@@ -77,6 +77,10 @@ audio is usually the largest on Android. Approach:
 
 ## Ranked recommendations (impact ÷ effort)
 - **P0** Simultaneous hit-juice at the strike line. *medium — the single biggest feel upgrade.*
+  ✅ **DONE (round strum-strings, 4th step below):** the strum juice is now the
+  **six-string band** (`SsStrumStrings`) plus the spark and a neutral impact ring,
+  on **Live, Practice and the Song Trainer** — and on Live it fires on the ONSET,
+  58 ms of DSP before the direction verdict exists (ADR 0582).
 - **P1** Combo/multiplier + safe-failure + section-end celebration. *medium.*
 - **P2** Highway → one `CustomPainter` + `RepaintBoundary` + single controller (unblocks P0 particles + 120 fps). *medium–high.*
 - **P3** Latency calibration + pre-scheduled beat + low-latency 48 kHz engine. *medium — without it juice mis-lands on Android.*
@@ -157,3 +161,59 @@ card tests see the plain card. `SharePreviewScreen` / `WrappedPreviewScreen`
 gate the IMAGE share on `onCompleted` (text share never waits) and press
 the card to 0.98 (`instant`) outside the boundary. The milestone SCENE
 (`SsCelebrationScene` via the ADR 0389 coordinator) stays R03's.
+
+## AS BUILT (2026-09-15, 4th step) — the STRINGS BAND is the P0 hit-juice, and on Live it fires on the ONSET
+**The P0 gap above is closed** (ADR 0582). The strum juice is no longer only a
+spark: a painted six-string band rings under the hero on every stroke, on
+**Live, Practice and the Song Trainer** — one stroke reads as one event because
+all three surfaces use the same copper-down / green-up pair the spark uses.
+
+- **Geometry is pure Dart** (`core/design_system/components/music/ss_strum_strings_model.dart`,
+  `dart:math` only — no Flutter, no `core/music`): 6 strings, index 0 = low E at
+  the top; the pick sweeps 60 ms across the set → **12 ms per string**; each
+  string then rings `A·exp(−t/τ)·sin(2πft)` with **τ = ringSec/4.2 = 142.9 ms**,
+  **f 9 → 14 Hz** low→high, `A` scaled by stroke strength AND by string gauge
+  (1.00 → 0.55). MEASURED: the envelope is at **1.51 % of peak at `ringSec`**
+  (0.6 s), so the hard cut-off is invisible rather than a pop; the worst swing is
+  **0.348 string-spacings < 0.5**, so no string reaches its neighbour's lane; the
+  up-stroke pick is an exact reflection of the down-stroke (|down+up−5| ≤ 8.9e-16).
+- **The widget** (`ss_strum_strings.dart`) is the `StrumBurstOverlay` ticker
+  discipline: a local `Ticker` started when a stroke is added, stopped with the
+  clock reset when the last stroke is pruned → an idle band schedules **no
+  frames** (measured: `hasScheduledFrame == false`, `pumpAndSettle()` = 1 frame)
+  and `pumpAndSettle` terminates. Painter: each string is a 24-segment polyline
+  whose displacement is shaped by `sin(πx/width)` (pinned at the nut and bridge),
+  stroke width 2.4 px × gauge, all `Paint`s cached, `RepaintBoundary` on top.
+  A 9–14 Hz sine sampled at 60 fps read as a slow WOBBLE in the frame dump, so
+  each excited string also draws two faint ghost lines at ± its decay envelope
+  (the shape the eye knows as a ringing string), the tint fades with `sqrt(decay)`
+  so a struck string still LOOKS struck once its swing is sub-pixel, and the pick
+  carries a three-ghost trail (12/24/36 ms lag) plus a soft glow. This was judged
+  on rendered frames, not by eye: `test/tools/strum_strings_frame_dump_test.dart`
+  writes PNGs to `build/strings_frames/` with `STRINGS_FRAME_DUMP=1`.
+- **Two-stage on Live only.** `LiveFrame.onsetSeq` starts an UNDIRECTED stroke
+  (six strings ring together, neutral colour, no pick); the `strumSeq` verdict
+  ~58 ms of DSP later RESOLVES that same stroke in place (pick + direction
+  colour, ring-out never restarts) while it is younger than
+  `directionGraceSec = 0.25 s`. MEASURED matched pair: a verdict 0.1 s after the
+  onset leaves the band settled 0.66 s after the onset (ONE stroke); a verdict at
+  0.3 s is still animating at 0.7 s, because that one legitimately starts a
+  SECOND stroke (0.96 s). The burst overlay follows the same split — a neutral
+  0.28 s impact ring on the onset, the directional spark on the verdict.
+- **Practice / Song Trainer get the directed-only variant** through the shared
+  56 dp `core/widgets/strum_strings_band.dart` (Live's own band is 72 dp and
+  labelled; the scored ones are decorative, `ExcludeSemantics`, because both
+  screens already announce the stroke in words). `onsetSeq` is hard-wired to 0
+  there and NOT exposed: `PracticeStrumFeedback` is emitted once per stroke after
+  the scoring pass with the direction already decided, so there is no earlier
+  onset signal to pass. Strength is floored at 0.35 exactly as the spark floors
+  its burst, so a dim stroke is never a dead band under a visible spark.
+- **Reduced motion** (`SsMotionScope`, ADR 0274 §5.1): no strokes, no ticker, no
+  frames — and the last known direction survives as a STATIC pick glyph parked on
+  the string the sweep would have ended on. A running stroke is dropped the
+  moment reduced motion turns on.
+- **Honest limit:** every number here is host-side (widget tests + a frame dump).
+  The felt latency on a phone is dominated by the capture buffer, not by this
+  code — chunk 010's measured table, 145 ms of Android mic chunk vs 20.3 ms of
+  onset-first DSP. Next on this thread: verdict pop + combo counter on Live once
+  a beat-relative timing verdict exists there.

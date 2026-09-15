@@ -1,5 +1,148 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ ONSET-FIRST VISSZAJELZÉS + HÚR-SÁV — `2af4260` → `d949b8f` (kör „strum-strings", branch `claude/strum-strings-live`), 2026-09-15
+
+A kör egyetlen mondata: **a pengetés mostantól KÉT szakaszban jelenik meg** — a
+hangkezdés pillanatában megszólal a hat húr (semleges), és csak ~58 ms DSP-vel
+később kapja meg az irány színét és a pengető söprését. Ehhez jött az új Live
+„juice", a festett hat-húros sáv, és mellette egy DSP/ML-adag (irány-kapu,
+gyorsabb forward, új irány-jel) plusz két MÉRÉS, amiből az egyik **negatív**.
+Döntés: [ADR 0582](docs/adr/0582-onset-first-strum-feedback.md).
+
+**Miért két szakasz:** az irány-verdict `_classifyAfterFrames = 12` hopot
+(69,7 ms hang) vár az onset után, a SuperFlux viszont már 2 hoppal az onset-frame
+után megerősíti a találatot — és az ADR 0549 kapuja a valódi pengetések 35 %-át el
+is nyomja (recall 0,649), vagyis eddig a képernyő NÉMA maradt olyan ütésre is,
+amit a tanuló a kezében érzett. Mostantól az elnyomott onset is megszólaltatja a
+húrokat, csak nyíl nem lesz belőle.
+
+| Commit | Mit hoz |
+|---|---|
+| `2af4260` | `StringArrivalCue` — akkord-alak ismeretében húrankénti parciális-burkoló (centrált Hann-Goertzel, N 2048 / hop 64), irány = Kendall-tau előjele a húr-index vs. érkezés fölött + valós-audió próbák |
+| `45ae95b` | MÉRÉS: a cue és a szállított élő CRNN UGYANAZON a 3035 tiszta GuitarSet-söprésen; fúzió 46,4 % → **62,3 %** azon az 1996 söprésen, amit az élő út egyáltalán hallott (`docs/eval/string-arrival-fusion-2026-09-15.md`) |
+| `0bbc32b` | `ShapeInformedStrumClassifier` a klasszifikátor-varrat mögött (vezetett módok); a szabad Live-tükör bájtazonos pass-through |
+| `203a2317` | [ADR 0581](docs/adr/0581-shape-informed-string-arrival-direction-cue.md) + chunk 006 mért igazságok |
+| `4468b166` | **A kör magja:** `LiveFrame.onsetSeq` + `latestOnsetTime`; a `LivePipeline` az onset megerősítésének frame-jén bumpol, és AZONNAL emittál (a 0–66 ms kadencia-jitter mindkét jelről lekerül) |
+| `d5e52e2` | `StrumBurstOverlay.onsetSeq` → semleges becsapódás-gyűrű (0,28 s, NEM irány-szín); az irányos szikra marad a `strumSeq`-en |
+| `d9033dd` | `SsStrumStringsModel` — tiszta Dart geometria (`dart:math`, se Flutter, se `core/music`): 6 húr, 60 ms söprés = **12 ms/húr**, `A·exp(−t/τ)·sin(2πft)`, τ = 142,9 ms, f 9 → 14 Hz |
+| `f1efb84` | [ADR 0549](docs/adr/0549-the-no-strum-gate-is-corpus-dependent-and-ships-higher.md) portolva: `noStrumThreshold` **0,439 → 0,85**, az illesztés `fittedNoStrumThreshold`-ként megmarad a provenienciájával |
+| `a38c36e` | `SsStrumStrings` widget + painter (ticker-fegyelem a `StrumBurstOverlay` mintájára, `directionGraceSec = 0,25 s`) |
+| `eea61c5` | MÉRÉS: a SuperFlux (delta, lambda, minRiseBands) 36-cellás rács LAPOS → **semmi nem szállt** — ÉS (scope-szivárgás, lásd lent) az ADR 0564/0565 port: nulla-átugró konv-törzs |
+| `b9188f1` | A sáv úgy néz ki, mint egy REZGŐ húr: ±burkoló szellemvonalak, `sqrt(decay)` színhalványulás, pengető-nyomvonal + glow — **renderelt frame-eken** ítélve (`test/tools/strum_strings_frame_dump_test.dart`); + headless emulátor-harness, ami egy valós gitár-WAV-ot tol át a capture-varraton |
+| `6572f23` | Bekötés a Live hőshöz: 72 dp-s sáv a `SsChordHero` alatt, `onsetSeq`/`strumSeq`-fed, új ARB `liveStringsSemantics`; `MockStrumEngine` 70 ms-os `directionDelay`-jel reprodukálja a kétszakaszos viselkedést |
+| `e837d6c` | `integration_test` lock |
+| `324676b` | a hős-overlay becsapódás-gyűrűje is `frame.onsetSeq`-ről indul |
+| `3352c24` | MÉRÉS (D4): **nem a DSP a késleltetés, hanem a mikrofon-chunk** — új `capture_latency_probe_test.dart` + allokáció-mentes `SlidingFramer` (viselkedés bitre azonos) |
+| `d949b8f` | A sáv a PONTOZOTT felületeken is: közös `StrumStringsBand` (56 dp) a Practice `StrumPatternView`/`ChordProgressionView` és a Song Trainer futó nézete alatt |
+
+**MÉRT számok (mind host-oldali — se telefon-mikrofon, se CI ezen a fejen):**
+
+```
+  onset-first DSP   =  896 minta =  20,3 ms   (onsetWindow 1024 + 2 hop − 2,5 hop r144-korrekció)
+  irány-verdict     = 3456 minta =  78,4 ms   (onsetWindow 1024 + 12 hop − ugyanaz)
+  a kettő közti rés = 2560 minta =  58,1 ms   ← ezt tölti ki a húr-sáv
+  emit-kadencia     = 0 ms mindkettőre (az addChunk azonnal emittál)
+  Android mic-chunk = 6400 minta = 145,1 ms   → legrosszabb eset 165,4 ms (gyűrű) / 223,5 ms (nyíl)
+```
+
+Az `audio_streamer` 4.3.0-n **nincs buffer-kapcsoló** (a pub cache forrásából
+olvasva: Android hard-code 6400 minta, iOS `installTap(bufferSize: 22050)`), tehát
+a <80 ms-os cél a DSP-n teljesül, az eszközön nem — és 6400-nál a két szakasz
+UGYANABBA a chunkba esik, vagyis a telefonon ma nem is szétválasztható. A 48 kHz
+kérése (~12 ms) szándékosan NEM történt meg: átskálázna minden ablakhosszt és
+minden valós audión hangolt küszöböt.
+
+Egyéb mért eredmények: a kapu 0,85-ön GuitarSeten onset P 0,899 / onset F1 0,6223 /
+pengetés-recall 0,649 / irány macro-F1 0,4311 (az illesztett 0,439-en 0,913 /
+0,5828 / 0,596 / 0,4192); új játékosra a Klangio LOGO **0,6061 ± 0,0548**, míg a
+saját (felvétel szerint hasított) foldon 0,807 — a 0,807 tehát SAME-player szám.
+A konv-törzs nulla-átugrása **bitre azonos** (0 / 224 softmax-skalár tér el 96
+valós ablakon, 3 futásban) és itt 1,86–1,96×, a szállított aszszeten 15 234 µs
+medián forward. A SuperFlux-rács legjobb cellája +0,0116 F1@50 a szállítotthoz
+képest, a szállítási küszöb +0,02 → **semmi nem szállt**; a tanulság a
+tolerancia-létra: recall 0,284 @25 ms → 0,592 @50 ms → 0,879 @100 ms, vagyis a
+hiba IDŐZÍTÉS, nem kihagyás.
+
+A vizuál mért oldala: üres sáv **nem ütemez frame-et** (`hasScheduledFrame ==
+false`, `pumpAndSettle()` = 1 frame); a késői verdict PÁROS mérése — 0,1 s-os
+verdict (a 0,25 s-os türelmi ablakon belül) után a sáv 0,66 s-ra teljesen
+elcsendesedik (EGY ütés), 0,3 s-os verdict után 0,7 s-nál még animál, mert az
+jogosan MÁSODIK ütést indít (0,96 s); a burkoló a `ringSec`-nél a csúcs 1,51 %-a
+(nincs pukkanás), a legnagyobb kitérés 0,348 húr-osztás (< 0,5, nincs sávátlépés).
+
+**Doksi:** [ADR 0582](docs/adr/0582-onset-first-strum-feedback.md) (kétszakaszos
+esemény + a sáv mint P0 juice), chunk 016b „AS BUILT (4. lépés)", chunk 006 (mi
+szállt ebben a körben), chunk 010 (mért késleltetés-táblázat), chunk 001
+(platform-konstansok), chunk 005 (a negatív SuperFlux-eredmény), CHANGELOG.
+
+**Tesztek (mind egyfájlos futásokban zöldek):** `live_pipeline_onset_first_test`,
+`capture_latency_probe_test`, `sliding_framer_test`, `ss_strum_strings_model_test`
+(20), `ss_strum_strings_test` (10), `live_stage_test` (16), `live_screen_test` (5),
+`mock_strum_engine_test` (12), `practice_strum_burst_test` (8),
+`song_trainer_screen_test` (13), `live_crnn_3class_test` (6), a négy CRNN-paritás,
+`superflux_honest_sweep_test`, `string_arrival_*`. **A TELJES suite ezen a fejen
+NEM futott** (a doboz OOM-ol tőle, ADR 0053: a CI a mérce).
+
+**KÖVETKEZŐ LÉPÉS — ebben a sorrendben:**
+
+1. **A gazda valós-gitáros APK-tesztje.** Ez az elfogadási predikátum (ADR 0581,
+   0582, chunk 018) — minden fenti szám szintetikus vagy korpuszos. A száraz
+   próba már megvan: `integration_test/live_strum_feedback_headless_test.dart` egy
+   adb-vel felpusholt valós gitár-WAV-ot tol át a capture-gyár varratán az IGAZI
+   motorba az emulátoron, nézi az `onsetSeq`/`strumSeq`-et és képernyőképet ment.
+   A kérdés, amire csak telefon tud válaszolni: a 145 ms-os mikrofon-chunk mellett
+   érződik-e egyáltalán a kétszakaszos visszajelzés, vagy egyszerre érkezik a
+   gyűrű és a nyíl.
+2. **Címkézett SAJÁT felvételek — ez a döntő tanítóanyag (E18).** Az irány ma
+   GuitarSeten 0,4311 macro-F1, új játékosra 0,6061 ± 0,0548 (a 0,807 same-player
+   szám) — a Chapter 14 §7.2 Alpha kapuja 0,80. A küszöb-hangolás rácsa lapos, a
+   sparse forward pontosságot nem ad, az alak-informált cue pedig csak ott szólal
+   meg, ahol ismerjük a fogást. Ami marad: a gazda saját, címkézett felvételei a
+   saját gitárjáról és a saját telefon-mikrofonjáról (chunk 006 „v2 upgrade path:
+   small CRNN/TFLite on user-recorded labeled clips"). A valós-gitáros APK-teszt
+   ennek az adatgyűjtésnek az első menete is egyben.
+3. **CI-dispatch a fejre** (full-gate + build-apk), és utána az x86-os
+   golden-újravétel (`tools/golden-x86.sh record` / a `record-goldens.yml`
+   workflow) — lásd a nyitott pontokat.
+
+**NYITOTT (mind mérve, egyik sem sejtés):**
+
+- **Az ARB-kulcs rossz helyen van.** A `liveStringsSemantics` CSAK a GENERÁLT
+  `lib/l10n/app_en.arb` / `app_hu.arb` aggregátumban létezik, a
+  `lib/l10n/base/` szegmensben nem — ez pontosan az `a8a287b`-nél már egyszer
+  piroslott l10n-frissességi kapu (ADR 0307 §4). A kulcsot a `lib/l10n/base/`-be
+  kell felvenni, mielőtt a full-gate elindul.
+- **A `flutter analyze` ezen a dobozon SENKINEK nem fut** (nem a mi kódunk): az
+  analysis server az LSP `initialize` üzenetét vágja el (`FormatException:
+  Unexpected end of input`), mert a repó útvonalában nem-ASCII karakter van
+  („gitár trainer") — a Content-Length bájtban számol, az olvasó karakterben.
+  Négy ügynök reprodukálta Bashből és PowerShellből is, 8.3-as rövid úton és
+  ASCII-junction mögött is. Helyettesítő: `dart.bat analyze` (ugyanaz az
+  `analysis_options.yaml`) — minden érintett fájlra „No issues found!". Központi
+  javítás kellene (junction vagy SDK-emelés).
+- **Commit-ütközés a megosztott indexen:** az `eea61c5` a SuperFlux-mérés mellett
+  egy MÁSIK ügynök négy fájlját is tartalmazza (ADR 0564/0565, `crnn_strum_net.dart`,
+  a forward-benchmark), mert a `git add <paths>` és a `git commit` közé beékelődött
+  egy párhuzamos commit. Tartalom nem veszett el, a provenienciája viszont rossz
+  helyen van; merge előtt szétszedhető. **Tanulság minden ügynöknek ezen a fán:
+  `git commit -- <paths>` (részleges commit), nem `git add <paths> && git commit`.**
+- **Goldenek újravétele x86-on** (a sáv minden bekötött képernyőt megnövelt):
+  `e13_r21_screens_golden_test.dart`, `e13_r25_screens_golden_test.dart`,
+  `e15_r13_full_variant_matrix_test.dart`. Külön, KORÁBBI piros:
+  `e13_r18_screens_golden_test.dart` két cellája (0,24 % / 0,44 % eltérés, tisztán
+  szöveg-raszterizációs drift a fejlécben és az akciósávban; a hős-régióban NULLA
+  eltérő pixel).
+- **A Song Trainer futó törzse nem görgethető** `Column`, és a sáv 56 dp-t ad
+  hozzá: 800×600-on és a 412×915-ös golden-kereten elfér, nagy `textScaler`-rel
+  rövid viewporton túlfolyhat.
+- **A latencia-próba kézzel ismétli** a `_classifyAfterFrames` (12) és a
+  `_postFrames` (2) konstansokat, mert egyik sem publikus; ha a tech lead
+  irány-munkája elmozdítja őket, a próba a saját korlátján bukik (jelzés, nem
+  néma elcsúszás) — egy `@visibleForTesting` konstans-felület megoldaná.
+- **`PcmRingBuffer`** még mindig dobozolt `List<double>` O(n) `removeRange`-dzsel;
+  Lab-only és alapból no-op, de bekapcsolt Lab-capture mellett ez az utolsó
+  dobozolt ugrás egy latencia-mérésben.
+
 ## ✅ SZÉRIA-LÁNG + SHARE-REVEAL — `f99cc9e` → javítások `bb8f251` + `a8a287b`, goldenek `9d2eb4b` (Chapter 18 R06/R07 szelet), kapu zöld (2026-09-15)
 
 A felhasználó „mehetsz tovább, CI csak a fejlesztés után" döntése nyomán a

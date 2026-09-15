@@ -85,3 +85,29 @@ estimation (45 % pitch accuracy → cue at chance), short 4-cycle windows
 (leakage compresses the stagger), and Klangio with guessed shapes (chance —
 no voicings in that corpus). Armed only while the decoder shows the expected
 chord; the free Live mirror is a bit-identical pass-through.
+
+**⚠ WHAT ELSE SHIPPED IN THAT SAME ROUND (2026-09-15) — three changes around the
+verdict, none of them a new direction cue.**
+
+1. **The no-strum gate moved 0.439 → 0.85** (ADR 0549, ported): on GuitarSet
+   (72 Rock/Funk comping files, 3035 clean sweeps) the fitted gate keeps 59.6 % of
+   true strums, not the 95 % measured on the model's own eval fold. At 0.85 the same
+   one-pass sweep reads onset P 0.899 / onset F1 0.6223 / true-strum recall 0.649 /
+   direction macro-F1 0.4311 (vs 0.913 / 0.5828 / 0.596 / 0.4192 at the fit); the
+   independent post-change baseline on the shipped path is 0.900 / 0.6224 / 0.649 /
+   0.4313. The fit survives as `fittedNoStrumThreshold` with its provenance. Also
+   corrected there: the eval fold splits by RECORDING, so 0.807 is a SAME-player
+   number — the new-player figure is the Klangio LOGO live-70 ms **0.6061 ± 0.0548**,
+   worst fold 0.5289. Both still far under the Chapter 14 §7.2 Alpha gate of 0.80.
+2. **The direction forward pass got ~2× cheaper, bit-exactly** (ADR 0564/0565,
+   ported): the conv trunk sparsifies each layer's input once and skips zero
+   channels. Verified at the IEEE-754 bit level — 0 of 224 softmax scalars differ
+   over 96 real parity windows of all three shipped assets, 3 runs — at 1.86–1.96×
+   on this box (median 15 234 µs per forward on the shipped 3-class asset).
+   Accuracy is unchanged BY CONSTRUCTION; this buys headroom, not points.
+3. **The verdict is no longer the first thing the user sees** (ADR 0582): the onset
+   is published on its own counter **58.1 ms of DSP before** the direction verdict,
+   and a gate-suppressed onset still rings the strings while never drawing an arrow.
+   So the cost of the gate suppressing 35 % of true strums (recall 0.649 above) is
+   now a missing ARROW, not a dead screen — worth remembering when reading those
+   recall numbers.

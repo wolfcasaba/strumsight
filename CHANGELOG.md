@@ -79,3 +79,51 @@ squash SHA-ja a `HANDOFF.md` saját fejezetében él.
   RC-workflow soha-nem-futott ténye, és hat gazdátlan, korábban mért nyitott
   lelet (`E12-R20`/`R21`/`R23`/`R24`/`R29`).
 - Hozzáadva: ez a fájl, a release-fejléc gépi mércéjével.
+
+### Kör „strum-strings" (2026-09-15, `claude/strum-strings-live`, `2af4260` → `d949b8f`)
+
+Élő visszajelzés és irány-sáv; a fejezet-szintű állapotot nem mozgatja (a
+verzió/build változatlan), a kör-szintű történet a [`HANDOFF.md`](HANDOFF.md)
+saját fejezetében él.
+
+- **Kétszakaszos pengetés-esemény**
+  ([ADR 0582](docs/adr/0582-onset-first-strum-feedback.md)): a `LiveFrame` új
+  `onsetSeq`/`latestOnsetTime` mezőt kapott, amit a `LivePipeline` a hangkezdés
+  megerősítésének frame-jén publikál — MÉRTEN **58,1 ms DSP-vel** az irány-verdict
+  (`strumSeq`) előtt —, és a megerősítő chunkon azonnal emittál, ami mindkét jelről
+  leveszi a 0–66 ms-os kadencia-jittert. Az ADR 0549 kapuja által elnyomott
+  hangkezdés is bumpolja az `onsetSeq`-et (a találat hallatszott), nyilat viszont
+  soha nem rajzol.
+- **Hat-húros sáv mint a P0 ütés-juice** (chunk 016b): új `SsStrumStringsModel`
+  (tiszta Dart geometria) + `SsStrumStrings` widget/painter a design systemben,
+  a Live hősön 72 dp-s, címkézett sávként (új ARB `liveStringsSemantics`), a
+  Practice és a Song Trainer pontozott felületein a közös
+  `StrumStringsBand`-en át 56 dp-sként; a `StrumBurstOverlay` a hangkezdésre
+  semleges becsapódás-gyűrűt kapott. Üres sáv nem ütemez frame-et, reduced
+  motion alatt nincs animáció (ADR 0274 §5.1).
+- **„Nem-pengetés" kapu 0,439 → 0,85**
+  ([ADR 0549](docs/adr/0549-the-no-strum-gate-is-corpus-dependent-and-ships-higher.md)):
+  GuitarSeten (3035 tiszta söprés) onset P 0,899 / onset F1 0,6223 /
+  pengetés-recall 0,649 / irány macro-F1 0,4311; az illesztett érték
+  `fittedNoStrumThreshold`-ként megmarad.
+- **Alak-informált irány-jel**
+  ([ADR 0581](docs/adr/0581-shape-informed-string-arrival-direction-cue.md)): a
+  vezetett módokban a húr-érkezési sorrendből számolt irány; fúzióban 46,4 % →
+  **62,3 %** azon az 1996 GuitarSet-söprésen, amit az élő út hallott.
+- **Olcsóbb irány-forward, bitre azonos kimenettel**
+  ([ADR 0564](docs/adr/0564-the-direction-model-costs-45x-what-its-header-claimed.md),
+  [0565](docs/adr/0565-the-conv-trunk-skips-zero-inputs-and-halves-the-forward.md)):
+  nulla-átugró konv-törzs, 0 / 224 softmax-skalár eltérés 96 valós ablakon,
+  1,86–1,96× ezen a dobozon.
+- **Két mérés, egy negatív eredménnyel** — a késleltetés-költségvetés
+  ([chunk 010](docs/rag/chunks/010-realtime-architecture.md)) mostantól MÉRT
+  tábla: 20,3 ms onset-first és 78,4 ms irány DSP mellett a legrosszabb eset
+  Androidon 165,4 / 223,5 ms, amiből 145,1 ms a mikrofon-chunk (az
+  `audio_streamer` 4.3.0-n nincs buffer-kapcsoló); a SuperFlux 36-cellás
+  (delta, lambda, minRiseBands) rácsa lapos, a legjobb cella +0,0116 F1@50 a
+  +0,02-es szállítási küszöb ellenében → **nem szállt semmi**
+  ([chunk 005](docs/rag/chunks/005-onset-spectral-flux.md),
+  [`docs/eval/superflux-honest-sweep-2026-09-15.md`](docs/eval/superflux-honest-sweep-2026-09-15.md)).
+- Elfogadás továbbra is a gazda valós-gitáros APK-tesztje: minden fenti szám
+  szintetikus próbából, widget-tesztből vagy korpuszból származik, egy sem
+  telefon-mikrofonból.
