@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/audio/dsp/sliding_framer.dart';
 
@@ -84,5 +86,43 @@ void main() {
       () => SlidingFramer(window: 2, hop: 3),
       throwsA(isA<AssertionError>()),
     );
+  });
+
+  // D4: the framer's pending store grows by doubling, so a mic chunk many
+  // times the window (audio_streamer delivers 6400 samples against a 1024
+  // onset window) must be framed in one call without losing or reordering a
+  // sample — and the capacity it grew to must still be reusable afterwards.
+  test('a chunk far larger than the window frames in one call', () {
+    final framer = SlidingFramer(window: 4, hop: 2);
+    final frames = framer.add(ramp(20)).map((f) => f.toList()).toList();
+    expect(frames, hasLength(9));
+    expect(frames.first, [0, 1, 2, 3]);
+    expect(frames.last, [16, 17, 18, 19]);
+    // The tail (sample 18,19 — one hop short of a frame) survives into the
+    // next, much smaller chunk, on the same grid.
+    expect(framer.add(ramp(2, from: 20)).map((f) => f.toList()), [
+      [18, 19, 20, 21],
+    ]);
+  });
+
+  test('a typed chunk frames identically to a plain list', () {
+    final typed = SlidingFramer(window: 4, hop: 2);
+    final plain = SlidingFramer(window: 4, hop: 2);
+    expect(
+      typed.add(Float64List.fromList(ramp(8))).map((f) => f.toList()),
+      plain.add(ramp(8)).map((f) => f.toList()),
+    );
+  });
+
+  test('each emitted frame is a fresh buffer, never a recycled one', () {
+    // Downstream consumers retain frames (the strum classifier keeps a
+    // post-onset evidence ring), so recycling one output buffer would rewrite
+    // their history — the frames must stay independent objects.
+    final framer = SlidingFramer(window: 4, hop: 2);
+    final frames = framer.add(ramp(8)).toList();
+    expect(identical(frames[0], frames[1]), isFalse);
+    framer.add(ramp(8, from: 8)).toList();
+    expect(frames[0], [0, 1, 2, 3]);
+    expect(frames[1], [2, 3, 4, 5]);
   });
 }
