@@ -140,6 +140,10 @@ class LiveCrnnStrumClassifier implements StrumDirectionClassifier {
     }
   }
 
+  /// The gate as FITTED for this model, kept for provenance — the shipped gate
+  /// is [noStrumThreshold], which is deliberately higher (ADR 0549 D3). The
+  /// r175 text below therefore describes the FIT, not what suppresses arrows.
+  ///
   /// r175 — the learned no-strum reject gate. P(no-strum) above this SUPPRESSES
   /// the arrow. Fit on the shipped 3-class live model's HELD-OUT eval fold as
   /// the P(no-strum) quantile that keeps ≥95 % of TRUE strums (chunk 018 r175 —
@@ -153,7 +157,64 @@ class LiveCrnnStrumClassifier implements StrumDirectionClassifier {
   /// players vs ~3 % for the r170 confidence gate — the noise the r170 finding
   /// proved confidence cannot touch. Only consulted for a 3-class model; a
   /// 2-class asset never suppresses (r139 fallback preserved).
-  static const noStrumThreshold = 0.4387717843055725;
+  ///
+  /// **What "HELD-OUT eval fold" means here, precisely.** It is held out by
+  /// RECORDING — the unit `klangio.split_by_recording` cuts on, which is what
+  /// `ml/train_live_3c.py` uses to build this fold — and NOT by player: all
+  /// three guitarists sit on both sides of that line. So every eval-fold figure
+  /// above, the 0.807 direction accuracy included, is a SAME-PLAYER /
+  /// new-recording number. The new-player figure for this recipe is the r172
+  /// LOGO CV in `ml/model_card.json` (`measured.logo.live70`): live-70 ms
+  /// direction accuracy 0.6061 ± 0.0548, worst fold 0.5289 — roughly 19 points
+  /// lower. Quote the LOGO number when asking what this model does for a
+  /// stranger; quote the eval fold only as what the gate was FITTED on.
+  static const fittedNoStrumThreshold = 0.4387717843055725;
+
+  /// What SHIPS, and deliberately not [fittedNoStrumThreshold]. ADR 0549 D1:
+  /// `docs/adr/0549-the-no-strum-gate-is-corpus-dependent-and-ships-higher.md`
+  ///
+  /// MEASURED on GuitarSet — 72 Rock/Funk comping files, 8089 annotated events,
+  /// 3035 clean sweeps, direction ground truth derived from the hexaphonic
+  /// pickup's per-string onsets. The fitted value was the P(no-strum) quantile
+  /// keeping 95 % of true strums **on this model's own eval fold**; on that
+  /// independent corpus it keeps **59.6 %**. The gate generalises badly, and
+  /// the cost is not only missed arrows: a suppressed strum is a stroke the
+  /// rhythm grader never sees, so a learner who played it is marked down for
+  /// the engine's silence.
+  ///
+  /// The sweep over that corpus, one pass with the probabilities recorded and
+  /// the gates applied afterwards, one row per candidate gate:
+  ///
+  /// ```
+  ///   gate    onset P   onset F1   true-strum recall   direction macro-F1
+  ///   0.439     0.913     0.5828               0.596              0.4192
+  ///   0.650     0.906     0.6013               0.620              0.4235
+  ///   0.850     0.899     0.6223               0.649              0.4311
+  ///   none      0.701     0.7847               0.955              0.4506
+  /// ```
+  ///
+  /// 0.85 beats the fitted value on EVERY column — detection, retention and
+  /// direction — for 1.4 points of precision. Verified, not assumed: after the
+  /// change the independent baseline run on the shipped path measured onset P
+  /// 0.900, onset F1 0.6224, true-strum recall 0.649, direction macro-F1 0.4313
+  /// — within rounding of the sweep's prediction — while the heuristic branch
+  /// stayed put (0.786 / 0.954 / 0.2953), so only what should have moved moved.
+  ///
+  /// Lifting the gate entirely is better still on recall and direction, and is
+  /// NOT taken (ADR 0549 D2): at 0.701 precision roughly three in ten reported
+  /// strums match no annotated event, and a phantom stroke credits a slot the
+  /// learner never played. That is a lie with the opposite sign to the one
+  /// being fixed, and the rhythm pillar cannot afford either.
+  ///
+  /// [fittedNoStrumThreshold] is kept rather than overwritten because the fit
+  /// is a real measurement with its own record (`ml/live_3c_threshold.json`,
+  /// written by `ml/train_live_3c.py`). Overwriting the number in place would
+  /// have deleted the evidence for the number, and left the JSON disagreeing
+  /// with the code with nothing saying which was right.
+  ///
+  /// The gate is MODEL- and CORPUS-specific (ADR 0549 D4): re-measure it for
+  /// every new asset, and not only on that asset's own fold.
+  static const noStrumThreshold = 0.85;
 
   @override
   void observe(Float64List frame, StrumFrameFeatures features) =>

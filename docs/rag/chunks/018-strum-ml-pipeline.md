@@ -428,11 +428,18 @@ is **`no_strum_threshold = 0.43877`**; at that operating point it **rejects
 93.0 % of false onsets** (no-strum recall 0.929; direction acc on true strums
 0.807). Provenance: `ml/live_3c_threshold.json` (same rule as
 `honest_eval._gate`, retention target 0.95). The value is hard-coded as
-`LiveCrnnStrumClassifier.noStrumThreshold` — model-specific (per-fold thresholds
+`LiveCrnnStrumClassifier.fittedNoStrumThreshold` — model-specific (per-fold thresholds
 ranged 0.08–0.9998 in the r174 LOGO run, so it MUST be re-measured from the
 shipped model, never reused from a fold). New-player generalisation is the r174
 LOGO number: ~87 % false-onset rejection at 95 % retention vs ~3 % for the r170
 confidence gate.
+
+**CORRECTION — the SHIPPED gate is 0.85 (ADR 0549).** The fitted 0.43877 kept 95 % of true
+strums on its OWN fold, **59.6 %** on GuitarSet (72 files, 3035 sweeps): 0.439 → onsetF1
+0.5828 / recall 0.596 / dirF1 0.4192 vs **0.85 → 0.6223 / 0.649 / 0.4311**, for 1.4 pts of
+precision (no gate: recall 0.955, onset P 0.701 = phantom strokes, D2). The fit lives on
+as `fittedNoStrumThreshold` (D3); the fold splits by RECORDING, so 0.807 is SAME-player —
+new-player = r172 LOGO live-70 ms **0.6061 ± 0.0548** (worst 0.5289).
 
 **Dart wiring (all behind the r139 seam):**
 - `CrnnStrumNet` reads the class count from the Dense width (`nClasses`) and

@@ -3,10 +3,13 @@ import 'package:strumsight/features/live/engine/ml/live_crnn_classifier.dart';
 import 'package:strumsight/core/music/strum.dart';
 
 /// r175 — the learned no-strum reject in the LIVE path. The 3-class model
-/// emits [P(down), P(up), P(no-strum)]; when P(no-strum) clears the calibrated
-/// threshold (fit to keep >=95 % of true strums, chunk 018 r174/r175) the arrow
-/// is SUPPRESSED. `classifyProbs` is the pure decision rule — tested here
-/// against crafted probabilities so it is deterministic and model-independent.
+/// emits [P(down), P(up), P(no-strum)]; when P(no-strum) clears the shipped
+/// threshold the arrow is SUPPRESSED. That threshold is NOT the fitted one: the
+/// fit (95 % true-strum retention on the model's own eval fold, chunk 018
+/// r174/r175) retained 59.6 % on GuitarSet, so ADR 0549 ships 0.85 and keeps
+/// the fit as [LiveCrnnStrumClassifier.fittedNoStrumThreshold] for provenance.
+/// `classifyProbs` is the pure decision rule — tested here against crafted
+/// probabilities so it is deterministic and model-independent.
 void main() {
   group('r175 no-strum reject — classifyProbs suppression gate', () {
     final thr = LiveCrnnStrumClassifier.noStrumThreshold;
@@ -14,6 +17,39 @@ void main() {
     test('the shipped no-strum threshold is a valid probability', () {
       expect(thr, greaterThan(0.0));
       expect(thr, lessThan(1.0));
+    });
+
+    test('the shipped gate is DELIBERATELY not the fitted one (ADR 0549)', () {
+      // The fitted value was the quantile keeping 95 % of true strums on this
+      // model's OWN eval fold. On GuitarSet it keeps 59.6 %, and the swept 0.85
+      // is better on every column - detection, retention and direction - for
+      // 1.4 points of precision (ADR 0549 D1).
+      //
+      // Both numbers are pinned here so the divergence cannot be "tidied up" by
+      // someone syncing the constant back to `ml/live_3c_threshold.json`. That
+      // JSON still records the FIT, which is still true; it is simply not the
+      // ship decision (ADR 0549 D3).
+      expect(
+        LiveCrnnStrumClassifier.fittedNoStrumThreshold,
+        0.4387717843055725,
+      );
+      expect(thr, 0.85);
+      expect(
+        thr,
+        greaterThan(LiveCrnnStrumClassifier.fittedNoStrumThreshold),
+        reason:
+            'the shipped gate must stay ABOVE the fit: a lower one suppresses '
+            'more real strums, and a suppressed strum is a stroke the rhythm '
+            'grader never sees, so the learner is marked down for the engine '
+            'going quiet',
+      );
+      // And not so high that suppression stops existing: the reject head is
+      // what keeps phantom strokes out of a slot nobody played (ADR 0549 D2).
+      expect(
+        thr,
+        lessThan(1.0),
+        reason: 'a gate at or above 1.0 would never suppress anything',
+      );
     });
 
     test('P(no-strum) above the threshold suppresses the arrow', () {
