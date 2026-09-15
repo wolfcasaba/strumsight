@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/features/live/widgets/strum_burst_hero.dart';
+import 'package:strumsight/core/widgets/strum_burst_overlay.dart';
 
-/// The Live hero's strum spark (chunk 016b P0 juice brought to Live): a burst
+/// The shared strum spark (chunk 016b P0 juice on every strum surface): a burst
 /// fires only when the strum counter ADVANCES, lives < 0.5 s, stops its own
 /// ticker (so `pumpAndSettle` terminates), and is skipped under reduced motion.
 void main() {
@@ -17,10 +17,10 @@ void main() {
       child: Directionality(
         textDirection: TextDirection.ltr,
         child: Center(
-          child: StrumBurstHero(
+          child: StrumBurstOverlay(
             strumSeq: seq,
             isDown: isDown,
-            confidence: confidence,
+            strength: confidence,
             child: const SizedBox(width: 200, height: 80, child: Text('G')),
           ),
         ),
@@ -28,7 +28,7 @@ void main() {
     );
   }
 
-  final overlay = find.byKey(StrumBurstHero.overlayKey);
+  final overlay = find.byKey(StrumBurstOverlay.overlayKey);
 
   testWidgets('no spark on first mount, even with a strum present', (
     tester,

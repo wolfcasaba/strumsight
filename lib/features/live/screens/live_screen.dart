@@ -15,6 +15,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/mic_error_banner.dart';
 import '../../../core/widgets/mic_permission_banner.dart';
+import '../../../core/widgets/strum_burst_overlay.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../settings/public.dart';
 import '../engine/strum_engine.dart';
@@ -25,7 +26,6 @@ import '../widgets/beat_counter.dart';
 import '../widgets/chord_timeline.dart';
 import '../widgets/live_lab_panel.dart';
 import '../widgets/live_status_bar.dart';
-import '../widgets/strum_burst_hero.dart';
 import '../widgets/uncertainty_reason_banner.dart';
 import '../../progress/public.dart';
 import '../../streak/public.dart';
@@ -345,10 +345,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       // The wrapper renders the bare hero until a strum lands and stops its
       // own ticker afterwards, so an idle Live still settles in tests.
       hero: hasChord
-          ? StrumBurstHero(
+          ? StrumBurstOverlay(
               strumSeq: frame.strumSeq,
               isDown: latestStrum?.isDown,
-              confidence: latestStrum?.confidence ?? 0.0,
+              strength: latestStrum?.confidence ?? 0.0,
               child: SsChordHero(
                 chordLabel: chordLabel,
                 textColor: palette.ink,

@@ -18,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/core/platform/platform_providers.dart';
 import 'package:strumsight/features/practice/application/practice_session_command.dart';
 import 'package:strumsight/features/practice/application/practice_session_effect.dart';
+import 'package:strumsight/features/practice/application/practice_strum_feedback.dart';
 import 'package:strumsight/features/practice/domain/model/practice_session_state.dart';
 import 'package:strumsight/features/practice/presentation/practice_effect_listener.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_session_screen.dart';
@@ -51,6 +52,8 @@ class _FakeSessionHost implements PracticeSessionHost {
   PracticeSessionState get state => _state;
   @override
   Stream<PracticeSessionEffect> get effects => _effectsController.stream;
+  @override
+  Stream<PracticeStrumFeedback> get strumFeedback => const Stream.empty();
   @override
   int? get liveOverallPerMille => liveScore;
   @override

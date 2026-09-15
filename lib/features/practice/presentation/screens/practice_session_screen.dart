@@ -13,6 +13,7 @@ import '../../../../core/widgets/mic_permission_banner.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../settings/public.dart';
 import '../../application/practice_session_command.dart';
+import '../../application/practice_strum_feedback.dart';
 import '../../domain/model/practice_mode.dart';
 import '../../domain/model/practice_session_state.dart';
 import '../../domain/model/speed_builder_state.dart';
@@ -56,8 +57,15 @@ class PracticeSessionScreen extends ConsumerStatefulWidget {
 
 class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
   StreamSubscription<PracticeSessionState>? _states;
+  StreamSubscription<PracticeStrumFeedback>? _strums;
   PracticeSessionHost? _host;
   PracticeSessionState _state = PracticeSessionState.initial;
+
+  // Per-strum feedback (chunk 016b P0): the latest observed stroke and a
+  // monotonic counter the mode views use as their spark trigger. Kept OFF
+  // the session state on purpose — it is one-shot presentation feedback.
+  PracticeStrumFeedback? _lastStrum;
+  int _strumSeq = 0;
   bool _exitInProgress = false;
   late final void Function(AppLifecycleState) _lifecycleListener;
   late final AppLifecycleEvents _lifecycle;
@@ -72,6 +80,13 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
       _states = host.states.listen((state) {
         if (mounted) setState(() => _state = state);
       });
+      _strums = host.strumFeedback.listen((feedback) {
+        if (!mounted) return;
+        setState(() {
+          _lastStrum = feedback;
+          _strumSeq++;
+        });
+      });
     }
     _lifecycleListener = (state) {
       final host = _host;
@@ -84,6 +99,7 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
   @override
   void dispose() {
     _states?.cancel();
+    _strums?.cancel();
     _lifecycle.removeListener(_lifecycleListener);
     super.dispose();
   }
@@ -162,7 +178,9 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
     if ((status == PracticeSessionStatus.running ||
             status == PracticeSessionStatus.paused) &&
         _state.target != null) {
-      children.add(_ModeView(state: _state));
+      children.add(
+        _ModeView(state: _state, strum: _lastStrum, strumSeq: _strumSeq),
+      );
     }
     if (status == PracticeSessionStatus.failed &&
         _state.recoverableFailure != null) {
@@ -376,8 +394,18 @@ class _Unavailable extends StatelessWidget {
 /// (the highway, the chord lane, and the feedback banner all handle
 /// `null` verdicts / metrics).
 class _ModeView extends ConsumerWidget {
-  const _ModeView({required this.state});
+  const _ModeView({
+    required this.state,
+    required this.strum,
+    required this.strumSeq,
+  });
   final PracticeSessionState state;
+
+  /// The latest per-strum feedback and its trigger counter (see the
+  /// screen state); the strum-aware views burst on a counter rise and show
+  /// the stroke's live verdict.
+  final PracticeStrumFeedback? strum;
+  final int strumSeq;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -390,10 +418,11 @@ class _ModeView extends ConsumerWidget {
     );
     final constraints = MediaQuery.of(context);
     final width = constraints.size.width - 32;
-    // The verdict and metrics are part of the runtime feedback that the
-    // host boundary does not yet expose (R10). Their absence is benign
-    // for the layout — the widgets render correctly with null and the
-    // round that wires the host will provide the live values.
+    // The live verdict rides the host's per-strum feedback stream (the
+    // R10 gap closed for the two strum-scored modes); the metrics surface
+    // is still not exposed by the host boundary, so it stays null — the
+    // widgets render correctly with null.
+    final verdict = strum?.verdict;
     switch (mode) {
       case PracticeMode.strumPattern:
         return StrumPatternView(
@@ -402,8 +431,11 @@ class _ModeView extends ConsumerWidget {
           visualOffset: visualOffset,
           width: width,
           highwayHeight: 168,
-          lastVerdict: null,
+          lastVerdict: verdict,
           metrics: null,
+          strumSeq: strumSeq,
+          strumIsDown: strum?.isDown,
+          strumStrength: strum?.strength ?? 0,
         );
       case PracticeMode.chordProgression:
         return ChordProgressionView(
@@ -412,9 +444,12 @@ class _ModeView extends ConsumerWidget {
           visualOffset: visualOffset,
           width: width,
           highwayHeight: 168,
-          lastVerdict: null,
+          lastVerdict: verdict,
           metrics: null,
           showChordHint: state.config?.expectedChordHintEnabled ?? true,
+          strumSeq: strumSeq,
+          strumIsDown: strum?.isDown,
+          strumStrength: strum?.strength ?? 0,
         );
       case PracticeMode.chordChanges:
         return ChordChangeView(

@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
-import '../../../core/design_system/public.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/widgets/hit_burst.dart';
+import '../design_system/public.dart';
+import '../theme/app_colors.dart';
+import 'hit_burst.dart';
 
-/// Wraps the Stage hero and throws a [HitBurst] spark over its ↓/↑ glyph on
-/// every NEW detected strum — the Learn highway's strike-line juice (chunk
-/// 016b P0) brought to Live, where the moat is actually seen first.
+/// Wraps a strum surface (the Live hero, a practice highway, the Song
+/// Trainer strum lane) and throws a [HitBurst] spark over it on every NEW
+/// detected strum — the Learn highway's strike-line juice (chunk 016b P0)
+/// shared by every screen where the moat is seen.
 ///
 /// * A burst fires when [strumSeq] advances (never on a rebuild with the
 ///   same seq, never on first mount), in the stroke's colour (copper = down,
-///   confidence green = up), sized by the stroke's [confidence]. The MOTION
+///   confidence green = up), sized by the caller's [strength]. The MOTION
 ///   reads the direction: a pick-sweep mark travels through the glyph the
 ///   way the hand moved (top→bottom for ↓, bottom→top for ↑, with a fading
 ///   trail — [HitBurstSweep]) and the sparks fan the same way.
@@ -22,17 +23,18 @@ import '../../../core/widgets/hit_burst.dart';
 /// * Under reduced motion ([SsMotionScope]) no spark is drawn: the glyph
 ///   itself already carries the direction by shape (ADR 0274 §5.1 — the
 ///   information stays, only the motion goes).
-final class StrumBurstHero extends StatefulWidget {
-  const StrumBurstHero({
+final class StrumBurstOverlay extends StatefulWidget {
+  const StrumBurstOverlay({
     super.key,
     required this.child,
     required this.strumSeq,
     required this.isDown,
-    required this.confidence,
-    this.glyphCenter = defaultGlyphCenter,
+    required this.strength,
+    this.centerOf = trailingGlyphCenter,
   });
 
-  /// The hero readout (chord label + direction glyph) the sparks overlay.
+  /// The strum surface the sparks overlay (drawn above it, never blocking
+  /// taps).
   final Widget child;
 
   /// Monotonic per-strum counter from the live frame; a rise fires a burst.
@@ -41,24 +43,27 @@ final class StrumBurstHero extends StatefulWidget {
   /// Direction of the latest strum; `null` (no strum yet) never bursts.
   final bool? isDown;
 
-  /// 0..1 — sizes the burst (a confident stroke bursts bigger).
-  final double confidence;
+  /// 0..1 — sizes the burst: Live passes the stroke's confidence, a scored
+  /// surface its timing ladder (PERFECT biggest). Clamped to ≥ 0.35 so a
+  /// weak stroke still visibly shows its direction.
+  final double strength;
 
-  /// Where the sparks originate, given the hero's laid-out size. The default
-  /// targets the 48 dp glyph `SsChordHero` places at the row's right edge.
-  final Offset Function(Size size) glyphCenter;
+  /// Where the sparks originate, given the child's laid-out size. The
+  /// default targets the 48 dp glyph `SsChordHero` places at the row's right
+  /// edge; a highway passes its strike line, a lane its "now" edge.
+  final Offset Function(Size size) centerOf;
 
   /// Key of the spark overlay — present only while a burst is alive.
-  static const Key overlayKey = ValueKey('live_strum_burst_overlay');
+  static const Key overlayKey = ValueKey('strum_burst_overlay');
 
-  static Offset defaultGlyphCenter(Size size) =>
+  static Offset trailingGlyphCenter(Size size) =>
       Offset(size.width - 24, size.height / 2);
 
   @override
-  State<StrumBurstHero> createState() => _StrumBurstHeroState();
+  State<StrumBurstOverlay> createState() => _StrumBurstOverlayState();
 }
 
-final class _StrumBurstHeroState extends State<StrumBurstHero>
+final class _StrumBurstOverlayState extends State<StrumBurstOverlay>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker;
   final List<HitBurst> _bursts = [];
@@ -71,7 +76,7 @@ final class _StrumBurstHeroState extends State<StrumBurstHero>
   }
 
   @override
-  void didUpdateWidget(StrumBurstHero old) {
+  void didUpdateWidget(StrumBurstOverlay old) {
     super.didUpdateWidget(old);
     final isDown = widget.isDown;
     if (widget.strumSeq > old.strumSeq && isDown != null) {
@@ -85,7 +90,7 @@ final class _StrumBurstHeroState extends State<StrumBurstHero>
       HitBurst(
         startSec: _nowSec,
         color: isDown ? AppColors.primary : AppColors.confidenceHigh,
-        strength: widget.confidence.clamp(0.35, 1.0),
+        strength: widget.strength.clamp(0.35, 1.0),
         directionSign: isDown ? 1 : -1,
       ),
     );
@@ -122,14 +127,14 @@ final class _StrumBurstHeroState extends State<StrumBurstHero>
       children: [
         widget.child,
         Positioned.fill(
-          key: StrumBurstHero.overlayKey,
+          key: StrumBurstOverlay.overlayKey,
           child: IgnorePointer(
             child: RepaintBoundary(
               child: CustomPaint(
                 painter: _HeroBurstPainter(
                   bursts: List.unmodifiable(_bursts),
                   nowSec: _nowSec,
-                  centerOf: widget.glyphCenter,
+                  centerOf: widget.centerOf,
                 ),
               ),
             ),
@@ -141,7 +146,8 @@ final class _StrumBurstHeroState extends State<StrumBurstHero>
 }
 
 /// [HitBurstPainter]'s sibling for a centre that depends on the laid-out
-/// size (the glyph sits at the hero row's right edge, wherever that lands).
+/// size (the glyph sits at the hero row's right edge, the strike line at a
+/// fixed x, wherever the surface lands).
 final class _HeroBurstPainter extends CustomPainter {
   _HeroBurstPainter({
     required this.bursts,

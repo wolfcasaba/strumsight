@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/strum_burst_overlay.dart';
 import '../../domain/model/compiled_practice_target.dart';
 import '../../domain/model/practice_metrics.dart';
 import '../../domain/model/practice_verdict.dart';
@@ -23,8 +24,15 @@ class ChordProgressionView extends StatelessWidget {
     required this.metrics,
     required this.showChordHint,
     this.leftHanded = false,
+    this.strumSeq = 0,
+    this.strumIsDown,
+    this.strumStrength = 0,
     super.key,
   });
+
+  /// Strike-line distance from the lane's leading edge (mirrored when
+  /// [leftHanded]); the spark burst is centred on it.
+  static const double strikeX = 68;
 
   final CompiledPracticeTarget target;
   final Duration playhead;
@@ -36,25 +44,41 @@ class ChordProgressionView extends StatelessWidget {
   final bool showChordHint;
   final bool leftHanded;
 
+  /// Per-strum spark trigger (chunk 016b P0): a rise fires a burst at the
+  /// strike line in the observed stroke's direction, sized by
+  /// [strumStrength]. `strumIsDown == null` never bursts.
+  final int strumSeq;
+  final bool? strumIsDown;
+  final double strumStrength;
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(
-          width: width,
-          height: highwayHeight,
-          child: PracticeHighway(
-            target: target,
-            playhead: playhead,
-            visualOffset: visualOffset,
+        StrumBurstOverlay(
+          strumSeq: strumSeq,
+          isDown: strumIsDown,
+          strength: strumStrength,
+          centerOf: (size) => Offset(
+            leftHanded ? size.width - strikeX : strikeX,
+            size.height / 2,
+          ),
+          child: SizedBox(
             width: width,
             height: highwayHeight,
-            strikeX: 68,
-            pixelsPerSecond: 240,
-            visibleSeconds: 4,
-            behindSeconds: 1.5,
-            leftHanded: leftHanded,
+            child: PracticeHighway(
+              target: target,
+              playhead: playhead,
+              visualOffset: visualOffset,
+              width: width,
+              height: highwayHeight,
+              strikeX: strikeX,
+              pixelsPerSecond: 240,
+              visibleSeconds: 4,
+              behindSeconds: 1.5,
+              leftHanded: leftHanded,
+            ),
           ),
         ),
         const SizedBox(height: 12),

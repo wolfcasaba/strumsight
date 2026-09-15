@@ -116,3 +116,19 @@ This is event-driven decay, not rhythm — ADR 0274's audio-clock rule is not
 in play. Next on this thread (Chapter 18 plan): verdict pop + combo counter
 on Live once a beat-relative timing verdict exists there (today Live has no
 scorer, only the metronome grid).
+
+## AS BUILT (2026-09-15, 2nd step) — the same spark on Practice and Song Trainer
+`StrumBurstOverlay` (was the Live-only `StrumBurstHero`) now lives in
+**`core/widgets/strum_burst_overlay.dart`** with a caller-supplied `centerOf`
+and `strength`. The Practice engine exposes a per-strum stream —
+`PracticeSessionController.strumFeedback` → `PracticeStrumFeedback`
+(observed direction + confidence + the matched target's LIVE verdict, null
+for a stray) — through the `PracticeSessionHost` boundary; the session
+screen forwards it to `StrumPatternView` / `ChordProgressionView`, which
+burst at the strike line (mirrored for left-handed) with the Learn timing
+ladder (PERFECT 1.0 · GOOD 0.72 · EARLY/LATE 0.45 · missed/stray 0.35) and
+finally show the live verdict in `PracticeFeedback` (the old R10 null gap).
+`SongTrainerController.practiceStrumFeedback` passes the scored session's
+stream through; the trainer's running body bursts at the strum lane's
+"now" edge. Nothing here touches DSP or the reducer: the stream is emitted
+from the controller's observation intake right after the scoring pass.

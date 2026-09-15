@@ -27,7 +27,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/design_system/public.dart';
+import '../../../../core/widgets/strum_burst_overlay.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../practice/public.dart' show PracticeStrumFeedback;
 import '../../../settings/public.dart';
 import '../../application/song_trainer_providers.dart';
 import '../../application/trainer/song_trainer_controller.dart';
@@ -96,6 +98,13 @@ final class SongTrainerScreen extends ConsumerStatefulWidget {
 final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
   SongTrainerController? _ownedController;
   Stream<SongTrainerState>? _ownedControllerStates;
+  StreamSubscription<PracticeStrumFeedback>? _strumSubscription;
+
+  // Per-strum feedback (chunk 016b P0) from the owned controller's scored
+  // Practice session: the latest observed stroke and a monotonic counter
+  // the running lane uses as its spark trigger. Presentation-only.
+  PracticeStrumFeedback? _lastStrum;
+  int _strumSeq = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -110,6 +119,10 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
         // instance instead.
         _ownedController = controller;
         _ownedControllerStates = controller.states;
+        _strumSubscription?.cancel();
+        _strumSubscription = controller.practiceStrumFeedback.listen(
+          _onStrumFeedback,
+        );
       }
       return StreamBuilder<SongTrainerState>(
         stream: _ownedControllerStates,
@@ -121,8 +134,17 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
     return _buildScaffold(context, widget.state);
   }
 
+  void _onStrumFeedback(PracticeStrumFeedback feedback) {
+    if (!mounted) return;
+    setState(() {
+      _lastStrum = feedback;
+      _strumSeq++;
+    });
+  }
+
   @override
   void dispose() {
+    _strumSubscription?.cancel();
     // §0.0/B/B7 — the Stage does not own the transport/practice resource; it
     // notifies the owner's exit path on every route exit rather than relying
     // solely on Riverpod's own provider-teardown timing.
@@ -156,6 +178,8 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
         onABClear: widget.onABClear,
         feedback: widget.feedback,
         loopRangeEnd: widget.loopRangeEnd,
+        strum: _lastStrum,
+        strumSeq: _strumSeq,
       ),
       SongTrainerStatus.paused => _PausedBody(
         state: current!,
@@ -224,6 +248,8 @@ final class _RunningBody extends StatelessWidget {
     required this.onABClear,
     required this.feedback,
     this.loopRangeEnd,
+    this.strum,
+    this.strumSeq = 0,
   });
 
   final SongTrainerState state;
@@ -240,7 +266,16 @@ final class _RunningBody extends StatelessWidget {
   final List<SongLoopFeedbackMessage> feedback;
   final Duration? loopRangeEnd;
 
+  /// Per-strum spark trigger for the strum lane (chunk 016b P0): the latest
+  /// observed stroke and the counter whose rise fires the burst.
+  final PracticeStrumFeedback? strum;
+  final int strumSeq;
+
   static const Duration _viewportSpan = Duration(seconds: 4);
+
+  /// The strum lane's "now" edge: the viewport starts at the playhead on the
+  /// leading side, so a stroke bursts just inside the lane's padding.
+  static const double _laneNowX = 20;
 
   @override
   Widget build(BuildContext context) {
@@ -291,10 +326,18 @@ final class _RunningBody extends StatelessWidget {
           viewportStart: playhead,
           viewportEnd: viewportEnd,
         ),
-        StrumLane(
-          events: strumEvents.cast(),
-          viewportStart: playhead,
-          viewportEnd: viewportEnd,
+        // Every detected strum bursts at the lane's "now" edge in the
+        // direction the hand moved — the same juice Live and Practice show.
+        StrumBurstOverlay(
+          strumSeq: strumSeq,
+          isDown: strum?.isDown,
+          strength: strum?.strength ?? 0,
+          centerOf: (size) => Offset(_laneNowX, size.height / 2),
+          child: StrumLane(
+            events: strumEvents.cast(),
+            viewportStart: playhead,
+            viewportEnd: viewportEnd,
+          ),
         ),
         TablatureLane(
           events: noteEvents.cast(),

@@ -13,6 +13,7 @@ import '../domain/model/practice_observation.dart';
 import '../domain/model/practice_session_config.dart';
 import '../domain/model/practice_session_result.dart' as presult;
 import '../domain/model/practice_session_state.dart';
+import '../domain/model/practice_verdict.dart';
 import '../domain/model/scoring_profile.dart';
 import '../domain/repository/practice_session_recorder.dart';
 import '../domain/service/practice_chord_scorer.dart';
@@ -26,6 +27,7 @@ import 'practice_session_clock.dart';
 import 'practice_session_command.dart';
 import 'practice_session_effect.dart';
 import 'practice_session_reducer.dart';
+import 'practice_strum_feedback.dart';
 import 'practice_tick_source.dart';
 
 /// The single first-call orchestrator of the Practice V2 session
@@ -114,6 +116,8 @@ final class PracticeSessionController {
       StreamController<PracticeSessionState>.broadcast();
   final StreamController<PracticeSessionEffect> _effectsController =
       StreamController<PracticeSessionEffect>.broadcast();
+  final StreamController<PracticeStrumFeedback> _strumFeedbackController =
+      StreamController<PracticeStrumFeedback>.broadcast();
 
   PracticeSessionState _state = PracticeSessionState.initial;
   PracticeScoreAggregation? _liveScore;
@@ -141,6 +145,13 @@ final class PracticeSessionController {
   Stream<PracticeSessionState> get states => _statesController.stream;
   PracticeSessionState get state => _state;
   Stream<PracticeSessionEffect> get effects => _effectsController.stream;
+
+  /// One event per detected strum, emitted right after its scoring pass:
+  /// the observed stroke plus the live verdict of the target it matched
+  /// (null for a stray). Presentation-only feedback, never session state —
+  /// the per-stroke "juice" signal (chunk 016b P0).
+  Stream<PracticeStrumFeedback> get strumFeedback =>
+      _strumFeedbackController.stream;
   PracticeScoreAggregation? get liveScore => _liveScore;
   presult.PracticeSessionResult? get result => _result;
 
@@ -198,6 +209,7 @@ final class PracticeSessionController {
     await _stopAndDisposeGateway();
     await _statesController.close();
     await _effectsController.close();
+    await _strumFeedbackController.close();
   }
 
   // --- Side-effect handlers ------------------------------------------------
@@ -415,6 +427,16 @@ final class PracticeSessionController {
         _observationsByTargetIndex[matched.targetIndex] = observation;
       }
       _runScoringPass();
+      _strumFeedbackController.add(
+        PracticeStrumFeedback(
+          sequence: observation.sequence,
+          direction: observation.direction,
+          confidence: observation.confidence,
+          verdict: matched == null
+              ? null
+              : _liveVerdictForObservation(observation.sequence),
+        ),
+      );
     } else if (observation is ChordObservation) {
       _chordObservations.add(observation);
     }
@@ -436,6 +458,17 @@ final class PracticeSessionController {
       fields: <String, Object?>{'code': mapped.code},
     );
     _effectsController.add(ShowRecoverableError(mapped));
+  }
+
+  /// The live verdict the last scoring pass assigned to the target that
+  /// observation [sequence] matched, or null if none names it.
+  PracticeVerdict? _liveVerdictForObservation(int sequence) {
+    final live = _liveScore;
+    if (live == null) return null;
+    for (final verdict in live.verdicts) {
+      if (verdict.matchedObservationSequence == sequence) return verdict;
+    }
+    return null;
   }
 
   void _runScoringPass() {

@@ -9,6 +9,7 @@ import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/core/platform/app_lifecycle.dart';
 import 'package:strumsight/features/practice/application/practice_session_command.dart';
 import 'package:strumsight/features/practice/application/practice_session_effect.dart';
+import 'package:strumsight/features/practice/application/practice_strum_feedback.dart';
 import 'package:strumsight/features/practice/domain/model/beat_position.dart';
 import 'package:strumsight/features/practice/domain/model/meter.dart';
 import 'package:strumsight/features/practice/domain/model/practice_definition.dart';
@@ -107,6 +108,8 @@ class FakeSessionHost implements PracticeSessionHost {
       StreamController<PracticeSessionState>.broadcast();
   final StreamController<PracticeSessionEffect> _effectsController =
       StreamController<PracticeSessionEffect>.broadcast();
+  final StreamController<PracticeStrumFeedback> _strumController =
+      StreamController<PracticeStrumFeedback>.broadcast();
 
   /// Every command the presentation layer has sent, in order.
   final List<PracticeSessionCommand> sent = <PracticeSessionCommand>[];
@@ -124,10 +127,16 @@ class FakeSessionHost implements PracticeSessionHost {
   Stream<PracticeSessionEffect> get effects => _effectsController.stream;
 
   @override
+  Stream<PracticeStrumFeedback> get strumFeedback => _strumController.stream;
+
+  @override
   int? get liveOverallPerMille => liveScore;
 
   @override
   void send(PracticeSessionCommand command) => sent.add(command);
+
+  void emitStrumFeedback(PracticeStrumFeedback feedback) =>
+      _strumController.add(feedback);
 
   void emitState(PracticeSessionState state) {
     _state = state;
@@ -140,6 +149,7 @@ class FakeSessionHost implements PracticeSessionHost {
   Future<void> close() async {
     await _statesController.close();
     await _effectsController.close();
+    await _strumController.close();
   }
 }
 
