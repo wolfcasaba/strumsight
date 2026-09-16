@@ -91,3 +91,6 @@ __pycache__/
 # device_build.example.json trackelt; a valódi profil sosem kerülhet a repóba.
 device_build.json
 device_build.*.json
+
+# Ágens-worktree-ek (beágyazott git-repók): a `git add -A` sosem szedheti fel őket.
+.claude/worktrees/
