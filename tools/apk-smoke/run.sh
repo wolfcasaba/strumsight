@@ -47,14 +47,35 @@ adb_sh() { adb shell "$@" 2>/dev/null | tr -d '\r'; }
 
 app_pid() { adb_sh pidof "$PKG" | tr -d '[:space:]'; }
 
-resumed_activity() {
-  adb shell dumpsys activity activities 2>/dev/null \
-    | tr -d '\r' \
-    | grep -E 'mResumedActivity' \
-    | head -1
+# "Is our app the thing on screen?"
+#
+# MEASURED (run 35088870428, 25/26 PASS): the first version read only the
+# FIRST `mResumedActivity` line of `dumpsys activity activities` and then
+# looked for the package in it. That line is not ours — the dump prints a
+# resumed-activity line per display/task stack and the launcher's comes
+# first — so the probe reported "not resumed" for 60 s while every other
+# assertion proved the app WAS up (process alive, non-blank launch frame,
+# 17 semantics nodes, `am start -W` TotalTime 1851 ms, clean logcat). The
+# false negative also made `ensure_foreground` re-launch before every step.
+#
+# So: filter by package across ALL lines, accept every spelling the platform
+# has used for the field (`mResumedActivity`, `topResumedActivity`,
+# `ResumedActivity`), and fall back to the window manager's focus — which is
+# what the user actually looks at — when the activity dump shape changes again.
+resumed_evidence() {
+  {
+    adb shell dumpsys activity activities 2>/dev/null \
+      | tr -d '\r' \
+      | grep -E 'ResumedActivity' \
+      | grep -F "$PKG" || true
+    adb shell dumpsys window 2>/dev/null \
+      | tr -d '\r' \
+      | grep -E 'mCurrentFocus|mFocusedApp' \
+      | grep -F "$PKG" || true
+  } | head -1
 }
 
-is_resumed() { resumed_activity | grep -q "$PKG"; }
+is_resumed() { [ -n "$(resumed_evidence)" ]; }
 
 # assert_alive <step-label>
 assert_alive() {
@@ -314,7 +335,8 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 if [ "$resumed" = "1" ]; then
-  record "launch-resumed" PASS "mResumedActivity = $(resumed_activity | sed -E 's/.*(com\.[^ }]*).*/\1/')"
+  record "launch-resumed" PASS \
+    "resumed = $(resumed_evidence | sed -E 's/.*(com\.[^ }]*).*/\1/')"
 else
   record "launch-resumed" FAIL "no $PKG activity became mResumedActivity in 60 s"
 fi
