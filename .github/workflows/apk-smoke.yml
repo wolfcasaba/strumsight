@@ -1,0 +1,96 @@
+name: APK smoke (emulator)
+
+# A SHIPPELT development APK-t futtatja EGY VALÓDI Android emulátoron, és
+# gépi evidenciát állít elő arról, hogy elindul, túlél egy alap-navigációt és
+# nem omlik össze. Ez az a réteg, amit a host-oldali kapu (`flutter test`) nem
+# ér el: valódi ART-process, valódi Flutter engine, valódi plugin-regisztráció,
+# valódi Android permission-modell.
+#
+# NEM mérce-megkerülés és nem helyettesíti a `build-apk.yml`-t: azt a futást
+# FOGYASZTJA (run_id), amelyik az APK-t előállította. A végső elfogadási
+# predikátum továbbra is a felhasználó valós-gitáros APK-tesztje.
+#
+# A fájlnak a `main`-en kell élnie ahhoz, hogy dispatchelhető legyen
+# (ugyanaz a szabály, mint a `record-goldens.yml`-nél).
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'A zöld build-apk.yml futás ID-ja, amelynek strumsight-*.apk artifactját teszteljük'
+        required: true
+      api_level:
+        description: 'Android API szint (emulátor rendszerkép)'
+        required: false
+        default: '34'
+
+permissions:
+  contents: read
+  actions: read # a másik futás artifactjának letöltéséhez kell
+
+concurrency:
+  group: apk-smoke-${{ inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # A hardveres gyorsítás enélkül nem elérhető a runneren, és az emulátor
+      # boot ~10 perc fölé kúszik (dokumentált lépés az
+      # android-emulator-runner README-jéből).
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download the APK under test
+        uses: actions/download-artifact@v4
+        with:
+          pattern: 'strumsight-*.apk'
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: dist
+
+      - name: Verify exactly one non-empty APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t apks < <(find dist -maxdepth 1 -type f -name '*.apk' -size +0c | sort)
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one non-empty strumsight-*.apk from run ${{ inputs.run_id }}, found ${#apks[@]}."
+            find dist -maxdepth 2 -type f -printf '%p (%s bytes)\n' 2>/dev/null || true
+            exit 1
+          fi
+          printf 'APK under test: %s (%s bytes)\n' "${apks[0]}" "$(stat -c%s "${apks[0]}")"
+
+      - name: Run the smoke on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ inputs.api_level }}
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          script: bash tools/apk-smoke/run.sh dist/*.apk
+
+      # Mindig feltöltjük: a BUKOTT futás evidenciája ér a legtöbbet.
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-smoke-${{ inputs.run_id }}
+          path: smoke-out/**
+          if-no-files-found: warn
