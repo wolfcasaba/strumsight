@@ -41,11 +41,21 @@ import 'community_theme_scope.dart';
 /// Renders [post] using the card matching the artifact's [ShareArtifactType].
 /// Unknown artifact types fall through to [_FallbackCard] (A5).
 class FeedCard extends StatelessWidget {
-  const FeedCard({super.key, required this.post});
+  const FeedCard({super.key, required this.post, this.onOpenComments});
 
   /// The post this card renders. The card reads only the post's public
   /// fields — it never mutates the controller or the repository.
   final CommunityPost post;
+
+  /// Opens this post's comment thread (WP-C, 2026-09-06).
+  ///
+  /// The card knows nothing about routing — the navigation seam is a
+  /// callback the host screen fills in, so the card stays testable
+  /// without a router and the route constant lives in exactly one
+  /// place (the feed screen). ``null`` hides the action entirely,
+  /// which keeps every existing call-site (goldens, card tests)
+  /// pixel-identical.
+  final VoidCallback? onOpenComments;
 
   @override
   Widget build(BuildContext context) {
@@ -77,6 +87,20 @@ class FeedCard extends StatelessWidget {
                 _artifactBody(context: context, post: post, artifact: artifact),
                 const SizedBox(height: 8),
                 _CardCounts(post: post),
+                if (onOpenComments != null) ...<Widget>[
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: TextButton.icon(
+                      key: Key('feed-card-comments-${post.id.value}'),
+                      onPressed: onOpenComments,
+                      icon: const Icon(Icons.mode_comment_outlined, size: 18),
+                      label: Text(
+                        AppLocalizations.of(context).communityHubComments,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

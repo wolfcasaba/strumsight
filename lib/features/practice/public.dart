@@ -114,3 +114,8 @@ export 'domain/model/next_practice_recommendation.dart'
     show NextPracticeReason, NextPracticeRecommendation;
 export 'domain/service/next_practice_recommender.dart'
     show nextPracticeConsolidationCoverage, recommendNextPractice;
+
+// A beépített gyakorlat-katalógus (2026-09-05). A `practice_generator`
+// katalógus-metaadata ezt olvassa, és az architektúra-szabály szerint egy
+// másik feature CSAK a `public.dart`-on át nyúlhat ide.
+export 'data/builtin_practice_catalog.dart' show BuiltinPracticeCatalog;

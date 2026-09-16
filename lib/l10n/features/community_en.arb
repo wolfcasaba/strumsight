@@ -24,6 +24,8 @@
 
   "communityGateErrorBody": "Could not load your Community profile. Pull to refresh, or check your connection.",
 
+  "communityGateRetry": "Retry",
+
   "communityEditCreateTitle": "Create your Community profile",
   "@communityEditCreateTitle": {},
 
@@ -690,6 +692,12 @@
 
   "communityClubChallengesEmpty": "No active challenges.",
   "@communityClubChallengesEmpty": {},
+
+  "communityClubChallengesUnavailableTitle": "Club challenges are not available yet",
+  "@communityClubChallengesUnavailableTitle": {},
+
+  "communityClubChallengesUnavailableBody": "This build cannot list a club's challenges — the server has no endpoint for it yet. This does not mean the club has none.",
+  "@communityClubChallengesUnavailableBody": {},
 
   "communityClubChallengesDifficultyPrefix": "Difficulty",
   "@communityClubChallengesDifficultyPrefix": {},

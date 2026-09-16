@@ -156,6 +156,7 @@ class HttpSocialGraphRepository implements SocialGraphRepository {
     if (cursorValue != null) params['cursor'] = cursorValue;
     final result = await _client.getJson<dynamic>(
       '/community/profiles/${userId.value}/following',
+      queryParameters: params,
       decode: _decodePage,
     );
     return switch (result) {
@@ -174,6 +175,7 @@ class HttpSocialGraphRepository implements SocialGraphRepository {
     if (cursorValue != null) params['cursor'] = cursorValue;
     final result = await _client.getJson<dynamic>(
       '/community/profiles/${userId.value}/followers',
+      queryParameters: params,
       decode: _decodePage,
     );
     return switch (result) {

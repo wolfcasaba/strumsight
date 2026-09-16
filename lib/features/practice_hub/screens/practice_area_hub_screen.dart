@@ -47,6 +47,12 @@ class PracticeAreaHubScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final catalog = ref.watch(practiceCatalogProvider);
+    // MÉRT hiba (2026-09-06 review, MAJOR-3): a tervező belépési pontjait
+    // csak a LEGACY `PracticeHubScreen` kapta meg, azt viszont a router
+    // kizárólag `!adaptiveShellEnabled` mellett regisztrálja. A szállított
+    // (Lab) buildben a shell BE van kapcsolva, tehát a `/practice` ezt a
+    // képernyőt rendereli — belépő nélkül a tervező megint elérhetetlen.
+    // Ugyanaz a zászló kapuz, mint a route-okat: `practiceGeneratorEnabled`.
     final flags = ref.watch(appConfigProvider).flags;
     final groups = practiceAreaHubGroups(catalog);
     // ADR 0508 D4 — `null` only for an empty catalog, so the recommended
@@ -165,6 +171,40 @@ class PracticeAreaHubScreen extends ConsumerWidget {
                   ),
               ],
             ),
+            // A tervező belépői ugyanazt a zászlót kapják, mint a route-ok
+            // (2026-09-06 review, MAJOR-3): kikapcsolt zászlónál egyik gomb
+            // sem létezik, mert a cél-útvonal sincs regisztrálva.
+            if (flags.practiceGeneratorEnabled) ...[
+              const SizedBox(height: 24),
+              Semantics(
+                header: true,
+                child: Text(
+                  l10n.planSetupTitle,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _QuickTool(
+                    key: const ValueKey('practice-area-hub-plan-builder'),
+                    icon: Icons.auto_awesome_outlined,
+                    label: l10n.planSetupGoalTitle,
+                    onPressed: () =>
+                        context.push(AppRoutes.practiceGeneratorSetup),
+                  ),
+                  _QuickTool(
+                    key: const ValueKey('practice-area-hub-today-plan'),
+                    icon: Icons.today_outlined,
+                    label: l10n.todayPlanTitle,
+                    onPressed: () =>
+                        context.push(AppRoutes.practiceGeneratorToday),
+                  ),
+                ],
+              ),
+            ],
             if (groups.isNotEmpty) ...[
               const SizedBox(height: 24),
               Semantics(

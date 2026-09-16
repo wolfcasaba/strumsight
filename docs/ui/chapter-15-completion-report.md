@@ -19,12 +19,12 @@ retirement happened." Both halves are measured below, and the second half
   variant matrix over the **MEASURED reachable-screen set** (71) ∪
   `{ProgressDashboardScreen, SkillDetailScreen}` (§0.0.A/R5), minus the one
   screen with no merged pump fixture anywhere in the tree
-  (`WrappedPreviewScreen`, §2 below) = **72 screens** × {light, dark} ×
+  (`WrappedPreviewScreen`, §2 below) = **93 screens** × {light, dark} ×
   {en, hu} × {compact portrait 412×915, landscape 915×412} × {textScale
-  1.0, 2.0} = **1152 cells**, each asserting no `RenderFlex` overflow and
+  1.0, 2.0} = **1488 cells**, each asserting no `RenderFlex` overflow and
   no pump exception via `FlutterError.onError`, plus **5 completeness
   cells** (A1) and **6 report-guard cells** (A5, including the grand-total
-  guard added this fixing round, review MAJOR-1) — **1163 tests total,
+  guard added this fixing round, review MAJOR-1) — **1499 tests total,
   all green** (measured locally this session: 48 "A-level"
   golden-fixtured screens and 24 "B-level" `test/features/**`-fixtured
   screens shipped in the original round, §8 steps 2–3; the A5 grand-total
@@ -86,11 +86,21 @@ session:
 
 ```
 flutter test test/ui/goldens/e15_r13_full_variant_matrix_test.dart
-# +1163: All tests passed!
+# +1499: All tests passed!
 ```
 
-**1163** (= 72 screens × 16 variants = 1152 cells + 5 A1-completeness
+**1499** (= 93 screens × 16 variants = 1488 cells + 5 A1-completeness
 cells + 6 A5-report-guard cells), reproduced this fixing round (§10.4).
+
+> **2026-09-05 (E17 Ch17 teljes bekötés):** 72 → **93 képernyő**. A
+> community tizenhármas, a hangelemzés felvételi hármasa, a
+> gyakorlástervező négyese és a First-Win állomás route-jainak bekötésével
+> ezek `reachable: true`-vá váltak, és az A1 teljességi invariáns (mért
+> elérhető halmaz ⊆ mátrix ∪ kizárás) helyesen követelte a
+> variáns-alapvonalukat. A mátrix HÁROM valódi, 2.0-s szöveg-méretnél
+> jelentkező túlcsordulást fogott meg — a kapu-képernyőn (8px), a
+> felvételi képernyőn (64px) és az értesítés-beállításokban (2310px) —,
+> mindhárom javítva ugyanebben a sávban.
 
 - **Completeness (A1):** a dedicated test group re-runs
   `ScreenReachability(Directory.current).render()` at test time and
@@ -101,7 +111,7 @@ cells + 6 A5-report-guard cells), reproduced this fixing round (§10.4).
   follow-up round (tightened this fixing round, review MINOR-1), and the
   `"no merged pump fixture"` reason is machine-checked to apply to
   `WrappedPreviewScreen` alone (§0.0.A/R3).
-- **Per-cell rendering (A2):** every one of the 1152 screen × variant
+- **Per-cell rendering (A2):** every one of the 1488 screen × variant
   cells sets its OWN `tester.view.physicalSize` + `devicePixelRatio`
   (L558) and asserts zero pump exceptions; overflow-free UNLESS the cell
   is a dated, measured `_ExcludedCell` entry (§5 below) — never `skip`,

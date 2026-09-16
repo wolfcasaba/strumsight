@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/practice_generator/public.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
@@ -135,6 +137,67 @@ void main() {
       expect(find.text('Today is complete'), findsOneWidget);
     });
   });
+
+  // -------------------------------------------------------------------
+  // WP-D (2026-09-06) — a tervező két MELLÉK-képernyőjének belépési
+  // pontja. MÉRT hiány: `/practice/generator/weekly` és `/privacy`
+  // regisztrálva volt, de a szállított felületről SEMMI nem vezetett
+  // rájuk. Az előnézet és a változás-áttekintés SZÁNDÉKOSAN nem kap itt
+  // gombot: azok `extra`-t (tervet, illetve javaslatot) kérnek, amit ez a
+  // képernyő nem tud előállítani — `extra` nélkül a router visszadobná
+  // ide, azaz halott vezérlő lenne.
+  // -------------------------------------------------------------------
+  group('WP-D — the Today screen reaches the generator side-screens', () {
+    for (final entry in const <({String key, String path})>[
+      (key: 'today-plan-open-weekly', path: AppRoutes.practiceGeneratorWeekly),
+      (
+        key: 'today-plan-open-privacy',
+        path: AppRoutes.practiceGeneratorPrivacy,
+      ),
+    ]) {
+      testWidgets('${entry.key} navigates to ${entry.path}', (tester) async {
+        await _pumpRouted(
+          tester,
+          TodayPlanScreen(
+            controller: TodayPlanController(clock: () => DateTime(2026, 8, 19)),
+          ),
+        );
+
+        await tester.tap(find.byKey(Key(entry.key)));
+        await tester.pumpAndSettle();
+
+        expect(find.text('STUB ${entry.path}'), findsOneWidget);
+      });
+    }
+  });
+}
+
+/// WP-D harness — a valós „ma" képernyő egy MINIMÁLIS go_router alatt. A
+/// két cél helyén `STUB <path>` áll: a cella a NAVIGÁCIÓT méri, nem a heti
+/// terv / adatvédelem képernyő tartalmát (azoknak saját tesztjük van).
+Future<void> _pumpRouted(WidgetTester tester, Widget child) {
+  final router = GoRouter(
+    initialLocation: AppRoutes.practiceGeneratorToday,
+    routes: <RouteBase>[
+      GoRoute(path: AppRoutes.practiceGeneratorToday, builder: (_, _) => child),
+      for (final path in const <String>[
+        AppRoutes.practiceGeneratorWeekly,
+        AppRoutes.practiceGeneratorPrivacy,
+      ])
+        GoRoute(
+          path: path,
+          builder: (_, state) => Scaffold(body: Text('STUB ${state.uri.path}')),
+        ),
+    ],
+  );
+  return tester.pumpWidget(
+    MaterialApp.router(
+      theme: SsLightTheme.data(),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      routerConfig: router,
+    ),
+  );
 }
 
 Future<void> _pump(WidgetTester tester, Widget child) => tester.pumpWidget(

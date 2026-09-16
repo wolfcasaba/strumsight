@@ -2,9 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart'
     show openAppSettings;
 
+import '../../../../app/config/app_config.dart';
+import '../../../../app/routing/app_route.dart';
 import '../../../../core/camera/camera_providers.dart';
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -59,6 +62,14 @@ class _VisionSetupScreenState extends ConsumerState<VisionSetupScreen> {
     }
     final state = ref.watch(visionSetupControllerProvider);
     final controller = ref.read(visionSetupControllerProvider.notifier);
+    // A gitár-geometria (`/vision/guitar-geometry`) a beállítás TERMÉSZETES
+    // következő lépése, de a szállított felületről csak a legacy
+    // `/calibrate` cím vezetett a képernyőre — magára az útvonalra semmi.
+    // A kapu bájtra a routeré: `visionEnabled && visionGuitarGeometryEnabled`
+    // (`app_router.dart`), így a gomb sosem mutat regisztrálatlan címre.
+    final flags = ref.watch(appConfigProvider).flags;
+    final geometryEnabled =
+        flags.visionEnabled && flags.visionGuitarGeometryEnabled;
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.visionSetupTitle, overflow: TextOverflow.ellipsis),
@@ -106,7 +117,11 @@ class _VisionSetupScreenState extends ConsumerState<VisionSetupScreen> {
                 onRequest: () =>
                     unawaited(controller.requestCameraPermission()),
               ),
-              VisionSetupStep.ready => _ReadyStep(),
+              VisionSetupStep.ready => _ReadyStep(
+                onOpenGeometry: geometryEnabled
+                    ? () => context.push(AppRoutes.visionGuitarGeometry)
+                    : null,
+              ),
               VisionSetupStep.audioOnly => const _AudioOnlyStep(),
             },
           ],
@@ -274,12 +289,34 @@ class _PermissionStep extends StatelessWidget {
 }
 
 class _ReadyStep extends StatelessWidget {
+  const _ReadyStep({this.onOpenGeometry});
+
+  /// `null`, ha a gitár-geometria útvonala NINCS regisztrálva (a két flag
+  /// bármelyike ki). Ilyenkor a gomb nem jelenik meg — nem tiltva, hanem
+  /// egyáltalán nem: egy letiltott vezérlő azt ígérné, hogy létezik a
+  /// folyamat, csak most nem érhető el.
+  final VoidCallback? onOpenGeometry;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return SsSection(
       title: l10n.visionSetupReadyTitle,
-      child: Text(l10n.visionSetupReadyBody),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(l10n.visionSetupReadyBody),
+          if (onOpenGeometry != null) ...[
+            const SizedBox(height: SsSpacing.space4),
+            SsButton(
+              key: const Key('vision-setup-open-guitar-geometry'),
+              variant: SsButtonVariant.secondary,
+              label: l10n.guitarCalibrationTitle,
+              onPressed: onOpenGeometry,
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

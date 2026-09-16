@@ -2,7 +2,14 @@ import 'package:meta/meta.dart';
 
 import 'song_setlist.dart';
 
-enum SetlistItemResultStatus { completed, skipped, failed }
+/// Egy dalcsomag-tétel kimenetele.
+///
+/// A `partial` 2026-09-05-én került be (felhasználói döntés): ha a tanuló
+/// félbehagy egy dalt, az addigi eredménye SZÁMÍT — az értékelés azt mutatja,
+/// ameddig eljutott. Enélkül két rossz lehetőség maradt volna: `completed`-nek
+/// jelölni (hamis állítás, mintha végigjátszotta volna) vagy `failed`-nek
+/// (szintén hamis — nem bukott el, csak abbahagyta).
+enum SetlistItemResultStatus { completed, partial, skipped, failed }
 
 /// The outcome of one ordered item in a Setlist session.
 @immutable
@@ -21,6 +28,22 @@ final class SetlistItemResult {
   }) => SetlistItemResult._(
     itemId: itemId,
     status: SetlistItemResultStatus.completed,
+    availability: SetlistItemAvailability.ready,
+    activeDuration: activeDuration,
+    repairRequired: false,
+  );
+
+  /// Félbehagyott tétel: a tanuló elhagyta a dalt, mielőtt a végére ért.
+  ///
+  /// A [activeDuration] a TÉNYLEGESEN eljátszott idő — ebből látszik, meddig
+  /// jutott. A `repairRequired` hamis: nincs mit megjavítani, a tétel maga
+  /// rendben volt.
+  factory SetlistItemResult.partial({
+    required String itemId,
+    required Duration activeDuration,
+  }) => SetlistItemResult._(
+    itemId: itemId,
+    status: SetlistItemResultStatus.partial,
     availability: SetlistItemAvailability.ready,
     activeDuration: activeDuration,
     repairRequired: false,

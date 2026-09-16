@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/practice/application/practice_catalog_controller.dart';
 import 'package:strumsight/features/practice/domain/model/beat_position.dart';
@@ -165,9 +167,78 @@ Widget _host({
   );
 }
 
+/// WP-D harness — a valós hub egy MINIMÁLIS go_router alatt. A tervező
+/// képernyői helyén `STUB <path>` áll: a cella a NAVIGÁCIÓT méri.
+Widget _routerHost({required PracticeCatalogRepository repository}) {
+  final router = GoRouter(
+    initialLocation: AppRoutes.practiceHub,
+    routes: <RouteBase>[
+      GoRoute(
+        path: AppRoutes.practiceHub,
+        builder: (_, _) => const PracticeHubScreen(),
+      ),
+      for (final path in const <String>[
+        AppRoutes.practiceGeneratorSetup,
+        AppRoutes.practiceGeneratorToday,
+      ])
+        GoRoute(
+          path: path,
+          builder: (_, state) => Scaffold(body: Text('STUB ${state.uri.path}')),
+        ),
+    ],
+  );
+  return ProviderScope(
+    overrides: [
+      ...preferenceOverrides(),
+      practiceCatalogRepositoryProvider.overrideWithValue(repository),
+      appConfigProvider.overrideWithValue(_configWith(true)),
+    ],
+    child: MaterialApp.router(
+      theme: SsLightTheme.data(),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      routerConfig: router,
+    ),
+  );
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  // WP-D (2026-09-06) — a tervező „ma" képernyője (`/practice/generator/
+  // today`) eddig CSAK a folyamat belső visszaesési célpontja volt: semmi
+  // nem nyitotta meg szándékosan. A kártya ugyanaz alatt a
+  // `practiceGeneratorEnabled` kapu alatt áll, amivel a router a route-ot
+  // regisztrálja.
+  testWidgets('WP-D: the Today-plan card navigates to the generator Today '
+      'route', (tester) async {
+    await tester.pumpWidget(
+      _routerHost(repository: const _FixtureRepository()),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('practice-hub-today-plan')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('STUB ${AppRoutes.practiceGeneratorToday}'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('WP-D: the Today-plan card is absent when '
+      'practiceGeneratorEnabled is off', (tester) async {
+    await tester.pumpWidget(
+      _host(
+        repository: const _FixtureRepository(),
+        practiceGeneratorEnabled: false,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('practice-hub-today-plan')), findsNothing);
+  });
 
   test('A1: fixture covers all five modes and totals to 6 cards', () {
     expect(_kFixtureModes.length, PracticeMode.values.length);

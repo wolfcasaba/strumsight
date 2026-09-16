@@ -109,6 +109,13 @@ class PracticeHubScreen extends ConsumerWidget {
                   if (practiceGeneratorEnabled) ...[
                     const SizedBox(height: SsSpacing.space3),
                     _PlanBuilderCard(onOpen: () => _openPlanBuilder(context)),
+                    const SizedBox(height: SsSpacing.space3),
+                    // A tervező „ma" képernyője (`/practice/generator/today`)
+                    // eddig CSAK a folyamat belső visszaesési célpontja volt
+                    // — semmi nem nyitotta meg szándékosan. Ugyanaz a kapu
+                    // gondoskodik róla, mint a terv-építőről: a route a
+                    // `practiceGeneratorEnabled` ág alatt regisztrálódik.
+                    _TodayPlanCard(onOpen: () => _openTodayPlan(context)),
                   ],
                   const SizedBox(height: SsSpacing.space5),
                   _ModeFilterRow(active: activeMode, all: catalog),
@@ -152,6 +159,10 @@ class PracticeHubScreen extends ConsumerWidget {
 
   void _openPlanBuilder(BuildContext context) {
     context.go(AppRoutes.practiceGeneratorSetup);
+  }
+
+  void _openTodayPlan(BuildContext context) {
+    context.go(AppRoutes.practiceGeneratorToday);
   }
 }
 
@@ -307,6 +318,25 @@ class _PlanBuilderCard extends StatelessWidget {
   }
 }
 
+/// A tervező „ma" képernyőjének belépési kártyája.
+class _TodayPlanCard extends StatelessWidget {
+  const _TodayPlanCard({required this.onOpen});
+
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return _HubCard(
+      key: const Key('practice-hub-today-plan'),
+      title: l10n.todayPlanTitle,
+      subtitle: l10n.todayPlanNextBlock,
+      trailing: Icons.today_outlined,
+      onTap: onOpen,
+    );
+  }
+}
+
 class _DailyChallengeCard extends StatelessWidget {
   const _DailyChallengeCard({required this.result, required this.onOpen});
 
@@ -341,6 +371,7 @@ class _HubCard extends StatelessWidget {
     required this.trailing,
     required this.onTap,
     this.enabled = true,
+    super.key,
   });
 
   final String title;

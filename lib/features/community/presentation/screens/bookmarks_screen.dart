@@ -39,9 +39,11 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:strumsight/core/design_system/public.dart';
 
+import '../../../../app/routing/app_route.dart';
 import '../../domain/value_objects/content_id.dart';
 import '../../domain/value_objects/cursor_page.dart';
 import '../widgets/community_theme_scope.dart';
@@ -289,8 +291,17 @@ class _BookmarkCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      key: Key('bookmark-row-${row.postId.value}'),
       title: Text('Post ${row.postId.value}'),
       subtitle: Text('Saved at ${row.createdAt.toIso8601String()}'),
+      // WP-C (2026-09-06) — a mentett tétel megnyitja a bejegyzés
+      // beszélgetését. Külön poszt-részlet képernyő NINCS a fában; a
+      // kommentek képernyő a bejegyzés kanonikus nézete.
+      // A sírkő-sor (tombstone) szándékosan NEM navigál: a tartalom
+      // már nincs meg, a sor csak eltávolítható.
+      onTap: () => context.push(
+        AppRoutes.communityComments.replaceFirst(':postId', row.postId.value),
+      ),
       trailing: IconButton(
         tooltip: _l10nBookmarkRemoveAction,
         icon: const Icon(Icons.bookmark_remove_outlined),

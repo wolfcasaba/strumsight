@@ -27,7 +27,7 @@ void main() {
       var streamClosed = false;
       run.progress.listen((_) {}, onDone: () => streamClosed = true);
 
-      final analysis = controller.analyze(_document());
+      final analysis = controller.analyze(_document(), audio: _audio());
       await Future<void>.delayed(Duration.zero);
       await controller.cancel();
       await analysis;
@@ -243,3 +243,16 @@ AnalysisDocument _document({String id = 'isolate-document'}) =>
       warnings: const <AnalysisWarning>[],
       completion: AnalysisCompletion(status: AnalysisCompletionStatus.complete),
     );
+
+/// A VALÓDI hangbemenet a hívótól jön (2026-09-05): az `AnalyzeAudioUseCase`
+/// korábban maga gyártott egy üres minta-listát, és így a felvételi folyamat
+/// csendet elemzett volna. A paraméter azért kötelező, hogy ez fordítási
+/// hibaként jöjjön elő, ne néma viselkedésként.
+ValidatedPcmAnalysisInput _audio() => ValidatedPcmAnalysisInput(
+  input: PcmAnalysisInput(
+    samples: List<double>.filled(4800, 0.1),
+    sampleRate: 48000,
+    channelCount: 1,
+    source: AnalysisInputSource.microphone,
+  ),
+);

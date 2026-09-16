@@ -48,8 +48,22 @@ final class AppConfig {
   static const String accountDefine = 'STRUMSIGHT_ACCOUNT';
   static const String diagTokenDefine = 'STRUMSIGHT_DIAG_TOKEN';
 
-  /// Android-emulator host loopback — dev-only default.
+  /// Android-emulator host loopback — the default for a `lab` (and, without
+  /// a define, a `production`) build. It is NOT the development default any
+  /// more; see [defaultApiBaseUrl].
   static const String devApiBaseUrl = 'http://10.0.2.2:8000';
+
+  /// The live StrumSight backend (WP-G, 2026-09-06). The tester APK is the
+  /// one `.github/workflows/build-apk.yml` builds, and that protected
+  /// workflow passes only `--dart-define=STRUMSIGHT_ENV=development` — so a
+  /// development build with no `STRUMSIGHT_API_URL` define talks to the live
+  /// backend instead of an emulator loopback that a real device cannot
+  /// reach. An emulator developer passes the loopback explicitly:
+  ///
+  /// ```bash
+  /// flutter run --dart-define=STRUMSIGHT_API_URL=http://10.0.2.2:8000
+  /// ```
+  static const String liveApiBaseUrl = 'https://casaba.app/strumsight';
 
   /// The shared dev secret for the Lab diagnostics endpoint. A production
   /// build with diagnostics may NOT ship this value.
@@ -64,6 +78,41 @@ final class AppConfig {
     diagTokenDefine,
     defaultValue: devDiagnosticsToken,
   );
+
+  /// The `STRUMSIGHT_API_URL` value this build was given, or `null` when the
+  /// define is ABSENT. `String.fromEnvironment` cannot express that
+  /// difference (an absent define is indistinguishable from its
+  /// `defaultValue`), so presence is measured with `bool.hasEnvironment` —
+  /// the same const-compatible mechanism `feature_flags.dart` uses.
+  static const String? definedApiBaseUrl = bool.hasEnvironment(apiUrlDefine)
+      ? String.fromEnvironment(apiUrlDefine)
+      : null;
+
+  /// The `STRUMSIGHT_ACCOUNT` value this build was given, or `null` when the
+  /// define is ABSENT (`bool.fromEnvironment` reads an absent define and an
+  /// explicit `false` identically). `FeatureFlags.forShippedBuild` needs the
+  /// difference: only an ABSENT define hands the decision to the
+  /// environment.
+  static const bool? definedAccountEnabled = bool.hasEnvironment(accountDefine)
+      ? rawAccountEnabled
+      : null;
+
+  /// The API base URL a build that passed NO `STRUMSIGHT_API_URL` uses:
+  /// [liveApiBaseUrl] for the development (tester) build, the unchanged
+  /// emulator loopback everywhere else.
+  static String defaultApiBaseUrl(AppEnvironment environment) =>
+      environment == AppEnvironment.development
+      ? liveApiBaseUrl
+      : devApiBaseUrl;
+
+  /// The resolved API base URL: an explicit `STRUMSIGHT_API_URL` define
+  /// always wins, in every environment; only its absence falls back to
+  /// [defaultApiBaseUrl]. [define] is injectable so the resolution is
+  /// testable — a dart-define cannot be varied inside `flutter test`.
+  static String apiBaseUrlFor(
+    AppEnvironment environment, {
+    String? define = definedApiBaseUrl,
+  }) => define ?? defaultApiBaseUrl(environment);
 
   final AppEnvironment environment;
 
@@ -99,10 +148,13 @@ final class AppConfig {
   /// - Lab mode must not be available in a production artifact (§14.5 — the
   ///   diagnostics device build is [AppEnvironment.lab]).
   ///
-  /// Outside production the dev defaults are exactly what you want (emulator
-  /// loopback, dev token), but a *malformed* URL is still rejected — a typo'd
-  /// `--dart-define=STRUMSIGHT_API_URL=...` should fail in development too,
-  /// where it's cheap.
+  /// Outside production the defaults are exactly what you want (the live
+  /// backend for the development tester build — [defaultApiBaseUrl] — the
+  /// emulator loopback for lab, and the dev token), but a *malformed* URL is
+  /// still rejected — a typo'd `--dart-define=STRUMSIGHT_API_URL=...` should
+  /// fail in development too, where it's cheap. Loopback and staging hosts
+  /// stay accepted outside production and rejected inside it, unchanged by
+  /// WP-G.
   static AppConfig resolve({
     required AppEnvironment environment,
     required String apiBaseUrl,
@@ -198,6 +250,14 @@ final class AppConfig {
 /// config; the default is a permissive development config so widget tests that
 /// don't care about configuration keep working — override it in tests that do
 /// (§3.5: fully overridable).
+///
+/// This default is TEST SCAFFOLDING, not the shipped development
+/// configuration: it deliberately keeps calling
+/// [FeatureFlags.forEnvironment] (the rollout boundary, account off,
+/// Community off, no preview overlay) so that the hundreds of widget tests
+/// reading it keep measuring one fixed, minimal flag set. The artifact a
+/// tester installs is assembled by `AppBootstrap.run` through
+/// [FeatureFlags.forShippedBuild] + [AppConfig.apiBaseUrlFor] (WP-G).
 final appConfigProvider = Provider<AppConfig>(
   (_) => AppConfig(
     environment: AppEnvironment.development,
