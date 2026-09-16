@@ -1,6 +1,6 @@
 # E17-R07 — Community HTTP-alap: kliens, hiba-taxonómia, auth-fejléc
 
-- **Státusz:** PREPARED (előre megírva 2026-09-05, kód olvasva: `main @ b17e08ef`) — **`hold`: A Community sáv (R07–R13) KÜLSŐ függősége, hogy a `backend/` FastAPI szolgáltatás fusson és a készülék elérje**
+- **Státusz:** PREPARED (előre megírva 2026-09-05, kód olvasva: `main @ b17e08ef`) — **`pending`** (a `hold` 2026-09-05-én feloldva, l. §0.0)
 - **Típus:** Chapter 17 (Teljes bekötés), Kör 7
 - **Kör-azonosító:** `E17-R07`
 - **Branch:** `<motor>/e17-r07-community-http-foundation`
@@ -10,9 +10,11 @@
 
 **Visszakeresett előzmény:** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "community http-alap: kliens, hiba-taxonómia, auth-fejléc"` — a kör pre-flightjának KÖTELEZŐ lefuttatnia és a találatokat a §2-be beépítenie; a brief előre megírt állapotában a §2 a `main @ b17e08ef` mérésein áll.
 
-## 0.0 MIÉRT `hold`
+## 0.0 A `hold` FELOLDVA (2026-09-05)
 
-A Community sáv (R07–R13) KÜLSŐ függősége, hogy a `backend/` FastAPI szolgáltatás fusson és a készülék elérje. **Mi oldja fel:** a `E17-R06` lezárása + a backend elérhetőségének megerősítése (a Lab-mód cloudflared-alagútjának mintájára).
+A kör a Community sáv (R07–R13) HTTP-alapját építi.
+
+Az eredeti `hold` KÜLSŐ függősége az volt, hogy a `backend/` FastAPI szolgáltatás fusson és a készülék elérje. **2026-09-05-én TELJESÜLT:** a backend él a `https://casaba.app/strumsight` végponton (`/health/ready` → `{"status":"ready"}`, Postgres 17, alembic fej `e09_r27_0020`) — lásd `docs/operations/backend-live-deploy.md`. A `E17-R06`-hoz kötés szintén sorrendi preferencia volt, nem függőség: az R06 a `practice_generator`-t érinti, ez a kör a `community`-t.
 
 ```ai-router
 schema_version = 1
