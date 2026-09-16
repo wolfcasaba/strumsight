@@ -38,7 +38,7 @@ unmodified (A5, verified by the §7 gate).
 
 | # | Criterion | Result |
 | --- | --- | --- |
-| A1 | Core flow, `textScale 2.0`, `en`, no overflow | **PASS with 1 recorded exception** — `setup-scoring-profile-overflow` (43px, `practice_setup_screen.dart:418`), tolerated by a dated `_KnownOverflow` entry |
+| A1 | Core flow, `textScale 2.0`, `en`, no overflow | **PASS with 1 recorded exception** — `setup-scoring-profile-overflow` (43px, `practice_setup_screen.dart:434`), tolerated by a dated `_KnownOverflow` entry |
 | A2 | Same, `hu` | **PASS with 2 recorded exceptions** — the same `setup-scoring-profile-overflow` (43px, locale-independent) PLUS `feedback-combo-row-overflow-hu` (65px, `practice_feedback.dart:89`, Hungarian-only) |
 | A3 | Every interactive element reachable via the REAL simulated accessibility traversal, sensible focus order | **PASS with 1 recorded exception class** — `switch-row-split-semantics-node` (3 occurrences per locale on Practice Setup); the primary CTA path (Quick start → Start practice → Start → Pause/Finish/Exit, in that reading order) is fully reachable and correctly labeled in both locales |
 | A4 | No state communicated by colour alone | **PASS** — the session readiness row (`PracticeReadinessRow`) exposes its weak-signal/degraded-capability state as one of 4 fully-localised text labels, verified present in the traversal for both locales |
@@ -56,7 +56,7 @@ the round's complete, documented output.
 ## 3. The three findings (detail in `known-exceptions.yaml`)
 
 1. **`setup-scoring-profile-overflow`** — `_ScoringProfileReadout`
-   (`practice_setup_screen.dart:418`) puts an un-`Expanded` `Text(profileId)`
+   (`practice_setup_screen.dart:434`) puts an un-`Expanded` `Text(profileId)`
    next to an `Expanded` label in a `Row`; at `textScale 2.0` it overflows by
    43px on the right, identically in `en` and `hu` (the id itself never
    localises — the label growing is what starves it of space).

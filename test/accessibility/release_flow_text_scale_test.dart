@@ -236,7 +236,7 @@ final class KnownOverflow {
 /// Public: see [KnownOverflow]'s doc comment — the A6 guard cell in
 /// `release_flow_semantics_test.dart` imports this list.
 const knownOverflows = <KnownOverflow>[
-  // `_ScoringProfileReadout` (practice_setup_screen.dart:410-430) puts an
+  // `_ScoringProfileReadout` (practice_setup_screen.dart:426-446) puts an
   // un-`Expanded` `Text(profileId)` next to an `Expanded` label in a `Row`
   // — at textScale 2.0 the fixed-width sibling no longer fits. Identical
   // 43px on BOTH locales: the overflow is driven by `profileId` (a
@@ -246,7 +246,7 @@ const knownOverflows = <KnownOverflow>[
     id: 'setup-scoring-profile-overflow',
     locale: 'en',
     textScale: 2.0,
-    source: 'practice_setup_screen.dart:418',
+    source: 'practice_setup_screen.dart:434',
     overflowPx: 43,
     measuredOn: '2026-09-01',
   ),
@@ -254,7 +254,7 @@ const knownOverflows = <KnownOverflow>[
     id: 'setup-scoring-profile-overflow',
     locale: 'hu',
     textScale: 2.0,
-    source: 'practice_setup_screen.dart:418',
+    source: 'practice_setup_screen.dart:434',
     overflowPx: 43,
     measuredOn: '2026-09-01',
   ),
