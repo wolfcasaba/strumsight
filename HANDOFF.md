@@ -1,5 +1,44 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ INTEGRÁCIÓS KÖR 2026-09-16 — PR #594/#593/#601 a main-re készen, production-readiness hiánylista (ág: `claude/workflow-production-readiness-r1866i`)
+
+Az ág alapja a már zöld `2315848` (learner-loop, motion, x86 golden-újrafelvétel; full-gate **35060343804**). Erre került:
+| sha | mi |
+|---|---|
+| `51ad38e` | `.gitignore`: `.claude/worktrees/` — az ágens-worktree-ek beágyazott git-repók |
+| `b6836c4` | checklist + blocker újramérés (cherry-pick `d0b2628`): **0/30 → 6/30**, minden pipa mellett bizonyíték-mutató |
+| `810cf1a` | **merge PR #594** (`ops/community-data-layer`, 33 commit, ~150 fájl) |
+| `b4db604` | **merge PR #593** (`ops/e17-parallel`) — E17-R02/R03/R04/R05/R07 `hold` → `pending` |
+| `fd69f6e` | **merge PR #601** (oracle-box toolchain) — CLAUDE.md +8 sor, ütközés nélkül |
+| `a903894` | completion-mátrix E17-sora újraszinkronizálva a queue-hoz (ADR 0494) |
+| `f6eb95d` `af10359` `b7bb53c` `6a8a606` | a merge négy mért következménye (lent) |
+
+**PR #594 — 7 ütközés.** Az alap (`9632a96`) elavult; szabály: ahol az alap avult, a **main viselkedése** marad, a PR javításai bekerülnek. `onboarding_screen.dart` → main (a PR még a review előtti BLOCKER-1/MAJOR-1 kódot hozta). `practice/public.dart` → additív. `practice_area_hub_screen.dart` → main szerkezete + a PR `practiceGeneratorEnabled`-kapuzott tervező-szekciója; a PR ActionChip-es kategórialistája NEM jött vissza; külön javítva a `_QuickTool`-ba **auto-merge-elt kettős `super.key`**. `profile_hub_screen.dart` → main kapuzása marad, a PR community-belépője a kapun BELÜLRE. `lib/l10n/base/app_{en,hu}.arb` → mindkét oldal kulcsai; az aggregátumok (ADR 0307 §4: GENERÁLTAK) újragenerálva — a generátor python-újraimplementációja **bájtra azonos** kimenetet ad mindkét szülőn (`b6836c4`, `abb486d`), **en↔hu paritás 2352 = 2352**.
+
+**PR #593:** sor-unió, és az EGYIK oldalon `done` kör `done` marad → E17-R01 a mi oldalunkról (`0534 done`). A derivált mátrix ettől elcsúszott (`pending=0/hold=13` → mérve `5/8`); a **DERIVÁLT doksit** igazítottam (`sync-completion-matrix.py --write`), nem a tesztet (L648).
+
+**A merge négy mért következménye (mind az elavult alap tünete, egyik sem teszt-gyengítés):**
+1. `f6eb95d` — négy `duplicate_import` (mindkét ág felvette ugyanazt az importot, az auto-merge mindkettőt megtartotta).
+2. `af10359` — `e13_r17_practice_area_hub_compact.png` x86-on újrafelvéve (`record-goldens.yml`, ADR 0426): a merge-elt hub MINDKÉT oldal változását hordozza. **Más golden nem tért el.**
+3. `b7bb53c` — a First-Win állomás EGYSZERRE volt „bejárt" és „kimaradóként dokumentált": a main E17-R01/ADR 0534 óta bejárja, és ki is vette a `full-app-verification.md` §3.2 táblájából, a PR elavult oldala viszont még hozta a sort. A DERIVÁLT doksi javítva (85 → 84 sor).
+4. `6a8a606` — a PR a DÁTUMOZOTT `chapter-15-completion-report.md`-t az ÉLŐ mátrixra írta át (72→93 képernyő, 1152→1488 cella, 1163→1499 teszt). A main ÉPPEN EZT a hibaosztályt szüntette meg (E17-R01 önjavítás, ADR 0112): a számok a jelentés saját alapján mért, rögzített pillanatképből (`test/fixtures/ui/e15_r13_completion_report_baseline.json`) jönnek. A jelentés törzse visszakapta a 72/1152/1163-at, a PR információja idézetblokkban megmaradt.
+
+**Napló-korlát és a megkerülése (L-jelölt tanulság):** a `get_job_logs` az utolsó **5000 sorra** csonkít, a blob-storage letöltés pedig proxy-403 — a full-gate ~13 300 soros naplójából a bukott cellák NEM látszottak. Megoldás: a `record-goldens.yml` `paths` bemenetével a fát **szűkített adagokban** futtattam (35067372183 · 35068007771 ZÖLD · 35068485038 ZÖLD · 35069026223), így minden napló belefért a csonkolásba, és a 3 bukás pontosan azonosítható lett. A golden-mappákon futott adag egyetlen PNG-t sem írt át.
+
+**Mérés:** `brief-lint --level base` (EZT futtatja a CI, `router-ci.yml:69`) → nincs lelet; `--level strict` 28 briefen ad S15-öt („a `main @ b17e08ef` alap elavult") — pre-flight teendő, nem kapu-lelet. `pytest tools/tests` → **968 passed, 4 skipped, 767 subtest**; az egyetlen bukó cella (`test_round_resume_independence`) **a `gh` CLI hiánya** miatt bukik, az érintetlen `2315848` alapvonalon ugyanúgy → környezeti korlát, nem regresszió.
+
+**Zöld futások:** full-gate **35069470318** (mindkét job) · build-apk **35071659469** — artefaktum `strumsight-1.0.0-1-6a8a606-development.apk` (id `10437054029`, 39,6 MB). Mindkettő a `6a8a606` kódállapoton; a jelen HANDOFF-commit csak doksi. **Hiánylista:** [`docs/release/production-readiness-gap-2026-09-16.md`](docs/release/production-readiness-gap-2026-09-16.md) (P0/P1/P2).
+
+### 🚧 NYITVA / EMBERI LÉPÉS
+1. **4 aláírási secret** (`ANDROID_KEYSTORE_BASE64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`) + egy zöld `release-apk.yml` futás (P0-1 / R-SIGN-01).
+2. **`release-candidate-approval` environment** kötelező jóváhagyókkal (ADR 0488).
+3. **RC-workflow + build-szám workflow-módosítás ELŐKÉSZÍTVE, DE NEM ALKALMAZVA**: `tmp/b2-version-and-rc`, commit `23021f2`. A `.github/workflows/**` szerkesztését az ADR 0112/0138 mérce-őr (`.claude/hooks/protect_factory_files.py`) emberi engedélyhez köti; ez a session nem kapott ilyet, és a feloldó `.claude/gate-edit-authorized` szándékosan gitignore-olt, hogy **egyetlen autonóm session se oldhassa fel saját magát**. Embernek kell alkalmaznia (P1-1 / R-VER-01, P1-6 / K-RC-01).
+4. **Valódi gitáros eszköz-teszt** — a végső acceptance predikátum; jegyzőkönyv: [`docs/manual-testing/learner-loop-device-run.md`](docs/manual-testing/learner-loop-device-run.md) (P0-2).
+5. **Privacy support-cím** — a `privacy-support@strumsight.app` ma placeholder (P1-2 / R-PRIV-01).
+6. **Store-listing képernyőképek** + Play Console feltöltés (P1-4 / R-STORE-01).
+7. **Megnevezett incident owner** + dashboard-hivatkozás (P1-5 / R-MONITOR-01).
+8. **Staging migrációs próbafuttatás** — a 21 backend-migráció dokumentáltan (P1-3 / R-STAGE-01).
+
 ## ✅ KÉSZ — 4. kör: egy haladás-modell; 5. kör: a Dalkönyvtár fül a Song Trainer V2 (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
 
 **4. kör — egy haladás-modell** (az 1. kör 6. lelete és az E16-R05 L4):
