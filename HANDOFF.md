@@ -1,5 +1,158 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ KÉSZ — 4. kör: egy haladás-modell; 5. kör: a Dalkönyvtár fül a Song Trainer V2 (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
+
+**4. kör — egy haladás-modell** (az 1. kör 6. lelete és az E16-R05 L4):
+| Elem | Mit ad | Fájl |
+|---|---|---|
+| `practiceStatsProvider` | a session/másodperc/pengetés rollup a V1+V2 összesített feedből (`PracticeStats.fromAggregated`), így a V2 gyakorlás a Ma-hubon, Profilon, streak- és haladás-képernyőn is számít | `lib/features/progress/providers/practice_stats_provider.dart` (ÚJ), `progress/public.dart`; fogyasztók: `today_hub_screen`, `profile_hub_screen`, `streak_screen`, `progress_screen` |
+| `StreakCreditingPracticeSessionRecorder` | sikeres history-mentés után a KANONIKUS `PracticeSessionEligibility` predikátummal (≥20 s aktív VAGY ≥4 megoldott cél) jóváírja a streaket (idempotens naponta); cancelled/failed/interrupted soha. A V1 naplót SZÁNDÉKOSAN nem tükrözi: az összesített feed már uniózza a V2 history-t, egy V1 tükörbejegyzés duplázná a napi célt | `lib/features/practice/application/practice_streak_recorder.dart` (ÚJ); bekötés `practice_session_providers.dart` (history → streak → reward) |
+| Tesztek | rollup V1 2 + V2 2 = 4 session; streak: eligible → 1, kétszer → 1, rövid → 0, cancelled → 0, bukó mentés → Failure és 0; tiszta predikátum-cellák | `test/features/progress/practice_stats_provider_test.dart`, `test/features/practice/practice_streak_recorder_test.dart` (ÚJ) |
+
+**5. kör — a Dalkönyvtár fül a Song Trainer V2:**
+| Elem | Mit ad | Fájl |
+|---|---|---|
+| `/songs` az adaptív shellben | `songTrainerV2Enabled` esetén a `SongLibraryScreen` (8 képernyős tréner belépője), különben változatlanul a legacy `SongListScreen` | `app_router.dart` (branch) |
+| `/songs/own` (ÚJ route) | a legacy „Dalaim" builder-lista, a V2 könyvtár app-bar ikonjáról (`song-library-own-songs`) egy tapra; a nem-adaptív shellben is regisztrálva | `app_route.dart`, `app_router.dart`, `song_library_screen.dart` |
+| Teszt | flag BE → könyvtár + ikon → builder; flag KI → legacy lista | `test/app/navigation/songs_tab_v2_test.dart` (ÚJ) |
+
+**CI-bizonyíték (a kör mérce-artefaktuma):**
+- Első teljes kapu (7b1cff1): 5 piros — `songs_tab_v2_test` (a router
+  harness nem adta a `songRepositoryProvider`-t; javítva 5e0f2e1), a két
+  `e13_r23_song_library` golden (szándékos: új app-bar ikon; x86
+  újrafelvétel `record-goldens.yml` run 34977570898 → 1eed124), és a
+  `full_app_walkthrough` + `placeholder_wiring` e2e páros: a bejárás a
+  §5.2 **L4** leletet kódolta („a Profile sessions csempe V2-vak"), amit
+  épp a 4. kör oldott fel — a teszt most a V1 + 1 V2 session egyesített
+  rollupot méri (f7bcb90); `docs/release/full-app-verification.md` L4 (4.
+  kör) és L5 (2. kör: `ref.invalidate` a `NavigateToResult`-nál) feloldva.
+- A 5000 soros log-farkon túli hibákat a `record-goldens.yml` PNG-mentes
+  könyvtárakra célzott, rövid logú futásaival lokalizáltuk (run 34980424437,
+  34980433500 zöld; 34981137366 piros → e2e); nem commitolt semmit.
+- Zöld teljes kapu f7bcb90-en: `full-gate.yml` run 34981957665;
+  `build-apk.yml` run 34982557486 (APK artefaktum).
+
+**6. kör előkészítése — Chapter 14 felismerési sáv:** a sáv (R20: strum
+modell tanítás csoportosított holdouton) **nem indítható** adat nélkül — a
+repóban nincs verziózott valós corpus (`ml/corpus`: 4 fájl, mind szkript), és
+0 dokumentált valós gitáros menet van. Ezért két bemenet készült:
+- `docs/manual-testing/learner-loop-device-run.md` — az ÚJ APK
+  tesztjegyzőkönyve (1–7. szakasz: az 1–5. kör mérése; 8. szakasz: a
+  felismerés számai, amelyek az R20 célértékét és hibaosztályát adják).
+- `docs/rounds/e14-r20-strum-model-grouped-holdout-training.md` — az R20
+  brief §0.0 STOP-feltételekkel (jegyzőkönyv, ≥3 játékos × 2 gitár × 2
+  helyiség csoportosított corpus, rögzített holdout-séma); a queue-ba
+  szándékosan nem került, amíg az adat nincs meg.
+
+
+## ✅ KÉSZ — 3. kör: valódi XP-főkönyv a Practice V2 session mögött (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
+
+Az 1. kör 3. lelete („+XP kártya, ami soha nem ad"): a
+`GamificationPracticeAdapter` sehol nem volt példányosítva, a result-képernyő
+főkönyv-seamje egy no-op volt. Most a MEGLÉVŐ lánc kap produkciós kompozíciót:
+
+| Elem | Mit ad | Fájl |
+|---|---|---|
+| Reward-pipeline providerek | `LocalActivityOutboxRepository` (kapacitás 64, 3 próba) a MEGOSZTOTT `gamificationRewardLedgerRepositoryProvider` fölött, `ActivityEventIngestor`, `DefaultRewardEligibilityPolicy(standard)`, `DefaultRewardPolicy(standard)` — egy főkönyv, egy outbox, egy policy-pár, a `public.dart`-on exportálva | `lib/features/gamification/providers/gamification_reward_pipeline_providers.dart` (ÚJ) |
+| `practiceGamificationAdapterProvider` | az adapter `newOnly` módban (a V2 sessionnek nincs legacy statisztika-sinkje: a V1 napló/streak a Learn és Song Trainer `PracticeSessionRecording`-ja, amit a V2 session sosem hívott — nincs mit duplán írni); a policy-history a főkönyvből (`practiceRewardHistorySnapshotFromLedger`) | `lib/features/practice/application/practice_reward_providers.dart` (ÚJ) |
+| `RewardingPracticeSessionRecorder` | a history-mentés UTÁN (és csak sikeres mentés után) jel → adapter → outbox → `drain()`, így a result-képernyő már valódi bejegyzést olvas; jutalmazási hiba SOHA nem bukja a sessiont (log + a mentés eredménye megy vissza) | `lib/features/practice/application/practice_reward_recorder.dart` (ÚJ); bekötés: `practice_session_providers.dart` (`practiceSessionControllerProvider`) |
+| Jel-leképezés (tiszta) | finishReason → outcome (completed/userFinished/timedOut → completed; cancelled/interrupted → cancelled; failed → failed); quality = a legjobb próbálkozás overall-ja, ha mért; trust `scored` / `deviceObserved` | ugyanott, `practiceGamificationSignalFor` |
+| Result-képernyő seam | `rewardLedgerRepositoryProvider` → a valódi `gamificationRewardLedgerRepositoryProvider` (a `_NoopRewardLedgerRepository` törölve) | `practice_result_providers.dart` |
+| Tesztek | valós in-memory lánc: scored 2,5 perces session → 1 bejegyzés, XP > 0, a seam visszaolvassa; kétszeri rögzítés → 1; két session egy napon → history 2; 30 mp → semmi; cancelled → semmi; bukó mentés → Failure és semmi; jel-leképezés cellák | `test/features/practice/practice_reward_recorder_test.dart` (ÚJ) |
+
+**Zöld kapu:** `build-apk.yml`
+[run 34968350914](https://github.com/wolfcasaba/strumsight/actions/runs/34968350914)
+az `a2b08a6`-on — a `flutter-gates` composite MINDEN lépése `success` (format,
+analyze, architektúra, secret-scan, l10n-paritás, asset, teljes tesztsuite,
+randomizált property gate), a song-schema és song-fixture kapu is; a release
+APK ugyanebből a futásból (development env). Az előző, 2. körös APK: run
+34964160809.
+
+**Őszinte kapuk maradnak:** a standard eligibility 1 perc alatt nem ad XP-t,
+mért minőség nélkül nem ad minőség-XP-t. **Nyitva (következő):** a V2 session
+ma sem írja a V1 naplót / streaket (a Ma-hub és a Profil a V1-et olvassa) — ez
+a haladás-modell egyesítésének köre.
+
+
+## ✅ KÉSZ — 2. kör: „Következő lépés ajánlás" (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
+
+Az 1. kör auditjának 5. leletére („nincs mi legyen most a hurok végén": az
+ajánlás mindig a katalógus első eleme, az eredmény csak „Gyakorolj újra").
+Egyetlen tiszta szabályrendszer, két fogyasztóval:
+
+| Elem | Mit ad | Fájl |
+|---|---|---|
+| `recommendNextPractice(catalog, history, latest?)` | determinisztikus, I/O-mentes: nincs előzmény → legkönnyebb (`firstSession`); az utolsó session lefedettsége < 70 % → ugyanaz újra (`repeatToConsolidate`); különben az első még nem játszott, könnyebbtől (`advance`); ha minden játszva → a leggyengébb legutóbbi (`revisitWeakest`) | `lib/features/practice/domain/service/next_practice_recommender.dart`, model: `domain/model/next_practice_recommendation.dart` |
+| `nextPracticeRecommendationProvider` | katalógus + `practiceHistoryV2ListProvider` (töltés/hiba alatt üres előzmény = legkönnyebb, sosem `null`, csak üres katalógusnál) | `application/practice_recommendation_providers.dart`, `public.dart` export |
+| Gyakorló hub „Neked ajánlott" | a definíció NEVE + az OK egy mondatban + CTA az ajánlott id-vel (nem `catalog.first`) | `practice_area_hub_screen.dart` |
+| Eredményképernyő „Következő" | elsődleges gomb: „Következő: {cím}" + ok; „Gyakorolj újra" másodlagos; ha az ajánlás ugyanaz a definíció, egyetlen elsődleges „Gyakorolj újra" az okkal. A most befejezett session `latest`-ként számít, mielőtt a lista újratölt | `practice_result_screen.dart` (`_NextStepAction`) |
+| L5 (E16-R05) zárva | session-vég után `practiceHistoryV2ListProvider` invalidálva, így a hub és a dashboard restart nélkül látja | `practice_effect_listener.dart` |
+| Szövegek | 4 ok-mondat + `practiceResultNextRecommendedCta` a `base/` forrásban, en+hu | `lib/l10n/base/app_{en,hu}.arb` |
+| Tesztek | 10 tiszta cella (küszöb-határ inkluzív, `latest` dedup, katalógusból hiányzó definíció), hub 2 cella (gyenge előzmény → ugyanaz, név+ok+id; nincs előzmény → első), eredmény 2 cella (haladás → „Következő: Second pattern" + Setup a másik id-vel; gyenge → egy gomb, ugyanaz az id) | `test/features/practice/domain/next_practice_recommender_test.dart`, `test/features/practice_hub/practice_area_hub_categories_test.dart`, `test/features/practice/presentation/practice_result_next_step_test.dart` |
+
+**Zöld kapu:** `full-gate.yml`
+[run 34961974108](https://github.com/wolfcasaba/strumsight/actions/runs/34961974108)
+a `2f4f803`-on — a `full-gate` job MINDEN lépése `success` (format, analyze,
+architektúra, secret-scan, l10n-paritás, asset, teljes tesztsuite, randomizált
+property gate, song-schema és song-fixture kapu). A goldenek a tulajdonos által
+engedélyezett `record-goldens.yml`-lel (a `main`-ről, run 34958608357 és
+34961673742) a kapu x86 architektúráján lettek felvéve: 1. kör 7 PNG, 2. kör 3
+PNG — a PNG-diff review-ja emberi lépés. Két lappangó hiba is előkerült a CI
+mérésével és javítva lett: a Live `dispose`-beli provider-írás (1. kör), és az
+eredményképernyő `Next` sorának build-fázisú history-inicializálása a 200 %-os
+akadálymentességi cellában (2. kör, post-frame betöltésre cserélve).
+
+**APK:** `build-apk.yml` a `2f4f803`-on dispatchelve (development env: adaptív
+shell, Practice V2, Song Trainer V2 BE) — ez a valós gitáros teszt artefaktuma.
+
+
+## ✅ KÉSZ — 1. kör: tanulói hurok-javítás (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
+
+A felhasználó kérése: az SDD-tervek átnézése után „a tanulónak tényleg élmény
+legyen" — az audit szerint a KÓD minősége nem a gond, hanem a szállított
+kompozíció zsákutcái és ígéretei. Ez az ág a mért zsákutcákat zárja, ÚJ
+funkció nélkül (mind kompozíció):
+
+| # | Mért lelet | Javítás | Fájl |
+|---|---|---|---|
+| 1 | A First-Win Stage a mikrofon első CSENDES frame-jére (`LiveFrame.confidence == 0`) azonnal „nem hallottuk tisztán"-t mutatott, a játék ELŐTT | csak `latestStrum != null` frame számít próbálkozásnak; A11 csend-cellák | `lib/features/onboarding/first_win_engine.dart`, `test/features/onboarding/first_win_production_engine_test.dart` |
+| 2 | A Gyakorló hub 5 „Böngészés cél szerint" chipje `?id=` nélkül nyitotta a Setupot → „Gyakorlat nem elérhető" hibaképernyő | a katalógus célcsoportokra bontva (a definíció módja/skillTags-e szerint), minden csempe `?id=`-vel; üres csoport nem renderelődik; + „Vezetett tanfolyam" kártya (`/practice/learn`) és Song Trainer gyors-eszköz (flag mögött) | `lib/features/practice_hub/practice_area_hub_categories.dart` (ÚJ), `.../practice_area_hub_screen.dart`, `test/features/practice_hub/practice_area_hub_categories_test.dart` (ÚJ) |
+| 3 | A gyakorlás-eredmény „+XP" kártyája MINDIG „még nincs rögzített jutalom" volt (`_NoopRewardLedgerRepository`, a `GamificationPracticeAdapter` sehol nincs példányosítva) | a kártya csak valódi főkönyvi bejegyzésnél renderelődik; a VALÓDI bekötés külön kör (E08-R29 integritás-hold után) | `lib/features/practice/presentation/screens/practice_result_screen.dart`, `test/features/practice/reward_idempotency_test.dart` |
+| 4 | Flag-KI kártyák a fő felületeken („Vizuális gyakorlás" a Ma-hubon, „Közösség" a Profilon), tartalmuk csak „nem elérhető" | a kártya/szekció flag-KI állapotban nem renderelődik | `today_hub_screen.dart`, `profile_hub_screen.dart` + tesztjeik |
+| 5 | Élő „Befejezés" → Ma, összegzés nélkül | pengetéses session után `LiveSummaryDialog` (pengetés, akkordszám, idő, egy következő lépés; ≥8 pengetésnél „Tanfolyam megnyitása"); 0 pengetésnél változatlan azonnali kilépés | `lib/features/live/widgets/live_summary_dialog.dart` (ÚJ), `live_screen.dart`, `test/features/live/live_summary_test.dart` (ÚJ) |
+| 6 | Profil fül címkéje `tutorProfileTitle` („Tutor profil"); „Bizonyossági küszöb" csúszka a Beállítások első képernyőjén | `profileHubTitle`; a csúszka összecsukott „Haladó beállítások" `ExpansionTile` alá | `lib/app/home_shell.dart`, `settings_screen.dart` |
+| — | 15 új ARB-kulcs a `base/` FORRÁS szegmensben, aggregátum generálva (ADR 0307 §4, a generátor Python-tükrével — bájtra azonos a Dart-kimenettel a módosítás előtti fán mérve) | | `lib/l10n/base/app_{en,hu}.arb`, `lib/l10n/app_{en,hu}.arb` |
+
+**CI-bizonyíték (remote konténer, nincs Flutter SDK —
+`docs/execution/remote-container-environment.md`):** a `full-gate.yml`
+[run 34955651162](https://github.com/wolfcasaba/strumsight/actions/runs/34955651162)
+a `415621e`-n: **format, analyze, architektúra, secret-scan, l10n-paritás, asset
+kapu ZÖLD**; a test-kapu `10227 passed, 7 failed` — a 7 piros pontosan a
+szándékosan változott pixel-golden (alább), más piros nincs. A formázó
+kimenetét és a bukó tesztek naplóját egy ideiglenes, azóta törölt próbateszt
+írta a CI-naplóba (a napló-API az utolsó 5000 sorra csonkol), onnan lett
+visszavezetve. Közben egy LAPPANGÓ hiba is előkerült és javítva lett: a Live
+képernyő `dispose`-a a `practiceLogProvider`-be írt (Riverpod tiltja a
+provider-írást widget-életciklusban) — a session-napló írása mikrotaszkra
+halasztva (`live_screen.dart`).
+
+**Nyitott piros — emberi lépés:** 7 golden PNG újrafelvétele a kapu
+architektúráján (ADR 0426): `e13_r17_today_hub_compact`,
+`e13_r17_practice_area_hub_compact{,_scale2}`,
+`e13_r17_profile_hub_compact{,_scale2}`, `e13_r22_practice_result_compact`,
+`e13_r35_settings_compact`. Parancs a felhasználó boxán, ezen az ágon:
+`tools/golden-x86.sh record test/ui/goldens/e13_r17_screens_golden_test.dart
+test/ui/goldens/e13_r22_screens_golden_test.dart
+test/ui/goldens/e13_r35_screens_golden_test.dart`. Egy CI-oldali
+`golden-record.yml` workflow-t a `protect_factory_files` hook helyesen
+blokkolt (`.github/workflows/*` a mérce része, ADR 0112/0138) — emberi
+engedély (`.claude/gate-edit-authorized`) nélkül nem került be.
+
+**Nyitva marad (külön kör):** valódi XP-főkönyv bekötés; a „Dalkönyvtár" fül
+V2-re váltása; egy haladás-modell (progress V1/V2/gamification); a Ch14 R20–R42
+felismerési sáv; valós gitáros APK-teszt jegyzőkönyve.
+
+
 ## ✅ E17-R01 KÉSZ — az onboarding First-Win állomása a szállított kompozícióban, VALÓS konfidencia-forrással — PR [#600](https://github.com/wolfcasaba/strumsight/pull/600), squash `c455e8ae` (2026-09-05)
 
 A Chapter 17 (Teljes bekötés) **első köre**: a `FirstWinStageScreen` eddig

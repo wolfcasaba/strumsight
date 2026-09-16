@@ -305,11 +305,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       // E13-R08 (D6) — when the adaptive shell owns `/songs` as a
       // destination root below, this legacy registration is excluded to
       // avoid a silently-shadowed duplicate path.
-      if (!adaptiveShellEnabled)
+      if (!adaptiveShellEnabled) ...[
         GoRoute(
           path: AppRoutes.songs,
           builder: (_, _) => const SongListScreen(),
         ),
+        GoRoute(
+          path: AppRoutes.songsOwn,
+          builder: (_, _) => const SongListScreen(),
+        ),
+      ],
       GoRoute(
         path: AppRoutes.setlists,
         builder: (_, _) => const SetlistListScreen(),
@@ -566,8 +571,19 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
             StatefulShellBranch(
               routes: [
+                // Learner-loop round 5: the Songs destination is the Song
+                // Trainer V2 library whenever that rollout is on (the shell
+                // used to open the legacy builder list, leaving the 8-screen
+                // trainer reachable only from an orphaned lesson list). The
+                // legacy builder keeps its own route below.
                 GoRoute(
                   path: AppRoutes.songs,
+                  builder: (_, _) => songTrainerEnabled
+                      ? const SongLibraryScreen()
+                      : const SongListScreen(),
+                ),
+                GoRoute(
+                  path: AppRoutes.songsOwn,
                   builder: (_, _) => const SongListScreen(),
                 ),
                 GoRoute(

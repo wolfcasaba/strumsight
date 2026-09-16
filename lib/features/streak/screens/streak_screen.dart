@@ -25,7 +25,7 @@ class StreakScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final streak = ref.watch(streakProvider);
-    final stats = PracticeStats(ref.watch(practiceLogProvider));
+    final stats = ref.watch(practiceStatsProvider);
     final today = StreakLogic.epochDayOf(now ?? DateTime.now());
     final thisWeek = WeeklyRecap.fromEntries(stats.entries, today: today);
     final lastWeek = WeeklyRecap.fromEntries(stats.entries, today: today - 7);

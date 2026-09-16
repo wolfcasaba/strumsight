@@ -72,6 +72,14 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
       appBar: AppBar(
         title: Text(l10n.songLibraryTitle),
         actions: <Widget>[
+          // Learner-loop round 5: the legacy "My songs" builder list stays
+          // one tap away now that this library is the Songs destination.
+          IconButton(
+            key: const Key('song-library-own-songs'),
+            onPressed: () => context.push(AppRoutes.songsOwn),
+            icon: const Icon(Icons.edit_note),
+            tooltip: l10n.songsTitle,
+          ),
           IconButton(
             key: const Key('song-editor-create'),
             onPressed: () => context.push(AppRoutes.songTrainerNewEditor),

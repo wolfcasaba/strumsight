@@ -12,6 +12,7 @@ import '../../../../app/routing/app_router.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/platform/app_lifecycle.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../application/practice_progress_providers.dart';
 import '../application/practice_session_command.dart';
 import '../application/practice_session_effect.dart';
 import '../application/practice_session_controller.dart';
@@ -171,6 +172,10 @@ class _PracticeEffectListenerState
       case NavigateToResult():
         if (!_navigated) {
           _navigated = true;
+          // The session was just persisted: drop the cached history list so
+          // the hub's recommendation and the progress dashboard see it
+          // without a restart (E16-R05 finding L5).
+          ref.invalidate(practiceHistoryV2ListProvider);
           ref.read(practiceResultNavigationSinkProvider)();
         }
       case ShowRecoverableError(:final failure):

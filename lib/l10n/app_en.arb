@@ -2461,6 +2461,38 @@
   "@liveStarting": {
     "description": "Shown while the detection engine's first frame is still loading."
   },
+  "liveSummaryChords": "{count} different chords",
+  "@liveSummaryChords": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryDone": "Done",
+  "liveSummaryDuration": "{minutes} min {seconds} s",
+  "@liveSummaryDuration": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryOpenCourse": "Open the course",
+  "liveSummaryStrums": "{count} strums",
+  "@liveSummaryStrums": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryTipCourse": "Ready for a goal? The guided course gives you the next chord to learn.",
+  "liveSummaryTipShort": "Short and sweet. Next time keep going a little longer — the detector settles after a few strums.",
+  "liveSummaryTitle": "Nice session!",
   "liveTuner": "Tuner",
   "liveWaitingForChord": "Play a chord…",
   "@liveWaitingForChord": {
@@ -2704,6 +2736,11 @@
   "practiceAreaHubCategoryScales": "Scales",
   "practiceAreaHubCategoryTechnique": "Technique",
   "practiceAreaHubCategoryWarmup": "Warm-up",
+  "practiceAreaHubCourseMessage": "Short lessons from your first chord to whole songs — each one tells you what it unlocks. Start here if you're new.",
+  "practiceAreaHubCourseTitle": "Guided course",
+  "practiceAreaHubDifficultyAdvanced": "Advanced",
+  "practiceAreaHubDifficultyBeginner": "Beginner",
+  "practiceAreaHubDifficultyIntermediate": "Intermediate",
   "practiceAreaHubQuickToolsHeading": "Quick tools",
   "practiceAreaHubRecommendedCta": "Start recommended practice",
   "practiceAreaHubRecommendedMessage": "Jump into a practice session picked for where you are right now.",
@@ -2903,6 +2940,10 @@
   "practiceInsightNoSignal": "We couldn't detect any strums — make sure the microphone is close to your guitar.",
   "practiceInsightPositiveReinforcement": "Strong run — every available dimension cleared the bar.",
   "practiceInsightTempoTooHigh": "The tempo pushed your rhythm accuracy below the threshold.",
+  "practiceNextReasonAdvance": "You cleared the last one. The next step up:",
+  "practiceNextReasonFirstSession": "Your first session: start with the easiest pattern.",
+  "practiceNextReasonRepeat": "Almost there. One more round of the same, so it locks in.",
+  "practiceNextReasonRevisit": "You've played everything once. This is where you were weakest last time.",
   "practicePatternPreviewEmpty": "No events in this bar",
   "practicePatternPreviewLabel": "Pattern preview",
   "practicePlanCatchUpSheetBody": "Skipping a day is part of playing. Your plan adapts — it never adds extra work.",
@@ -3029,6 +3070,14 @@
   "practiceResultFinishUserFinished": "You finished the session",
   "practiceResultHistoryCta": "History",
   "practiceResultInsufficientData": "Not enough data",
+  "practiceResultNextRecommendedCta": "Next: {title}",
+  "@practiceResultNextRecommendedCta": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
   "practiceResultNextStepCta": "Practice again",
   "practiceResultNotScored": "Not scored",
   "practiceResultOverall": "Overall",
@@ -3807,6 +3856,8 @@
   "setlistsTitle": "Setlists",
   "settingsAbout": "About",
   "settingsAccount": "Account",
+  "settingsAdvanced": "Advanced",
+  "settingsAdvancedHint": "Detection tuning. The defaults work for most guitars — change these only if recognition keeps missing.",
   "settingsAppearance": "Appearance",
   "settingsCapo": "Capo",
   "settingsCapoFret": "Fret {fret}",

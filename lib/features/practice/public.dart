@@ -106,3 +106,10 @@ export 'domain/model/speed_builder_state.dart'
         SpeedBuilderState,
         SpeedBuilderStatus;
 export 'domain/service/speed_builder_engine.dart' show SpeedBuilderEngine;
+// Learner-loop round — the one "what next" the hub's recommended card and
+// the result screen's Next action share.
+export 'application/practice_recommendation_providers.dart';
+export 'domain/model/next_practice_recommendation.dart'
+    show NextPracticeReason, NextPracticeRecommendation;
+export 'domain/service/next_practice_recommender.dart'
+    show nextPracticeConsolidationCoverage, recommendNextPractice;

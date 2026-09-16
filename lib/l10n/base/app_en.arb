@@ -3287,5 +3287,56 @@
   "libraryV2SyncConflictMessage": "This item changed in two places. Choose which version to keep — the other is discarded.",
   "libraryV2SyncConflictLocalLabel": "On this device",
   "libraryV2SyncConflictRemoteLabel": "In the cloud",
-  "libraryV2SyncConflictKeepThis": "Keep this version"
+  "libraryV2SyncConflictKeepThis": "Keep this version",
+  "practiceAreaHubCourseTitle": "Guided course",
+  "practiceAreaHubCourseMessage": "Short lessons from your first chord to whole songs — each one tells you what it unlocks. Start here if you're new.",
+  "practiceAreaHubDifficultyBeginner": "Beginner",
+  "practiceAreaHubDifficultyIntermediate": "Intermediate",
+  "practiceAreaHubDifficultyAdvanced": "Advanced",
+  "settingsAdvanced": "Advanced",
+  "settingsAdvancedHint": "Detection tuning. The defaults work for most guitars — change these only if recognition keeps missing.",
+  "liveSummaryTitle": "Nice session!",
+  "liveSummaryStrums": "{count} strums",
+  "@liveSummaryStrums": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryChords": "{count} different chords",
+  "@liveSummaryChords": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryDuration": "{minutes} min {seconds} s",
+  "@liveSummaryDuration": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryTipShort": "Short and sweet. Next time keep going a little longer — the detector settles after a few strums.",
+  "liveSummaryTipCourse": "Ready for a goal? The guided course gives you the next chord to learn.",
+  "liveSummaryOpenCourse": "Open the course",
+  "liveSummaryDone": "Done",
+  "practiceNextReasonFirstSession": "Your first session: start with the easiest pattern.",
+  "practiceNextReasonRepeat": "Almost there. One more round of the same, so it locks in.",
+  "practiceNextReasonAdvance": "You cleared the last one. The next step up:",
+  "practiceNextReasonRevisit": "You've played everything once. This is where you were weakest last time.",
+  "practiceResultNextRecommendedCta": "Next: {title}",
+  "@practiceResultNextRecommendedCta": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  }
 }

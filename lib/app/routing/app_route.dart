@@ -102,6 +102,11 @@ abstract final class AppRoutes {
   static const String practiceMetronome = '/practice/metronome';
   static const String practiceChords = '/practice/chords';
   static const String songsSetlists = '/songs/setlists';
+
+  /// The legacy "My songs" builder list (learner-loop round 5): once the
+  /// Songs destination renders the Song Trainer V2 library, the builder
+  /// stays reachable here, from the library's own app bar.
+  static const String songsOwn = '/songs/own';
   static const String profileLibrary = '/profile/library';
 
   // Unified Library session detail (E13-R28, SDD Ch13 UI-41). The `extra`

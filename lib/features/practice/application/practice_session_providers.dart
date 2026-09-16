@@ -34,6 +34,8 @@ import '../../../core/foundation/app_result.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/logging/logger_provider.dart';
 import '../../../core/platform/microphone_permission.dart';
+import '../../gamification/public.dart' show activityEventIngestorProvider;
+import '../../streak/public.dart' show streakProvider;
 import '../data/local_practice_history_repository.dart';
 import '../data/practice_history_recorder.dart';
 import '../data/practice_observation_gateway_provider.dart';
@@ -45,7 +47,12 @@ import '../domain/repository/practice_history_repository.dart';
 import '../domain/repository/practice_session_recorder.dart';
 import '../domain/service/practice_target_compiler.dart';
 import 'practice_observation_gateway.dart';
+import 'practice_reward_providers.dart';
+import 'practice_reward_recorder.dart';
 import 'practice_session_clock.dart';
+import 'practice_session_recording.dart'
+    show practiceSessionEligibilityProvider;
+import 'practice_streak_recorder.dart';
 import 'practice_session_controller.dart';
 import 'practice_tick_source.dart';
 
@@ -242,7 +249,7 @@ final practiceSessionControllerProvider = Provider.autoDispose
           (cfg) => cfg.flags.practiceDetailedHistoryEnabled,
         ),
       );
-      final recorder = PracticeHistoryRecorder(
+      final historyRecorder = PracticeHistoryRecorder(
         repository: repository,
         mapperFactory: () => PracticeSessionResultHistoryMapper(
           now: DateTime.now,
@@ -254,9 +261,30 @@ final practiceSessionControllerProvider = Provider.autoDispose
           skillTags: inputs.definition.skillTags,
         ),
       );
+      final logger = ref.watch(practiceSessionLoggerProvider);
+      // Learner-loop round 4: a saved, eligible session credits the streak
+      // the Today/Profile hubs read (the V1 log is NOT mirrored — the
+      // aggregated feed already unions V2 history with it).
+      final streakRecorder = StreakCreditingPracticeSessionRecorder(
+        inner: historyRecorder,
+        streak: ref.watch(streakProvider.notifier),
+        eligibility: ref.watch(practiceSessionEligibilityProvider),
+        now: DateTime.now,
+        logger: logger,
+      );
+      // Learner-loop XP round: the saved session is fed to the shared reward
+      // pipeline (adapter → outbox → ledger) AFTER the history save, so the
+      // result screen's reward card reads a real ledger entry.
+      final recorder = RewardingPracticeSessionRecorder(
+        inner: streakRecorder,
+        adapter: ref.watch(practiceGamificationAdapterProvider),
+        ingestor: ref.watch(activityEventIngestorProvider),
+        definitionId: inputs.definition.id,
+        now: DateTime.now,
+        logger: logger,
+      );
       final clock = ref.watch(practiceSessionClockProvider);
       final tickSource = ref.watch(practiceTickSourceProvider);
-      final logger = ref.watch(practiceSessionLoggerProvider);
       final permissions = ref.watch(practiceMicrophonePermissionProvider);
       final observationConfig = ref.watch(practiceObservationConfigProvider);
       final sessionIdFactory = ref.watch(practiceSessionIdFactoryProvider);

@@ -4,6 +4,11 @@ import 'package:intl/intl.dart' show DateFormat;
 
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../gamification/public.dart' show RewardLedgerEntry;
+import '../../application/practice_catalog_controller.dart'
+    show practiceCatalogProvider;
+import '../../application/practice_progress_providers.dart'
+    show practiceHistoryV2ListProvider;
 import '../../domain/model/practice_history_entry.dart';
 import '../../domain/model/practice_insight.dart';
 import '../../domain/model/practice_metric_snapshot.dart';
@@ -11,9 +16,15 @@ import '../../domain/model/practice_mode.dart';
 import '../../domain/model/practice_session_result.dart';
 import '../../domain/model/speed_builder_policy.dart';
 import '../../domain/model/tempo.dart';
+import '../../domain/service/next_practice_recommender.dart'
+    show recommendNextPractice;
 import '../practice_route_args.dart';
 import '../providers/practice_result_providers.dart';
-import '../widgets/practice_mode_card.dart' show practiceModeLabel;
+import '../widgets/practice_mode_card.dart'
+    show
+        practiceDefinitionDisplayTitle,
+        practiceModeLabel,
+        practiceNextReasonLabel;
 import '../widgets/score_breakdown.dart';
 import '../widgets/timing_bias_chart.dart';
 import 'practice_history_screen.dart';
@@ -59,6 +70,7 @@ class PracticeResultScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final mode = _modeFor(entry.modeCode);
+    final reward = ref.watch(practiceRewardForSessionProvider(entry.id));
     return Scaffold(
       appBar: AppBar(title: Text(l10n.practiceResultTitle)),
       body: SafeArea(
@@ -74,8 +86,15 @@ class PracticeResultScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             _InsightSection(entry: entry),
             const SizedBox(height: 16),
-            _RewardSection(sessionId: entry.id),
-            const SizedBox(height: 16),
+            // The reward card renders only when the ledger actually holds an
+            // entry for this session. A permanent "no reward recorded yet"
+            // card advertised an XP system the shipped composition never
+            // writes to (`rewardLedgerRepositoryProvider` defaults to a
+            // no-op ledger) — a promise without delivery, not information.
+            if (reward != null) ...[
+              _RewardSection(reward: reward),
+              const SizedBox(height: 16),
+            ],
             _NextStepAction(entry: entry),
             const SizedBox(height: 12),
             _ShareSection(entry: entry),
@@ -289,19 +308,18 @@ class _LowConfidenceSummary extends StatelessWidget {
   }
 }
 
-/// Reads the finished session's reward straight from the ledger (A5, ADR
-/// 0283 §Döntés 4). Never computes a number itself — an absent ledger entry
-/// renders as "no reward", not an estimate.
-class _RewardSection extends ConsumerWidget {
-  const _RewardSection({required this.sessionId});
-  final String sessionId;
+/// Shows the finished session's reward exactly as the ledger recorded it
+/// (A5, ADR 0283 §Döntés 4). Never computes a number itself — the parent
+/// reads the ledger and renders this card only when an entry exists.
+class _RewardSection extends StatelessWidget {
+  const _RewardSection({required this.reward});
+  final RewardLedgerEntry reward;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final typography = Theme.of(context).extension<SsTypography>()!;
-    final reward = ref.watch(practiceRewardForSessionProvider(sessionId));
     return SsCard(
       child: Row(
         children: [
@@ -319,9 +337,7 @@ class _RewardSection extends ConsumerWidget {
                 ),
                 const SizedBox(height: SsSpacing.space1),
                 Text(
-                  reward == null
-                      ? l10n.practiceResultRewardNone
-                      : l10n.practiceResultRewardXp(reward.totalXp),
+                  l10n.practiceResultRewardXp(reward.totalXp),
                   style: typography.bodyMedium.copyWith(
                     color: colors.textSecondary,
                   ),
@@ -335,33 +351,123 @@ class _RewardSection extends ConsumerWidget {
   }
 }
 
-/// The executable next step (A7): restarts the SAME definition through the
-/// Setup screen, correctly parameterized by [PracticeHistoryEntry.definitionId]
-/// — never a text-only suggestion.
-class _NextStepAction extends StatelessWidget {
+/// The executable next step (A7): the ONE recommended next practice
+/// ([recommendNextPractice] over the catalog, the persisted history and the
+/// session just finished — which may not be in the reloaded list yet),
+/// named and explained, as a Setup launch correctly parameterized by its
+/// definition id — never a text-only suggestion. "Practice again" stays as
+/// the secondary action when the recommendation is a different definition.
+class _NextStepAction extends ConsumerStatefulWidget {
   const _NextStepAction({required this.entry});
   final PracticeHistoryEntry entry;
 
   @override
+  ConsumerState<_NextStepAction> createState() => _NextStepActionState();
+}
+
+class _NextStepActionState extends ConsumerState<_NextStepAction> {
+  /// The persisted history, loaded AFTER the first frame. Watching the
+  /// history future provider from build made its (re)initialisation land
+  /// inside the build phase when the enclosing scope's overrides changed
+  /// (measured: the A1.5 200 % audit cell), which Riverpod rejects. Until
+  /// it arrives the action row is not rendered — a one-frame gap, never a
+  /// recommendation that flips after the fact.
+  List<PracticeHistoryEntry>? _history;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref
+          .read(practiceHistoryV2ListProvider.future)
+          .then<List<PracticeHistoryEntry>>(
+            (list) => list,
+            onError: (_) => const <PracticeHistoryEntry>[],
+          )
+          .then((list) {
+            if (mounted) setState(() => _history = list);
+          });
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final history = _history;
+    if (history == null) return const SizedBox.shrink();
+    final entry = widget.entry;
     final l10n = AppLocalizations.of(context);
-    return SizedBox(
-      width: double.infinity,
-      child: FilledButton.icon(
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => PracticeSetupScreen(
-              argsOverride: PracticeSetupArgs(
-                request: PracticeSetupRequest.hasId,
-                definitionId: entry.definitionId,
-              ),
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    final catalog = ref.watch(practiceCatalogProvider);
+    final recommendation = recommendNextPractice(
+      catalog: catalog,
+      history: history,
+      latest: entry,
+    );
+    final nextIsSame =
+        recommendation == null ||
+        recommendation.definition.id == entry.definitionId;
+
+    void openSetup(String definitionId) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PracticeSetupScreen(
+            argsOverride: PracticeSetupArgs(
+              request: PracticeSetupRequest.hasId,
+              definitionId: definitionId,
             ),
           ),
         ),
-        icon: const Icon(Icons.replay),
-        label: Text(l10n.practiceResultNextStepCta),
-        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-      ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (recommendation != null) ...[
+          Text(
+            practiceNextReasonLabel(l10n, recommendation.reason),
+            key: const ValueKey('practice-result-next-reason'),
+            style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+          ),
+          const SizedBox(height: SsSpacing.space2),
+        ],
+        if (recommendation != null && !nextIsSame) ...[
+          FilledButton.icon(
+            key: const ValueKey('practice-result-next-recommended'),
+            onPressed: () => openSetup(recommendation.definition.id),
+            icon: const Icon(Icons.arrow_forward),
+            label: Text(
+              l10n.practiceResultNextRecommendedCta(
+                practiceDefinitionDisplayTitle(l10n, recommendation.definition),
+              ),
+            ),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+            ),
+          ),
+          const SizedBox(height: SsSpacing.space2),
+          OutlinedButton.icon(
+            key: const ValueKey('practice-result-practice-again'),
+            onPressed: () => openSetup(entry.definitionId),
+            icon: const Icon(Icons.replay),
+            label: Text(l10n.practiceResultNextStepCta),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+            ),
+          ),
+        ] else
+          FilledButton.icon(
+            key: const ValueKey('practice-result-practice-again'),
+            onPressed: () => openSetup(entry.definitionId),
+            icon: const Icon(Icons.replay),
+            label: Text(l10n.practiceResultNextStepCta),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+            ),
+          ),
+      ],
     );
   }
 }

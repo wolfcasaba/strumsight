@@ -2,22 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/config/app_config.dart';
 import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../features/practice/public.dart' show practiceCatalogProvider;
+import '../../../features/practice/public.dart'
+    show
+        PracticeDifficulty,
+        nextPracticeRecommendationProvider,
+        practiceCatalogProvider,
+        practiceDefinitionDisplayTitle,
+        practiceModeLabel,
+        practiceNextReasonLabel;
 import '../../../l10n/app_localizations.dart';
+import '../practice_area_hub_categories.dart';
 
 /// The Practice Area Hub (UI-06, SDD Ch13 §UI-06) — every practice tool's
-/// rendezvous point: one recommended session, quick tools reachable in a
-/// single tap (A2, well under the 2-touch cap), and goal-based catalog
-/// categories.
+/// rendezvous point: one recommended session, the guided course, quick tools
+/// reachable in a single tap (A2, well under the 2-touch cap), and the whole
+/// catalog browsable by goal.
 ///
 /// Resource-free (A4, ADR 0276): this screen only *navigates* to
-/// `/practice/tuner`, `/practice/metronome`, `/practice/live` and
-/// `/practice/chords` — none of those routes' screens are built inline
-/// here, so no microphone or camera opens on this hub itself. Reading
-/// [practiceCatalogProvider] (ADR 0508 D3) is a const-list lookup, not a
-/// resource open.
+/// `/practice/tuner`, `/practice/metronome`, `/practice/live`,
+/// `/practice/chords`, `/practice/learn` and the Song Trainer library —
+/// none of those routes' screens are built inline here, so no microphone or
+/// camera opens on this hub itself. Reading [practiceCatalogProvider]
+/// (ADR 0508 D3) is a const-list lookup, not a resource open.
+///
+/// Every catalog tile navigates to Setup WITH its definition id — the
+/// pre-existing "Browse by goal" chips called `/practice/setup` without one,
+/// which `PracticeSetupScreen` renders as its route-error branch: five dead
+/// ends in the middle of the hub. The goal groups are derived from the
+/// definitions themselves ([practiceAreaHubGroups]); a goal with nothing in
+/// it is not rendered.
 ///
 /// Styled with plain Material widgets + [AppColors] (matching
 /// `ProgressScreen`/the legacy `PracticeHubScreen`), not the
@@ -31,6 +47,11 @@ class PracticeAreaHubScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final catalog = ref.watch(practiceCatalogProvider);
+    final flags = ref.watch(appConfigProvider).flags;
+    final groups = practiceAreaHubGroups(catalog);
+    // ADR 0508 D4 — `null` only for an empty catalog, so the recommended
+    // card and the catalog stay consistent by construction.
+    final recommendation = ref.watch(nextPracticeRecommendationProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.practiceHubTitle)),
@@ -41,7 +62,7 @@ class PracticeAreaHubScreen extends ConsumerWidget {
             // ADR 0508 D4 — an empty catalog means no recommended card at
             // all (no title, no message, no button), not a CTA that
             // navigates without a definition id.
-            if (catalog.isNotEmpty)
+            if (recommendation != null)
               Card(
                 margin: EdgeInsets.zero,
                 child: Padding(
@@ -54,28 +75,54 @@ class PracticeAreaHubScreen extends ConsumerWidget {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 8),
+                      // The recommended definition by name, and the one
+                      // honest sentence saying WHY it is next — derived from
+                      // the learner's own history, never a generic promise.
                       Text(
-                        l10n.practiceAreaHubRecommendedMessage,
+                        practiceDefinitionDisplayTitle(
+                          l10n,
+                          recommendation.definition,
+                        ),
+                        key: const ValueKey('practice-hub-recommended-name'),
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        practiceNextReasonLabel(l10n, recommendation.reason),
+                        key: const ValueKey('practice-hub-recommended-reason'),
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 16),
                       FilledButton(
                         key: const ValueKey('practice-hub-recommended-cta'),
-                        onPressed: () {
-                          final uri = Uri(
-                            path: AppRoutes.practiceSetup,
-                            queryParameters: <String, String>{
-                              'id': catalog.first.id,
-                            },
-                          );
-                          context.go(uri.toString());
-                        },
+                        onPressed: () => _openSetup(
+                          context,
+                          definitionId: recommendation.definition.id,
+                        ),
                         child: Text(l10n.practiceAreaHubRecommendedCta),
                       ),
                     ],
                   ),
                 ),
               ),
+            const SizedBox(height: 16),
+            // The guided course (the 17-lesson curriculum) — the only path
+            // that names what unlocks what. It was routed but no shell
+            // button led to it; the hub is where a learner looks for it.
+            Card(
+              key: const ValueKey('practice-hub-course-card'),
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                leading: const Icon(
+                  Icons.school_outlined,
+                  color: AppColors.primary,
+                ),
+                title: Text(l10n.practiceAreaHubCourseTitle),
+                subtitle: Text(l10n.practiceAreaHubCourseMessage),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push(AppRoutes.practiceLearn),
+              ),
+            ),
             const SizedBox(height: 24),
             Semantics(
               header: true,
@@ -109,45 +156,97 @@ class PracticeAreaHubScreen extends ConsumerWidget {
                   label: l10n.chordLibraryTitle,
                   onPressed: () => context.go(AppRoutes.practiceChords),
                 ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Semantics(
-              header: true,
-              child: Text(
-                l10n.practiceAreaHubCategoriesHeading,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final label in [
-                  l10n.practiceAreaHubCategoryWarmup,
-                  l10n.practiceAreaHubCategoryChords,
-                  l10n.practiceAreaHubCategoryRhythm,
-                  l10n.practiceAreaHubCategoryScales,
-                  l10n.practiceAreaHubCategoryTechnique,
-                ])
-                  ActionChip(
-                    label: Text(label),
-                    onPressed: () => context.go(AppRoutes.practiceSetup),
+                if (flags.songTrainerV2Enabled)
+                  _QuickTool(
+                    key: const ValueKey('practice-hub-song-trainer'),
+                    icon: Icons.queue_music,
+                    label: l10n.songTrainerTitle,
+                    onPressed: () => context.push(AppRoutes.songTrainerLibrary),
                   ),
               ],
             ),
+            if (groups.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Semantics(
+                header: true,
+                child: Text(
+                  l10n.practiceAreaHubCategoriesHeading,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+            ],
+            for (final MapEntry(key: category, value: definitions)
+                in groups) ...[
+              const SizedBox(height: 16),
+              Text(
+                _categoryLabel(l10n, category),
+                key: ValueKey('practice-hub-category-${category.name}'),
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 8),
+              for (final definition in definitions) ...[
+                Card(
+                  key: ValueKey('practice-hub-definition-${definition.id}'),
+                  margin: EdgeInsets.zero,
+                  child: ListTile(
+                    title: Text(
+                      practiceDefinitionDisplayTitle(l10n, definition),
+                    ),
+                    subtitle: Text(
+                      '${practiceModeLabel(l10n, definition.mode)} · '
+                      '${_difficultyLabel(l10n, definition.difficulty)}',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () =>
+                        _openSetup(context, definitionId: definition.id),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ],
           ],
         ),
       ),
     );
   }
+
+  /// The one way into a scored practice: Setup, parameterized by the
+  /// definition id (the same URI shape as the legacy Hub's `_openSetup`).
+  static void _openSetup(BuildContext context, {required String definitionId}) {
+    final uri = Uri(
+      path: AppRoutes.practiceSetup,
+      queryParameters: <String, String>{'id': definitionId},
+    );
+    context.go(uri.toString());
+  }
+
+  static String _categoryLabel(
+    AppLocalizations l10n,
+    PracticeAreaHubCategory category,
+  ) => switch (category) {
+    PracticeAreaHubCategory.warmup => l10n.practiceAreaHubCategoryWarmup,
+    PracticeAreaHubCategory.chords => l10n.practiceAreaHubCategoryChords,
+    PracticeAreaHubCategory.rhythm => l10n.practiceAreaHubCategoryRhythm,
+    PracticeAreaHubCategory.scales => l10n.practiceAreaHubCategoryScales,
+    PracticeAreaHubCategory.technique => l10n.practiceAreaHubCategoryTechnique,
+  };
+
+  static String _difficultyLabel(
+    AppLocalizations l10n,
+    PracticeDifficulty difficulty,
+  ) => switch (difficulty) {
+    PracticeDifficulty.beginner => l10n.practiceAreaHubDifficultyBeginner,
+    PracticeDifficulty.intermediate =>
+      l10n.practiceAreaHubDifficultyIntermediate,
+    PracticeDifficulty.advanced => l10n.practiceAreaHubDifficultyAdvanced,
+  };
 }
 
 /// A single-tap quick tool: icon + label, text-button weight so it never
 /// competes with the hub's one primary "start recommended" action (§5.2).
 class _QuickTool extends StatelessWidget {
   const _QuickTool({
+    super.key,
     required this.icon,
     required this.label,
     required this.onPressed,

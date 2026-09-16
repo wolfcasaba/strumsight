@@ -25,6 +25,7 @@ import '../widgets/beat_counter.dart';
 import '../widgets/chord_timeline.dart';
 import '../widgets/live_lab_panel.dart';
 import '../widgets/live_status_bar.dart';
+import '../widgets/live_summary_dialog.dart';
 import '../widgets/uncertainty_reason_banner.dart';
 import '../../progress/public.dart';
 import '../../streak/public.dart';
@@ -116,16 +117,20 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // once the screen is gone. Safe after unmount (touches no provider state).
     _engine?.setDiagnosticsCapture(false);
     // Log the finished Live session for the Progress dashboard (only if the user
-    // actually played). Uses the captured notifier — safe after unmount.
-    if (_sessionStart != null && _strokeCount > 0) {
-      _log?.record(
-        PracticeEntry(
-          day: StreakLogic.epochDayOf(DateTime.now()),
-          source: PracticeSource.live,
-          seconds: DateTime.now().difference(_sessionStart!).inSeconds,
-          strokes: _strokeCount,
-        ),
+    // actually played). Uses the captured notifier — safe after unmount. The
+    // write is deferred one microtask: Riverpod forbids modifying a provider
+    // inside a widget life-cycle (dispose included), and this dispose runs
+    // inside the unmount frame when the route is left (measured in CI).
+    final log = _log;
+    final sessionStart = _sessionStart;
+    if (log != null && sessionStart != null && _strokeCount > 0) {
+      final entry = PracticeEntry(
+        day: StreakLogic.epochDayOf(DateTime.now()),
+        source: PracticeSource.live,
+        seconds: DateTime.now().difference(sessionStart).inSeconds,
+        strokes: _strokeCount,
       );
+      scheduleMicrotask(() => unawaited(log.record(entry)));
     }
     super.dispose();
   }
@@ -160,6 +165,12 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   /// immediately; the actual navigation is deferred one short beat so the
   /// `finishing` transport state gets a visible frame.
   ///
+  /// A session in which the learner actually strummed first gets a recap
+  /// ([LiveSummaryDialog]: strums, distinct chords, time, one next step) —
+  /// Finish used to jump straight back to the hub with no feedback at all.
+  /// A session with zero strums (nothing to summarise) leaves immediately,
+  /// exactly as before.
+  ///
   /// The fallback target (when there's nothing to pop to) is the app's own
   /// entry route, mirroring the router's own choice (`adaptiveShellEnabled
   /// ? today : live` — read here via the same public [appConfigProvider]
@@ -174,23 +185,54 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     unawaited(_wakelock.disable());
     _finishTimer = Timer(const Duration(milliseconds: 300), () {
       if (!mounted) return;
-      if (context.canPop()) {
-        context.pop();
+      if (_strokeCount > 0) {
+        unawaited(_showSummaryThenLeave());
         return;
       }
-      final entryLocation =
-          ref.read(appConfigProvider).flags.adaptiveShellEnabled
-          ? AppRoutes.today
-          : AppRoutes.live;
-      if (entryLocation != AppRoutes.live) {
-        context.go(entryLocation);
-        return;
-      }
-      setState(() {
-        _finishing = false;
-        _paused = true;
-        _frozen = ref.read(liveFrameProvider).asData?.value;
-      });
+      _leave();
+    });
+  }
+
+  Future<void> _showSummaryThenLeave() async {
+    final timeline = ref.read(chordTimelineProvider);
+    final chords = <String>{for (final event in timeline) event.chord.label};
+    final start = _sessionStart;
+    final seconds = start == null
+        ? 0
+        : DateTime.now().difference(start).inSeconds;
+    final openCourse = await showDialog<bool>(
+      context: context,
+      builder: (_) => LiveSummaryDialog(
+        strums: _strokeCount,
+        chords: chords.length,
+        seconds: seconds,
+      ),
+    );
+    if (!mounted) return;
+    if (openCourse ?? false) {
+      final adaptive = ref.read(appConfigProvider).flags.adaptiveShellEnabled;
+      context.go(adaptive ? AppRoutes.practiceLearn : AppRoutes.learn);
+      return;
+    }
+    _leave();
+  }
+
+  void _leave() {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    final entryLocation = ref.read(appConfigProvider).flags.adaptiveShellEnabled
+        ? AppRoutes.today
+        : AppRoutes.live;
+    if (entryLocation != AppRoutes.live) {
+      context.go(entryLocation);
+      return;
+    }
+    setState(() {
+      _finishing = false;
+      _paused = true;
+      _frozen = ref.read(liveFrameProvider).asData?.value;
     });
   }
 

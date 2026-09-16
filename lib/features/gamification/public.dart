@@ -67,6 +67,7 @@ export 'presentation/screens/gamification_hub_screen.dart';
 export 'presentation/screens/level_detail_screen.dart';
 export 'presentation/providers/gamification_preferences_provider.dart';
 export 'providers/gamification_providers.dart';
+export 'providers/gamification_reward_pipeline_providers.dart';
 export 'presentation/widgets/achievement_tile.dart';
 export 'presentation/widgets/gamification_theme_scope.dart';
 export 'presentation/widgets/pending_rewards_card.dart';

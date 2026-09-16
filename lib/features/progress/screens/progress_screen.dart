@@ -8,7 +8,7 @@ import '../../streak/public.dart';
 import '../model/practice_entry.dart';
 import '../model/practice_stats.dart';
 import '../providers/daily_goal_provider.dart';
-import '../providers/practice_log_provider.dart';
+import '../providers/practice_stats_provider.dart';
 import '../../share/public.dart';
 import '../widgets/weekly_bars.dart';
 
@@ -45,7 +45,7 @@ class ProgressScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final stats = PracticeStats(ref.watch(practiceLogProvider));
+    final stats = ref.watch(practiceStatsProvider);
     final streak = ref.watch(streakProvider);
     final today = StreakLogic.epochDayOf(now ?? DateTime.now());
 

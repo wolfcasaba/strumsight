@@ -2422,6 +2422,38 @@
   "@liveStarting": {
     "description": "Shown while the detection engine's first frame is still loading."
   },
+  "liveSummaryChords": "{count} különböző akkord",
+  "@liveSummaryChords": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryDone": "Kész",
+  "liveSummaryDuration": "{minutes} perc {seconds} mp",
+  "@liveSummaryDuration": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryOpenCourse": "Tanfolyam megnyitása",
+  "liveSummaryStrums": "{count} pengetés",
+  "@liveSummaryStrums": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryTipCourse": "Jöhet egy cél? A vezetett tanfolyam megadja a következő megtanulandó akkordot.",
+  "liveSummaryTipShort": "Rövid volt. Legközelebb játssz kicsit tovább — a felismerés pár pengetés után áll be.",
+  "liveSummaryTitle": "Szép munka!",
   "liveTuner": "Hangoló",
   "liveWaitingForChord": "Pengess egy akkordot…",
   "@liveWaitingForChord": {
@@ -2665,6 +2697,11 @@
   "practiceAreaHubCategoryScales": "Skálák",
   "practiceAreaHubCategoryTechnique": "Technika",
   "practiceAreaHubCategoryWarmup": "Bemelegítés",
+  "practiceAreaHubCourseMessage": "Rövid leckék az első akkordtól a teljes dalokig — mindegyik megmondja, mit old fel. Ha most kezded, itt indulj.",
+  "practiceAreaHubCourseTitle": "Vezetett tanfolyam",
+  "practiceAreaHubDifficultyAdvanced": "Haladó",
+  "practiceAreaHubDifficultyBeginner": "Kezdő",
+  "practiceAreaHubDifficultyIntermediate": "Középhaladó",
   "practiceAreaHubQuickToolsHeading": "Gyors eszközök",
   "practiceAreaHubRecommendedCta": "Ajánlott gyakorlás indítása",
   "practiceAreaHubRecommendedMessage": "Indíts egy, a jelenlegi szintedhez válogatott gyakorlást.",
@@ -2864,6 +2901,10 @@
   "practiceInsightNoSignal": "Nem érzékeltünk pengetést — a mikrofon legyen közel a gitárhoz.",
   "practiceInsightPositiveReinforcement": "Erős futam — minden elérhető dimenzió átlépte a küszöböt.",
   "practiceInsightTempoTooHigh": "A tempó a ritmus-pontosságot a küszöb alá nyomta.",
+  "practiceNextReasonAdvance": "Az előzőt megcsináltad. A következő lépcső:",
+  "practiceNextReasonFirstSession": "Az első gyakorlásod: a legkönnyebb mintával kezdünk.",
+  "practiceNextReasonRepeat": "Majdnem megvan. Még egy kör ugyanebből, hogy rögzüljön.",
+  "practiceNextReasonRevisit": "Mindent kipróbáltál már egyszer. Ebben voltál legutóbb a leggyengébb.",
   "practicePatternPreviewEmpty": "Nincs esemény ebben az ütemben",
   "practicePatternPreviewLabel": "Minta előnézet",
   "practicePlanCatchUpSheetBody": "Egy kimaradt nap a tanulás része. A terved alkalmazkodik — sosem büntet.",
@@ -2990,6 +3031,14 @@
   "practiceResultFinishUserFinished": "Te zártad a gyakorlatot",
   "practiceResultHistoryCta": "Előzmények",
   "practiceResultInsufficientData": "Nincs elég adat",
+  "practiceResultNextRecommendedCta": "Következő: {title}",
+  "@practiceResultNextRecommendedCta": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
   "practiceResultNextStepCta": "Gyakorolj újra",
   "practiceResultNotScored": "Nincs pontozva",
   "practiceResultOverall": "Összesített",
@@ -3768,6 +3817,8 @@
   "setlistsTitle": "Szettlisták",
   "settingsAbout": "Névjegy",
   "settingsAccount": "Fiók",
+  "settingsAdvanced": "Haladó beállítások",
+  "settingsAdvancedHint": "Felismerés-finomhangolás. Az alapértékek a legtöbb gitárhoz jók — csak akkor nyúlj hozzá, ha a felismerés rendre elvéti.",
   "settingsAppearance": "Megjelenés",
   "settingsCapo": "Kapodaszter",
   "settingsCapoFret": "{fret}. bund",
