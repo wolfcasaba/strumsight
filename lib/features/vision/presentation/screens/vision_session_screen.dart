@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/config/app_config.dart';
@@ -22,7 +21,6 @@ class VisionSessionScreen extends ConsumerWidget {
     // Mount the existing guard: backgrounding revokes the coordinator lease;
     // the controller's revoke callback completes the session exactly once.
     ref.watch(cameraLifecycleGuardProvider);
-    _listenForCueHaptic(ref);
     final state = ref.watch(visionSessionControllerProvider);
     final controller = ref.read(visionSessionControllerProvider.notifier);
     final l10n = AppLocalizations.of(context);
@@ -103,41 +101,6 @@ class VisionSessionScreen extends ConsumerWidget {
         ),
       ),
     );
-  }
-
-  /// SDD Ch6 §24.3 — the `coachCue` feedback mode is "vizuális + opcionális
-  /// haptic". Only the visual half ever shipped: [VisionPreviewOverlay]
-  /// renders the `vision-realtime-cue` text, while nothing under
-  /// `lib/features/vision/**` or `lib/core/camera/**` ever touched
-  /// [HapticFeedback] — which is why the camera surface stayed silent on the
-  /// device.
-  ///
-  /// The haptic half matters more here than anywhere else in the app: §24.4
-  /// ("a gitáros keze foglalt") means the user is NOT watching the phone
-  /// while playing, so a screen-only cue is a cue they never receive.
-  ///
-  /// One short pulse fires when a NEW cue surfaces — never for a repeat of
-  /// the same cue (the controller re-reports the R23 selection while it holds
-  /// its budget window) and never when the cue clears. This mirrors the
-  /// shipped pattern in `tuner_screen.dart` (in-tune lock) and
-  /// `live_screen.dart` (pause toggle): a direct [HapticFeedback] call —
-  /// `mediumImpact`, not `vibrate`, so Android routes it through
-  /// `View.performHapticFeedback` (no `VIBRATE` permission, honours the
-  /// system touch-feedback setting) — a no-op off-device and in tests.
-  static void _listenForCueHaptic(WidgetRef ref) {
-    ref.listen<VisionSessionState>(visionSessionControllerProvider, (
-      previous,
-      next,
-    ) {
-      final cue = next.realtimeCue;
-      if (cue == null || cue == previous?.realtimeCue) return;
-      try {
-        HapticFeedback.mediumImpact();
-      } catch (_) {
-        // A device without a vibrator (or a host test binding) must never turn
-        // a coaching cue into a crash — the visual cue still stands alone.
-      }
-    });
   }
 
   static String _statusText(
