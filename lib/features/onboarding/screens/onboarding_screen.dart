@@ -10,7 +10,6 @@ import '../../learn/public.dart';
 import '../onboarding_provider.dart';
 import 'first_win_stage_screen.dart';
 import 'permission_primer_screen.dart';
-import 'first_win_stage_screen.dart';
 
 /// First-run onboarding: three glanceable pages that teach the moat (↓/↑),
 /// tease the streak, and prime the mic permission before dropping into Live.

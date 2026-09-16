@@ -335,9 +335,6 @@ import 'package:strumsight/features/audio_analysis/domain/analysis_progress.dart
 import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_home_screen.dart';
 import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_processing_screen.dart';
 import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_recording_screen.dart';
-import 'package:strumsight/features/onboarding/first_win_engine.dart';
-import 'package:strumsight/features/onboarding/first_win_providers.dart';
-import 'package:strumsight/features/onboarding/screens/first_win_stage_screen.dart';
 
 import '../../fixtures/practice_generator/plan/plan_fixtures.dart';
 import 'package:strumsight/features/community/application/controllers/challenge_controller.dart'
