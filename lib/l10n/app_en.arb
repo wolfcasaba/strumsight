@@ -4302,6 +4302,15 @@
   "streakDoneToday": "Practised today ✓ — see you tomorrow!",
   "streakFreezes": "Freezes",
   "streakLongest": "Longest",
+  "streakMilestone": "{days}-day milestone 🎉",
+  "@streakMilestone": {
+    "description": "Pill under the streak hero on a 7/30/100-day streak.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
   "streakSkillAccuracy": "↓↑ accuracy",
   "streakSkillGrowing": "Your strumming hand is getting better — keep building on it.",
   "streakSkillStrums": "Strums played",

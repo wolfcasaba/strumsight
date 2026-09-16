@@ -111,6 +111,12 @@ final class SongTrainerController {
 
   Stream<SongTrainerState> get states => _states.stream;
   Stream<SongTrainerEffect> get effects => _effects.stream;
+
+  /// The scored Practice session's per-strum feedback (observed stroke +
+  /// live verdict), or an empty stream for a playback-only compilation.
+  Stream<PracticeStrumFeedback> get practiceStrumFeedback =>
+      _practiceSession?.strumFeedback ??
+      const Stream<PracticeStrumFeedback>.empty();
   Stream<NoteScoringUpdate> get noteUpdates => _noteUpdates.stream;
   Stream<NoteScoringResult> get noteResults => _noteResults.stream;
   SongTrainerState get state => _state;

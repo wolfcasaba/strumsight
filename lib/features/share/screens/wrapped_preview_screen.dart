@@ -34,6 +34,10 @@ class _WrappedPreviewScreenState extends State<WrappedPreviewScreen> {
   final GlobalKey _cardKey = GlobalKey();
   bool _busy = false;
 
+  // Ch18 spec §12: the recap builds up (SsShareReveal); the share waits
+  // for the final frame so the captured PNG is never a half-built card.
+  bool _revealed = false;
+
   Future<void> _share(BuildContext buttonContext) async {
     if (_busy) return;
     setState(() => _busy = true);
@@ -70,12 +74,24 @@ class _WrappedPreviewScreenState extends State<WrappedPreviewScreen> {
               child: Center(
                 child: Padding(
                   padding: const EdgeInsets.all(SsSpacing.space4),
-                  child: FittedBox(
-                    child: RepaintBoundary(
-                      key: _cardKey,
-                      child: WrappedCard(
-                        recap: widget.recap,
-                        weekLabel: widget.weekLabel,
+                  child: AnimatedScale(
+                    scale: _busy ? 0.98 : 1,
+                    duration: SsMotionScope.durationOf(
+                      context,
+                      SsMotion.instant,
+                    ),
+                    child: FittedBox(
+                      child: SsShareReveal(
+                        onCompleted: () {
+                          if (mounted) setState(() => _revealed = true);
+                        },
+                        child: RepaintBoundary(
+                          key: _cardKey,
+                          child: WrappedCard(
+                            recap: widget.recap,
+                            weekLabel: widget.weekLabel,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -95,7 +111,9 @@ class _WrappedPreviewScreenState extends State<WrappedPreviewScreen> {
                     label: l10n.shareCardButton,
                     icon: Icons.ios_share,
                     loading: _busy,
-                    onPressed: _busy ? null : () => _share(buttonContext),
+                    onPressed: _busy || !_revealed
+                        ? null
+                        : () => _share(buttonContext),
                   ),
                 ),
               ),

@@ -23,6 +23,7 @@ export 'application/practice_session_command.dart';
 export 'application/practice_session_controller.dart'
     show PracticeSessionController;
 export 'application/practice_session_effect.dart';
+export 'application/practice_strum_feedback.dart' show PracticeStrumFeedback;
 export 'application/practice_session_providers.dart'
     show
         PracticeSessionInputs,

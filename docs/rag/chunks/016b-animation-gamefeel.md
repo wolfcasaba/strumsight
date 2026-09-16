@@ -101,3 +101,59 @@ audio is usually the largest on Android. Approach:
 - **P5** Vanishing-point perspective + radial-shader glow (screenshot/reel-worthy). *medium.*
 - **P6** Signed timing + wrong-direction feedback vocabulary. *low–medium.*
 - **P7** Reel viral polish (branded end-card, downbeat punch-in, 1-tap share) once P0/P5 land. *low.*
+
+## AS BUILT (2026-09-15) — the strike-line spark reaches the Live hero
+`HitBurst` moved from `features/learn/widgets/` to **`core/widgets/hit_burst.dart`**
+(shared, dependency-free geometry) and gained `directionSign` (−1 = the
+default upward cone, +1 = downward). New `features/live/widgets/strum_burst_hero.dart`
+wraps the Stage `SsChordHero`: every NEW `LiveFrame.strumSeq` throws a spark
+over the ↓/↑ glyph — copper fanning down for ↓, confidence-green fanning up
+for ↑, strength = stroke confidence (clamped ≥ 0.35). A local `Ticker` runs
+only while a burst is alive (≤ 0.45 s) and stops itself, so an idle Live
+schedules no frames and `pumpAndSettle` terminates; reduced motion
+(`SsMotionScope`) draws no spark (the glyph shape already carries direction).
+This is event-driven decay, not rhythm — ADR 0274's audio-clock rule is not
+in play. Next on this thread (Chapter 18 plan): verdict pop + combo counter
+on Live once a beat-relative timing verdict exists there (today Live has no
+scorer, only the metronome grid).
+
+## AS BUILT (2026-09-15, 2nd step) — the same spark on Practice and Song Trainer
+`StrumBurstOverlay` (was the Live-only `StrumBurstHero`) now lives in
+**`core/widgets/strum_burst_overlay.dart`** with a caller-supplied `centerOf`
+and `strength`. The Practice engine exposes a per-strum stream —
+`PracticeSessionController.strumFeedback` → `PracticeStrumFeedback`
+(observed direction + confidence + the matched target's LIVE verdict, null
+for a stray) — through the `PracticeSessionHost` boundary; the session
+screen forwards it to `StrumPatternView` / `ChordProgressionView`, which
+burst at the strike line (mirrored for left-handed) with the Learn timing
+ladder (PERFECT 1.0 · GOOD 0.72 · EARLY/LATE 0.45 · missed/stray 0.35) and
+finally show the live verdict in `PracticeFeedback` (the old R10 null gap).
+`SongTrainerController.practiceStrumFeedback` passes the scored session's
+stream through; the trainer's running body bursts at the strum lane's
+"now" edge. Nothing here touches DSP or the reducer: the stream is emitted
+from the controller's observation intake right after the scoring pass.
+
+## AS BUILT (2026-09-15, 3rd step) — streak flame + share reveal (Ch18 R06/R07 slice)
+`SsFlame` (**`core/design_system/components/music/ss_flame.dart`**) is the
+painted streak glyph — S 16 / M 40 / L 72 — lit (colour + light core) or
+dim (same shape, grey). It "ignites" ONCE (grow 0.6 → 1.18 → 1 about the
+foot, plus a sine glow, `celebration` = 700 ms) when `lit` flips true, when
+the caller's `ignition` counter rises (the streak length → the daily-credit
+moment) or on mount (`igniteOnMount`, hero reveal). No idle flicker (§9.7 —
+no endless decoration): at rest it schedules no frames. Reduced motion
+snaps. `SsFlame.milestoneFor(days)` → 7/30/100. Wired: `StreakBadge` (Live
+header, ignites on credit), `StreakScreen` hero (L, ignite on entry,
+milestone pill, one `SsStaggeredEntrance` of six groups = 500 ms), the
+gamification streak tile (S), `StreakStatusCard` (M, for the two "lit"
+reasons only) and the streak-detail current card (M; the caller-fed
+`reduceMotion` reaches it through `SsMotionScope(appOverride:)`).
+`SsShareReveal` + `SsRevealSlot` (**`motion/ss_share_reveal.dart`**): one
+0 → 1 progress over `celebration`, inherited down the card; each slot maps
+it onto its own [start, end] window (fade + 10 px rise, or `landing` from
+1.6× for the ↓/↑ arrows — `SsRevealSlot.windowFor` spreads the arrows
+evenly over 0.40–0.85). At/after `end`, or with no reveal above, a slot
+returns its child UNTOUCHED — so the `RepaintBoundary` capture and the
+card tests see the plain card. `SharePreviewScreen` / `WrappedPreviewScreen`
+gate the IMAGE share on `onCompleted` (text share never waits) and press
+the card to 0.98 (`instant`) outside the boundary. The milestone SCENE
+(`SsCelebrationScene` via the ADR 0389 coordinator) stays R03's.

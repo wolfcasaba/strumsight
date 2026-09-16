@@ -15,6 +15,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../application/practice_progress_providers.dart';
 import '../application/practice_session_command.dart';
 import '../application/practice_session_effect.dart';
+import '../application/practice_strum_feedback.dart';
 import '../application/practice_session_controller.dart';
 import '../application/practice_session_providers.dart';
 import '../domain/model/practice_session_state.dart';
@@ -27,6 +28,10 @@ abstract interface class PracticeSessionHost {
   Stream<PracticeSessionState> get states;
   PracticeSessionState get state;
   Stream<PracticeSessionEffect> get effects;
+
+  /// Per-strum feedback (observed stroke + live verdict) — see
+  /// `PracticeSessionController.strumFeedback`.
+  Stream<PracticeStrumFeedback> get strumFeedback;
   int? get liveOverallPerMille;
   void send(PracticeSessionCommand command);
 }
@@ -81,6 +86,9 @@ class _ControllerSessionHost implements PracticeSessionHost {
 
   @override
   Stream<PracticeSessionEffect> get effects => _controller.effects;
+
+  @override
+  Stream<PracticeStrumFeedback> get strumFeedback => _controller.strumFeedback;
 
   @override
   int? get liveOverallPerMille => _controller.liveScore?.overallPerMille;

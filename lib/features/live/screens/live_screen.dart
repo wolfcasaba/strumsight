@@ -15,6 +15,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/mic_error_banner.dart';
 import '../../../core/widgets/mic_permission_banner.dart';
+import '../../../core/widgets/strum_burst_overlay.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../settings/public.dart';
 import '../engine/strum_engine.dart';
@@ -381,21 +382,30 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       // Before any chord is heard, a giant placeholder glyph is worse UX
       // than no hero at all — the timeline slot's own "Play a chord…" prompt
       // already carries that message (§5.2, kept as a separate state).
+      // Every NEW strum throws a spark over the ↓/↑ glyph — the Learn
+      // highway's strike-line juice (chunk 016b P0) on the moat's own screen.
+      // The wrapper renders the bare hero until a strum lands and stops its
+      // own ticker afterwards, so an idle Live still settles in tests.
       hero: hasChord
-          ? SsChordHero(
-              chordLabel: chordLabel,
-              textColor: palette.ink,
-              direction: latestStrum == null
-                  ? null
-                  : (latestStrum.isDown
-                        ? SsStrumDirection.down
-                        : SsStrumDirection.up),
-              glyphColor: confColor,
-              confidenceTier: confTier,
-              directionSemanticLabel: latestStrum == null
-                  ? null
-                  : '${latestStrum.isDown ? l10n.strumDown : l10n.strumUp} '
-                        '${(latestStrum.confidence * 100).round()}%',
+          ? StrumBurstOverlay(
+              strumSeq: frame.strumSeq,
+              isDown: latestStrum?.isDown,
+              strength: latestStrum?.confidence ?? 0.0,
+              child: SsChordHero(
+                chordLabel: chordLabel,
+                textColor: palette.ink,
+                direction: latestStrum == null
+                    ? null
+                    : (latestStrum.isDown
+                          ? SsStrumDirection.down
+                          : SsStrumDirection.up),
+                glyphColor: confColor,
+                confidenceTier: confTier,
+                directionSemanticLabel: latestStrum == null
+                    ? null
+                    : '${latestStrum.isDown ? l10n.strumDown : l10n.strumUp} '
+                          '${(latestStrum.confidence * 100).round()}%',
+              ),
             )
           : SizedBox(
               height: 64,

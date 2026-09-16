@@ -37,6 +37,16 @@ abstract final class SsMotion {
   /// A success/celebration flourish (achievement, streak).
   static const Duration successFeedback = celebration;
 
+  /// A score ring filling from empty to its measured value (Ch18 spec
+  /// §0.1): the one "reveal" long enough to be read as a result.
+  static const Duration ringFill = celebration;
+
+  /// Per-item delay of a staggered list entrance (Ch18 spec §0.1). Not a
+  /// pinned base duration: with [contentFade] per item, five items enter in
+  /// 200 + 4 × 60 = 440 ms — under the [celebration] cap, so a screen's
+  /// entrance never reads as a celebration of its own.
+  static const Duration stagger = Duration(milliseconds: 60);
+
   // --- Curve tokens (Ch13 §9.7) ---
 
   /// Default easing for content entering the screen.

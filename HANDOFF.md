@@ -153,6 +153,188 @@ V2-re váltása; egy haladás-modell (progress V1/V2/gamification); a Ch14 R20�
 felismerési sáv; valós gitáros APK-teszt jegyzőkönyve.
 
 
+## ✅ SZÉRIA-LÁNG + SHARE-REVEAL — `f99cc9e` → javítások `bb8f251` + `a8a287b`, goldenek `9d2eb4b` (Chapter 18 R06/R07 szelet), kapu zöld (2026-09-15)
+
+A felhasználó „mehetsz tovább, CI csak a fejlesztés után" döntése nyomán a
+következő szelet: **`SsFlame`** (festett széria-láng S 16 / M 40 / L 72;
+`lit`/dim ugyanaz a forma; egyszer gyullad — talptól nő 0,6 → 1,18 → 1 + rövid
+glow, 700 ms — amikor a széria életre kel, a `ignition` számláló nő (napi
+jóváírás) vagy belépéskor; nyugalomban nem ütemez frame-et; reduced motion
+vált) és **`SsShareReveal` + `SsRevealSlot`** (egy 0→1 progress a kártya
+fölött, minden blokk saját ablakot kap, a ↓/↑ nyilak 1,6×-ről landolnak; az
+ablak végén VAGY reveal nélkül a slot érintetlenül adja vissza a gyerekét →
+a `RepaintBoundary`-export és a kártya-tesztek a sima kártyát látják).
+Bekötés: StreakBadge (Live fejléc, S, jóváíráskor gyullad), StreakScreen
+hero (L + 7/30/100 napos milestone-pill — új ARB `streakMilestone` en+hu —
++ hatcsoportos `SsStaggeredEntrance`), gamification hub streak-tile (S),
+StreakStatusCard (M a két „ég" okra), StreakDetail current-kártya (M, a
+caller-fed `reduceMotion` `SsMotionScope`-on át), SharePreview + Wrapped
+preview (felépülés; a KÉP-megosztás a végállapotra kapuzva, a szöveges nem
+vár; 0,98 press-scale a boundary-n kívül). A milestone-JELENET
+(`SsCelebrationScene` + ADR 0389 koordinátor) R03-mal együtt nyílik.
+
+Tesztek: `test/core/design_system/motion/ss_flame_test.dart`,
+`ss_share_reveal_test.dart`, `test/features/streak/streak_milestone_test.dart`,
+`test/features/share/share_reveal_test.dart`. Doksi: chunk 016b AS BUILT (3.
+lépés), plan §1 „Státusz" blokk.
+
+**Goldenek:** a `record-goldens.yml` futás
+[34947870239](https://github.com/wolfcasaba/strumsight/actions/runs/34947870239)
+x86-on újravette és bot-commitként visszatette (`e97d270`):
+`e13_r18_live_stage_compact{,_scale2}`, `e13_r32_hub_compact`,
+`e13_r32_streak_detail_compact{,_scale2}`. A `share_preview` goldenek NEM
+változtak — bizonyíték, hogy a reveal végállapota pixelre azonos a régi
+kártyával.
+
+**CI-történet a szeleten (négy fej, mind CI-ből diagnosztizálva):**
+
+1. `e97d270` — PIROS: format (egy `wrapped_card.dart` sor 80 karakterbe
+   fér, a formázó összevonja) + 4 cella: a `SsShareReveal` reduced-motion
+   ága build KÖZBEN (és post-frame másodszor is) küldte a completion-t; a
+   `ss_flame` semantics-cella a `SemanticsHandle`-t tearDown-ban zárta (a
+   teszt végi ellenőrzés előbb fut); a streak-detail M láng (40 dp) a 24 dp
+   ikon helyett megnövelte a kártyát, és egy MEGLÉVŐ teszt recovery-gombja
+   kicsúszott a 600 px-es teszt-viewportból.
+2. `bb8f251` — javítás: státusz-listener csak az animált ágon (a reduced ág
+   először ugrik, egyszer, post-frame jelez); inline `dispose()`; a láng a
+   24 dp ikon-lábnyomon áll (`SizedOverflowBox`, fölfelé a paddingba nő) —
+   egyetlen képernyő magassága sem változik.
+3. `9d2eb4b` — streak-detail goldenek újra x86-on
+   ([record-goldens 34952311405](https://github.com/wolfcasaba/strumsight/actions/runs/34952311405));
+   a teljes suite ZÖLD, a composite az l10n-frissességi kapun piros: az
+   `app_<locale>.arb` GENERÁLT aggregátum (ADR 0307 §4), az új kulcs csak
+   oda került.
+4. `a8a287b` — `streakMilestone` a `lib/l10n/base/` szegmensekben; az
+   aggregátum bájtra azonos maradt. **Zöld:**
+   [full-gate 34955802156](https://github.com/wolfcasaba/strumsight/actions/runs/34955802156)
+   + [build-apk 34955804305](https://github.com/wolfcasaba/strumsight/actions/runs/34955804305)
+   (a 2. kísérletben: az 1.-ben a párhuzamos Coverage job egyetlen, a
+   napló-plafon fölötti, azonosítatlan cellán esett el, miközben ugyanaz a
+   suite ugyanezen a commiton két másik jobban zöld volt — egyszeri
+   újrafuttatás, ADR 0053 szerint a kapu így teljesült).
+
+**LESSON (ebből a szeletből):**
+- ARB-kulcs a `lib/l10n/base/` vagy `lib/l10n/features/` SZEGMENSBE megy;
+  az `app_<locale>.arb` generált (ADR 0307 §4). Dart nélkül a
+  `tool/gen_l10n_segments.dart` Python-replikája — egy friss commit ellen
+  bájtra validálva — újratermeli az aggregátumot (scratchpad-script, nem
+  repó-eszköz).
+- A GitHub log-eszköz 5000 sornál vágja a naplót: egy KORAI egyedi piros
+  cella csak a `failed_only` nézetben vagy az artefaktumban látszik; a
+  `--reporter` marad `expanded` (a ❌-sorok kellenek a diagnózishoz).
+- Egy meglévő tesztet a viewport-magasság köt: ha egy komponens megnő,
+  a képernyő alja kicsúszhat a 800×600-as tesztablakból — a lábnyom
+  megtartása (`SizedOverflowBox`) olcsóbb, mint a teszt átírása.
+
+## ✅ MOTION-ADAG — `bc8003d` → goldenek `288ee57` (Chapter 18 R01/R03/R04 szelet), kapu zöld (2026-09-15)
+
+Három témafüggetlen design-system komponens + bekötés — `SsStaggeredEntrance`
+(lépcsőzetes belépés), `SsScoreRingReveal` (gyűrű-felfutás számlálóval),
+`SsLockRing` (bezáruló lock-gyűrű); Today Hub (szekciók belépése + napi cél
+gyűrű a hero-ban), Tuner (lock-gyűrű a hang neve körül), Practice result
+(gyűrű minden pontozott dimenzió sorában). `SsMotion.stagger` (60 ms) és
+`SsMotion.ringFill` tokenek; a rögzített alap-időtartamok változatlanok.
+
+**Zöld kapu a `288ee57`-en:** [full-gate 34946210462](https://github.com/wolfcasaba/strumsight/actions/runs/34946210462)
++ [build-apk 34946212622](https://github.com/wolfcasaba/strumsight/actions/runs/34946212622),
+mindkettő `success`. Az előző futás (`bc8003d`) 10 240 zöld / 6 piros volt —
+mind a hat a három szándékosan változott képernyő nulla-toleranciás
+pixel-goldenje (`e13_r17_today_hub`, `e13_r19_tuner`,
+`e13_r22_practice_result`, compact + scale2).
+
+**Új eszköz — `record-goldens.yml` (`0a4e0c8`, a tulajdonos kifejezett
+jóváhagyásával, H-GATEGUARD marker):** az ADR 0426 távoli megfelelője a
+`tools/golden-x86.sh record`-nak — a remote konténerben nincs Docker/Flutter,
+ezért egy kézzel dispatchelt workflow futtatja a `flutter test
+--update-goldens`-t ubuntu x86_64-en a kapu Flutter-pinjével, a változott
+PNG-ket artefaktumként feltölti ÉS bot-commitként visszateszi a dispatchelő
+branchre (main-en megtagadja). Nem kapu, magától sosem fut. Használat:
+
+```
+Actions → Record goldens (x86) → Run workflow → branch + test_paths
+   (pl. "test/ui/goldens/e13_r17_screens_golden_test.dart …")
+→ bot-commit "test(goldens): re-record on x86 (record-goldens run <id>)"
+→ utána full-gate + build-apk dispatch az új fejre
+```
+
+Első éles futás: [34945400267](https://github.com/wolfcasaba/strumsight/actions/runs/34945400267)
+→ `288ee57`. **Figyelem:** egy másik session ugyanaznap FÜGGETLENÜL
+hozzáadott egy `record-goldens.yml`-t a `claude/guitar-app-development-points-d0asfy`
+branchen (run 34940207516) — merge-kor a két fájlt egyeztetni kell (egy
+maradjon).
+
+## ✅ STRUM-SPARK — a le/fel ütés-animáció a Live, Practice és Song Trainer képernyőn — branch `claude/ui-design-viral-elements-u9z9ht`, HEAD `9121160` (2026-09-15)
+
+A felhasználó kérése a dizájn-session után: „a le/fel ütés animáció már volt
+fejlesztve, folytasd azzal" → „amikor ütöd a gitárt, abban az irányban mutassa
+az ütést" → „vidd át a többi képernyőre is (Practice, Song Trainer)". A Learn
+highway meglévő strike-line juice-a (`HitBurst`, chunk 016b P0) lett a közös
+alap; DSP/ML/reducer érintetlen.
+
+**Zöld kapu a HEAD-en:** [full-gate 34938571528](https://github.com/wolfcasaba/strumsight/actions/runs/34938571528)
++ [build-apk 34938573519](https://github.com/wolfcasaba/strumsight/actions/runs/34938573519),
+mindkettő `success` (teljes suite + property gate + APK). Az előző futás
+(`1474512`) 10 230 zöld / 2 piros volt — mindkét piros az új tesztekben
+(hiányzó `observationConfig`; a söprés élettartam-vége lebegőpontos határon),
+`9121160` javította.
+
+| Commit | Mit hoz |
+|---|---|
+| `04490c8` | `HitBurst` → `core/widgets/` (+ `directionSign`); `StrumBurstHero` a Live hero glyph fölé: minden új `LiveFrame.strumSeq` szikrát dob, réz ↓ lefelé, zöld ↑ felfelé, erősség = konfidencia; saját `Ticker` csak amíg él a szikra; reduced motion → nincs szikra |
+| `e576a8e` | explicit `0.0` fallback, redundáns `setState` ki |
+| `b4341ca` | `HitBurstSweep`: pengető-söprés csík, ami az ütés irányában fut végig a glyph-en (fentről le ↓, lentről fel ↑, 0,22 s, fakuló nyom) |
+| `1474512` | `StrumBurstOverlay` (általánosított, `core/widgets/strum_burst_overlay.dart`, `centerOf` + `strength`); **motor**: `PracticeSessionController.strumFeedback` → `PracticeStrumFeedback` (hallott irány + konfidencia + a talált cél ÉLŐ verdictje, kósza ütésnél null), a `PracticeSessionHost` határon és a practice public barrelen át; **Practice**: `StrumPatternView`/`ChordProgressionView` a strike-vonalon szikrázik (balkezes tükrözés), Learn-létra (PERFECT 1.0 · GOOD 0.72 · EARLY/LATE 0.45 · miss/kósza 0.35), és a `PracticeFeedback` végre az élő verdictet mutatja (R10 null-hiány zárva); **Song Trainer**: `SongTrainerController.practiceStrumFeedback` passthrough, a futó nézet a strum-sáv „most" élénél szikrázik |
+| `5762102` | dart format (egysoros passthrough) |
+| `70dfdf6` | a testvér-session gate-jelentése (lent) |
+| `9121160` | a két teszt-cella javítása |
+
+**Tesztek:** `test/core/widgets/hit_burst_test.dart` (irány + söprés cellák),
+`test/core/widgets/strum_burst_overlay_test.dart` (6 cella),
+`test/features/practice/application/practice_strum_feedback_test.dart`
+(talált verdict PERFECT, sorrend, inaktív capture, erősség-létra),
+`test/features/practice/presentation/practice_strum_burst_test.dart`
+(nézet-cellák); a három `PracticeSessionHost` fake frissítve.
+
+**Lokális gate ebben a konténerben NEM futott** — mért ok: a proxy 403-at ad a
+`storage.googleapis.com` / `pub.dev` / `pub.dartlang.org` hosztokra; a
+felhasználó engedélyezése után indított FRISS testvér-session ugyanabban a
+környezetben (`Default`, `env_011CUaPRnRYLByjSGKz4YDzE`) is 403-at kapott →
+jelentés: [`docs/execution/gate-runs/2026-09-15-strum-spark-gate.md`](docs/execution/gate-runs/2026-09-15-strum-spark-gate.md).
+A CI a mérce (ADR 0053). Nyitott: a környezet hoszt-allowlistjének
+ellenőrzése a claude.ai-on (melyik környezeten lett beállítva).
+
+**Következő lépés a szálon (Chapter 18 terv, `docs/plans/chapter-18-viral-ui-motion.md`):**
+verdict-pop + kombó-számláló a Live-on (ehhez ott ütem-relatív időzítési
+verdict kell; ma a Live-nak nincs scorere), majd E18-R00 paletta-döntés.
+Nem érintett: `docs/execution/pipeline-queue.tsv`.
+
+## 🎨 DIZÁJN-SESSION — Chapter 18 „Viral UI & Motion" terv + Midnight Stage paletta (2026-09-15, branch `claude/ui-design-viral-elements-u9z9ht`)
+
+A felhasználó kérése: „nézd át az UI dizájnokat, keress viral elemeket a
+versenytársakkal szemben, fejleszd az UI-t minden funkcióhoz animációval,
+látványos elemekkel" + „a színeket is lehetne változtatni, nagyon
+Claude-dizájnos". **Csak dokumentum és makett készült — production kód NEM
+változott** (remote konténer, nincs Flutter SDK; ADR 0055: Claude tervez).
+
+| Kimenet | Hely |
+|---|---|
+| Versenytárs- és viral-audit (Yousician, Simply, Duolingo, Chordify, Rocksmith+, GuitarTuna vs. StrumSight; V1–V7 elem; kemény korlátok) | [`docs/ui/viral-ui-audit.md`](docs/ui/viral-ui-audit.md) |
+| Funkciónkénti motion-dizájn spec (16 terület, 9 új `Ss*` komponens, új `stagger` alias, A-MOTION-1…8 elfogadási cellák) + **§0.5 palettajavaslat** (A „Midnight Stage" ajánlott, B „Tube Amp") | [`docs/ui/viral-motion-design-spec.md`](docs/ui/viral-motion-design-spec.md) |
+| Chapter 18 körterv (E18-R00 paletta … E18-R12 zárás; engedélyezett-fájl magok; kockázatok) | [`docs/plans/chapter-18-viral-ui-motion.md`](docs/plans/chapter-18-viral-ui-motion.md) |
+| Vizuális makett-canvas (Live, Today, Result, Tuner, Széria, Strum Card + palettalap + alternatíva; CSS-előnézet mozgással) | https://claude.ai/artifact/W74U95xMr3LGF9csazq22C |
+
+**Mért tények, amikre a terv épül:** `SsMotion`/`SsMotionScope`/`SsBeatPulse`
+kész, de a feature-fában 3 `flutter_animate`-import és 1 `AnimationController`
+→ a képernyők statikusak; `HitBurst` csak a Learn highway-en; a
+`CelebrationCoordinator` (ADR 0389) létezik, jelenet nincs; a `StrumCard`
+statikus PNG. A ↓/↑ irány-pontozás EGYETLEN versenytársnál sincs.
+
+**Következő lépés (emberi döntés kell):** 1) paletta A vagy B (spec §0.5);
+2) ha igen, E18-R00 brief (`docs/rounds/e18-r00-…`) + ADR-foglalás
+(`tools/round-slots.py reserve-adr --round E18-R00`) + a queue-sor felvétele
+— ez a session a pipeline-queue.tsv-hez NEM nyúlt. A Chapter 17 `hold`
+sorai és a Chapter 18 fájlszinten nem ütköznek (plan §0).
+
 ## ✅ E17-R01 KÉSZ — az onboarding First-Win állomása a szállított kompozícióban, VALÓS konfidencia-forrással — PR [#600](https://github.com/wolfcasaba/strumsight/pull/600), squash `c455e8ae` (2026-09-05)
 
 A Chapter 17 (Teljes bekötés) **első köre**: a `FirstWinStageScreen` eddig

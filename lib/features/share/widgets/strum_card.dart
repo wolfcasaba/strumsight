@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/design_system/public.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../analyze/public.dart';
 import '../../../core/music/strum.dart';
@@ -9,6 +10,10 @@ import '../share_content.dart';
 /// showcases StrumSight's moat (the DOWN ↓ / UP ↑ pattern) plus the chords,
 /// tempo and stroke counts of a clip. Rendered offline; captured to PNG by the
 /// share service. Fixed logical size (4:5 portrait) for a consistent export.
+///
+/// Every block is an [SsRevealSlot] (Ch18 spec §12): under an
+/// [SsShareReveal] the card builds up top to bottom and the arrows land one
+/// by one; without one — the export capture, tests — the slots are inert.
 class StrumCard extends StatelessWidget {
   const StrumCard({
     super.key,
@@ -63,54 +68,74 @@ class StrumCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _wordmark(),
+                SsRevealSlot(start: 0, end: 0.25, child: _wordmark()),
                 const SizedBox(height: 6),
-                Text(
-                  'Chord & strum-direction detector',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: _ink.withValues(alpha: 0.6),
+                SsRevealSlot(
+                  start: 0.05,
+                  end: 0.3,
+                  child: Text(
+                    'Chord & strum-direction detector',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: _ink.withValues(alpha: 0.6),
+                    ),
                   ),
                 ),
                 const Spacer(),
-                if (showTitle && (title ?? '').trim().isNotEmpty) ...[
-                  _label('TITLE'),
-                  const SizedBox(height: 4),
-                  Text(
-                    title!.trim(),
-                    maxLines: 1,
+                if (showTitle && (title ?? '').trim().isNotEmpty)
+                  SsRevealSlot(
+                    start: 0.1,
+                    end: 0.35,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _label('TITLE'),
+                        const SizedBox(height: 4),
+                        Text(
+                          title!.trim(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: _ink,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
+                  ),
+                SsRevealSlot(start: 0.15, end: 0.4, child: _label('CHORDS')),
+                const SizedBox(height: 6),
+                SsRevealSlot(
+                  start: 0.2,
+                  end: 0.45,
+                  child: Text(
+                    chords.isEmpty ? 'My riff' : chords,
+                    maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
+                      fontFamily: 'Montserrat',
+                      fontWeight: FontWeight.w800,
+                      fontSize: 30,
+                      height: 1.1,
                       color: _ink,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                ],
-                _label('CHORDS'),
-                const SizedBox(height: 6),
-                Text(
-                  chords.isEmpty ? 'My riff' : chords,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: 'Montserrat',
-                    fontWeight: FontWeight.w800,
-                    fontSize: 30,
-                    height: 1.1,
-                    color: _ink,
-                  ),
                 ),
                 const SizedBox(height: 20),
-                _label('YOUR STRUM PATTERN'),
+                SsRevealSlot(
+                  start: 0.3,
+                  end: 0.55,
+                  child: _label('YOUR STRUM PATTERN'),
+                ),
                 const SizedBox(height: 8),
                 _StrumArrows(dirs: dirs, truncated: result.strums.length > 16),
                 const Spacer(),
-                _stats(),
+                SsRevealSlot(start: 0.55, end: 0.85, child: _stats()),
                 const SizedBox(height: 14),
-                _footer(),
+                SsRevealSlot(start: 0.7, end: 1, child: _footer()),
               ],
             ),
           ),
@@ -231,21 +256,32 @@ class StrumCard extends StatelessWidget {
 }
 
 /// The arrow row — down strokes in copper, up strokes in the confidence green,
-/// so the pattern reads at a glance (the whole point of the card).
+/// so the pattern reads at a glance (the whole point of the card). Under a
+/// reveal each arrow lands in order inside the [arrowWindowStart]–
+/// [arrowWindowEnd] slice of the card's progress.
 class _StrumArrows extends StatelessWidget {
   const _StrumArrows({required this.dirs, required this.truncated});
 
   final List<StrumDirection> dirs;
   final bool truncated;
 
+  /// The slice of the card's reveal the arrows land in (after the pattern
+  /// label, before the stats).
+  static const double arrowWindowStart = 0.4;
+  static const double arrowWindowEnd = 0.85;
+
   @override
   Widget build(BuildContext context) {
     if (dirs.isEmpty) {
-      return Text(
-        'No strums detected',
-        style: TextStyle(
-          fontSize: 12,
-          color: const Color(0xFFE9E5DE).withValues(alpha: 0.5),
+      return SsRevealSlot(
+        start: arrowWindowStart,
+        end: arrowWindowEnd,
+        child: Text(
+          'No strums detected',
+          style: TextStyle(
+            fontSize: 12,
+            color: const Color(0xFFE9E5DE).withValues(alpha: 0.5),
+          ),
         ),
       );
     }
@@ -253,22 +289,39 @@ class _StrumArrows extends StatelessWidget {
       spacing: 4,
       runSpacing: 4,
       children: [
-        for (final d in dirs)
-          Icon(
-            d == StrumDirection.down
-                ? Icons.arrow_downward
-                : Icons.arrow_upward,
-            size: 26,
-            color: d == StrumDirection.down
-                ? AppColors.primary
-                : AppColors.confidenceHigh,
-          ),
+        for (var i = 0; i < dirs.length; i++) _landing(i, _arrow(dirs[i])),
         if (truncated)
-          const Text(
-            '…',
-            style: TextStyle(fontSize: 18, color: Color(0xFFE9E5DE)),
+          _landing(
+            dirs.length,
+            const Text(
+              '…',
+              style: TextStyle(fontSize: 18, color: Color(0xFFE9E5DE)),
+            ),
           ),
       ],
+    );
+  }
+
+  Widget _arrow(StrumDirection d) => Icon(
+    d == StrumDirection.down ? Icons.arrow_downward : Icons.arrow_upward,
+    size: 26,
+    color: d == StrumDirection.down
+        ? AppColors.primary
+        : AppColors.confidenceHigh,
+  );
+
+  Widget _landing(int index, Widget child) {
+    final window = SsRevealSlot.windowFor(
+      index,
+      dirs.length + (truncated ? 1 : 0),
+      from: arrowWindowStart,
+      to: arrowWindowEnd,
+    );
+    return SsRevealSlot(
+      start: window.start,
+      end: window.end,
+      landing: true,
+      child: child,
     );
   }
 }

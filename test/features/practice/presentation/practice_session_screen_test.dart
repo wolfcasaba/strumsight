@@ -17,6 +17,7 @@ import 'package:strumsight/core/platform/platform_providers.dart';
 import 'package:strumsight/core/widgets/mic_permission_banner.dart';
 import 'package:strumsight/features/practice/application/practice_session_command.dart';
 import 'package:strumsight/features/practice/application/practice_session_effect.dart';
+import 'package:strumsight/features/practice/application/practice_strum_feedback.dart';
 import 'package:strumsight/features/practice/domain/model/beat_position.dart';
 import 'package:strumsight/features/practice/domain/model/meter.dart';
 import 'package:strumsight/features/practice/domain/model/practice_definition.dart';
@@ -66,6 +67,8 @@ class _FakeSessionHost implements PracticeSessionHost {
 
   @override
   Stream<PracticeSessionEffect> get effects => _effectsController.stream;
+  @override
+  Stream<PracticeStrumFeedback> get strumFeedback => const Stream.empty();
 
   @override
   int? get liveOverallPerMille => liveScore;

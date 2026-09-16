@@ -6,6 +6,10 @@ import 'package:flutter/material.dart';
 /// beat (chunk 016b P0 "juice"). The geometry is PURE and deterministic (no
 /// Random) so it's unit-testable and identical every run; [HitBurstPainter]
 /// just draws whatever [particlesAt] returns for the current clock.
+///
+/// Shared by the Learn highway (strike-line hits) and the Live hero (every
+/// detected strum) — it depends on nothing but `dart:ui` geometry, so it
+/// lives in `core/widgets` rather than either feature.
 class HitBurst {
   HitBurst({
     required this.startSec,
@@ -13,7 +17,8 @@ class HitBurst {
     required this.strength,
     this.lifeSec = 0.45,
     this.count = 14,
-  });
+    this.directionSign = -1,
+  }) : assert(directionSign == -1 || directionSign == 1);
 
   /// Elapsed-clock time (lesson seconds) at which the burst was fired.
   final double startSec;
@@ -24,6 +29,11 @@ class HitBurst {
 
   final double lifeSec;
   final int count;
+
+  /// Which way the spark cone opens: `-1` (default) fans UPWARD — the
+  /// strike-line burst; `+1` fans DOWNWARD — so a Live down-stroke ↓ throws
+  /// its sparks the way the hand moved, and an up-stroke ↑ the other way.
+  final double directionSign;
 
   bool isDone(double nowSec) => nowSec - startSec >= lifeSec;
 
@@ -39,8 +49,9 @@ class HitBurst {
     final reach = 26.0 + 40.0 * strength;
     final out = <BurstParticle>[];
     for (var i = 0; i < count; i++) {
-      // Upward-biased cone, deterministic per index (a little variety via sin).
-      const base = -math.pi / 2; // straight up
+      // Direction-biased cone (up by default), deterministic per index (a
+      // little variety via sin).
+      final base = directionSign * math.pi / 2; // straight up or down
       const spread = math.pi * 0.95;
       final frac = count == 1 ? 0.5 : i / (count - 1);
       final angle = base + (frac - 0.5) * spread + math.sin(i * 2.399) * 0.14;
@@ -54,6 +65,42 @@ class HitBurst {
     }
     return out;
   }
+}
+
+/// The pick "sweep" that accompanies a burst: a short mark that travels
+/// THROUGH the burst centre the way the hand moved — top→bottom for a
+/// down-stroke (`directionSign == 1`), bottom→top for an up-stroke — so the
+/// motion itself reads the direction, not only the settled glyph shape.
+/// Pure geometry on the same clock as [HitBurst.particlesAt]; the caller
+/// draws it (and a fading trail by sampling slightly earlier instants).
+extension HitBurstSweep on HitBurst {
+  /// How long the sweep is visible after [HitBurst.startSec] — shorter than
+  /// the spark life, so the pick has "passed" while the sparks still fall.
+  static const double lifeSec = 0.22;
+
+  /// Half the distance the mark travels (from `-reach` to `+reach` along the
+  /// stroke direction, relative to the burst centre).
+  static const double reach = 34.0;
+
+  /// The mark at [nowSec], or null when the sweep is not visible.
+  SweepMark? sweepAt(double nowSec) {
+    final dt = nowSec - startSec;
+    if (dt < 0 || dt >= lifeSec) return null;
+    final t = dt / lifeSec;
+    final ease = 1 - (1 - t) * (1 - t) * (1 - t); // ease-out cubic: fast start
+    final dy = directionSign * (-reach + 2 * reach * ease);
+    final alpha = (1 - t) * (0.55 + 0.45 * strength);
+    return SweepMark(dy, alpha.clamp(0.0, 1.0), t);
+  }
+}
+
+/// The sweep mark's vertical [dy] from the burst centre (signed: positive is
+/// downward on screen), its [alpha] and its [progress] (0 start → 1 end).
+class SweepMark {
+  const SweepMark(this.dy, this.alpha, this.progress);
+  final double dy;
+  final double alpha;
+  final double progress;
 }
 
 /// One spark: [offset] from the burst centre, current [radius] and [alpha].

@@ -244,6 +244,15 @@
     }
   },
   "streakLongest": "Leghosszabb",
+  "streakMilestone": "{days} napos mérföldkő 🎉",
+  "@streakMilestone": {
+    "description": "Pill under the streak hero on a 7/30/100-day streak.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
   "streakFreezes": "Fagyasztások",
   "streakDoneToday": "Ma gyakoroltál ✓ — holnap találkozunk!",
   "streakAtRisk": "Játssz ma, hogy megtartsd a sorozatod 🔥",

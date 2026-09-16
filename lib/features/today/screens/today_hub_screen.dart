@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/config/app_config.dart';
 import '../../../app/routing/app_route.dart';
+import '../../../core/design_system/public.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../progress/public.dart';
@@ -24,7 +25,9 @@ import '../providers/today_providers.dart';
 /// component library: those widgets require `SsDarkTheme`/`SsLightTheme` to
 /// be the app's active `ThemeData`, which the running app does not yet wire
 /// up (`StrumSightApp` still applies `AppTheme`) — using them here would
-/// crash on first frame.
+/// crash on first frame. The two design-system pieces used below
+/// ([SsStaggeredEntrance], [SsScoreRingReveal]) are theme-agnostic by
+/// contract (they read no theme extension), so they are safe here.
 class TodayHubScreen extends ConsumerWidget {
   const TodayHubScreen({super.key, this.now});
 
@@ -50,93 +53,120 @@ class TodayHubScreen extends ConsumerWidget {
 
     final hero = _heroContent(l10n, snapshot: snapshot, isNewUser: isNewUser);
     final todayMinutes = todaySeconds ~/ 60;
+    // The daily-goal ring (Ch18 spec §1): fills to today's minutes over the
+    // goal; a zero goal is an explicit "not applicable", never a fake 0 %.
+    final goalRing = SsScoreRingReveal(
+      state: goalMinutes > 0
+          ? SsScoreRingState.measured
+          : SsScoreRingState.notApplicable,
+      ratio: goalMinutes > 0 ? todayMinutes / goalMinutes : null,
+      size: 56,
+      semanticLabel: l10n.progressGoalProgress(todayMinutes, goalMinutes),
+    );
+
+    // Ch18 spec §1: the cards enter one after another (fade + short rise),
+    // one finite gesture under half a second; reduced motion shows all at once.
+    final sections = <Widget>[
+      if (snapshot.availability == TodayPlanAvailability.offlineCached)
+        _StatusBanner(
+          icon: Icons.cloud_off_outlined,
+          label: l10n.dsStatusBadgeOffline,
+        ),
+      if (snapshot.availability == TodayPlanAvailability.syncPending)
+        _StatusBanner(
+          icon: Icons.sync_outlined,
+          label: l10n.dsStatusBadgeSyncPending,
+        ),
+      // A1 — the ONLY primary (filled) button on this screen; every
+      // other action below is outlined/text-styled.
+      Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  goalRing,
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          hero.title,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          hero.message,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                key: const ValueKey('today-hub-primary-cta'),
+                onPressed: () => context.go(AppRoutes.practiceHub),
+                child: Text(hero.ctaLabel),
+              ),
+            ],
+          ),
+        ),
+      ),
+      const SizedBox(height: 20),
+      Row(
+        children: [
+          Expanded(
+            child: _Metric(
+              label: l10n.progressStreak,
+              value: '${streak.current}',
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _Metric(
+              label: l10n.progressDailyGoal,
+              value: '$todayMinutes min',
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 6),
+      Text(
+        l10n.progressGoalProgress(todayMinutes, goalMinutes),
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      const SizedBox(height: 20),
+      OutlinedButton(
+        onPressed: () => context.go(AppRoutes.profileProgress),
+        child: Text(l10n.todayHubViewProgressCta),
+      ),
+      // A card whose only content is "not available in this build" is
+      // an advertisement for a feature the learner cannot use — it is
+      // not rendered at all while the Vision capability is off. The
+      // disabled-reason copy stays on the card for the flag-on-but-
+      // setup-off case (A7).
+      if (flags.visionEnabled) ...[
+        const SizedBox(height: 20),
+        _VisionCard(
+          l10n: l10n,
+          visionEnabled: flags.visionEnabled,
+          visionSetupEnabled: flags.visionSetupEnabled,
+        ),
+      ],
+    ];
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.todayHubTitle)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-          children: [
-            if (snapshot.availability == TodayPlanAvailability.offlineCached)
-              _StatusBanner(
-                icon: Icons.cloud_off_outlined,
-                label: l10n.dsStatusBadgeOffline,
-              ),
-            if (snapshot.availability == TodayPlanAvailability.syncPending)
-              _StatusBanner(
-                icon: Icons.sync_outlined,
-                label: l10n.dsStatusBadgeSyncPending,
-              ),
-            // A1 — the ONLY primary (filled) button on this screen; every
-            // other action below is outlined/text-styled.
-            Card(
-              margin: EdgeInsets.zero,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      hero.title,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      hero.message,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      key: const ValueKey('today-hub-primary-cta'),
-                      onPressed: () => context.go(AppRoutes.practiceHub),
-                      child: Text(hero.ctaLabel),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: _Metric(
-                    label: l10n.progressStreak,
-                    value: '${streak.current}',
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _Metric(
-                    label: l10n.progressDailyGoal,
-                    value: '$todayMinutes min',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              l10n.progressGoalProgress(todayMinutes, goalMinutes),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 20),
-            OutlinedButton(
-              onPressed: () => context.go(AppRoutes.profileProgress),
-              child: Text(l10n.todayHubViewProgressCta),
-            ),
-            // A card whose only content is "not available in this build" is
-            // an advertisement for a feature the learner cannot use — it is
-            // not rendered at all while the Vision capability is off. The
-            // disabled-reason copy stays on the card for the flag-on-but-
-            // setup-off case (A7).
-            if (flags.visionEnabled) ...[
-              const SizedBox(height: 20),
-              _VisionCard(
-                l10n: l10n,
-                visionEnabled: flags.visionEnabled,
-                visionSetupEnabled: flags.visionSetupEnabled,
-              ),
-            ],
-          ],
+          children: [SsStaggeredEntrance(children: sections)],
         ),
       ),
     );
