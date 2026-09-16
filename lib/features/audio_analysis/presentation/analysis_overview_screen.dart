@@ -64,7 +64,7 @@ class _AnalysisOverviewBody extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.list_alt),
             tooltip: l10n.analysisOverviewSeeAllInsights,
-            onPressed: () => context.go(
+            onPressed: () => context.push(
               AppRoutes.analysisMetricDetail,
               extra: OverviewDetailsPayload(
                 metrics: viewModel.details,
@@ -116,7 +116,7 @@ class _AnalysisOverviewBody extends StatelessWidget {
                   metricSemanticLabel: (label, value, status) =>
                       l10n.analysisOverviewMetricSemantic(label, value, status),
                   detailLabel: l10n.analysisOverviewSeeDetails,
-                  onOpenDetail: () => context.go(
+                  onOpenDetail: () => context.push(
                     AppRoutes.analysisMetricDetail,
                     extra: <OverviewMetricCard>[metric],
                   ),
@@ -134,7 +134,7 @@ class _AnalysisOverviewBody extends StatelessWidget {
               OutlinedButton.icon(
                 key: const Key('overview-see-details'),
                 icon: const Icon(Icons.tune),
-                onPressed: () => context.go(
+                onPressed: () => context.push(
                   AppRoutes.analysisMetricDetail,
                   extra: OverviewDetailsPayload(
                     metrics: viewModel.details,

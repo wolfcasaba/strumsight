@@ -804,9 +804,21 @@ final routerProvider = Provider<GoRouter>((ref) {
                   path: AppRoutes.profileLibrary,
                   builder: (_, _) => const UnifiedLibraryScreen(),
                 ),
+                // Navigation fix (owner report 2026-09-16): the Profile Hub
+                // now PUSHES this route, which places the page on the root
+                // navigator — outside the shell's `Scaffold`. `SettingsScreen`
+                // deliberately renders no `Scaffold`/`AppBar` of its own (it
+                // was written as a shell-hosted body, and four golden suites
+                // pin that widget tree), so the missing `Material` ancestor
+                // and the missing back affordance are supplied HERE, at the
+                // composition root, instead of inside the screen. The bar
+                // carries no title on purpose: the screen's own large
+                // "Settings" heading is the title, so this only contributes
+                // the automatic leading back button.
                 GoRoute(
                   path: AppRoutes.profileSettings,
-                  builder: (_, _) => const SettingsScreen(),
+                  builder: (_, _) =>
+                      Scaffold(appBar: AppBar(), body: const SettingsScreen()),
                 ),
                 // E16-R02 (ADR 0500) — replaces the legacy `ProgressScreen`
                 // adapter with the real Progress V2 dashboard, built from

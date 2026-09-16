@@ -32,11 +32,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   /// "Continue without an account" (A1, ADR 0292 norm) always has to leave
-  /// this screen — but it is reached two ways: PUSHED (from Settings, a real
-  /// route to pop back to) and via a `go()` that REPLACED the stack (from the
-  /// profile hub), which leaves nothing to pop (javító kör 1, F4). `maybePop`
-  /// alone silently no-ops on the second path, stranding the user here; a
-  /// `go()` fallback only fires when there genuinely was nothing to pop.
+  /// this screen. Every in-app entry point now PUSHES this route (Settings
+  /// always did; the profile hub's `go()` was the navigation bug the
+  /// 2026-09-16 owner report hit, fixed in `profile_hub_screen.dart`), so
+  /// `maybePop` is the normal path. The `go()` fallback stays for the entries
+  /// that can still arrive with an empty stack — a `/login` deep link, or
+  /// `onException`'s reset — where `maybePop` would silently no-op and strand
+  /// the user here (javító kör 1, F4).
   Future<void> _continueWithoutAccount() async {
     final popped = await Navigator.of(context).maybePop();
     if (!popped && mounted) {

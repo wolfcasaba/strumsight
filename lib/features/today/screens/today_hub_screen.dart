@@ -143,7 +143,7 @@ class TodayHubScreen extends ConsumerWidget {
       ),
       const SizedBox(height: 20),
       OutlinedButton(
-        onPressed: () => context.go(AppRoutes.profileProgress),
+        onPressed: () => context.push(AppRoutes.profileProgress),
         child: Text(l10n.todayHubViewProgressCta),
       ),
       // A card whose only content is "not available in this build" is
@@ -322,7 +322,7 @@ class _VisionCard extends StatelessWidget {
             if (visionEnabled) ...[
               const SizedBox(height: 12),
               TextButton(
-                onPressed: () => context.go(
+                onPressed: () => context.push(
                   visionSetupEnabled
                       ? AppRoutes.visionSetup
                       : AppRoutes.visionSession,

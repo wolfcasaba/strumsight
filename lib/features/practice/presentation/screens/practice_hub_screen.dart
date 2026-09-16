@@ -154,15 +154,15 @@ class PracticeHubScreen extends ConsumerWidget {
       path: AppRoutes.practiceSetup,
       queryParameters: <String, String>{'id': definition.id},
     );
-    context.go(uri.toString());
+    context.push(uri.toString());
   }
 
   void _openPlanBuilder(BuildContext context) {
-    context.go(AppRoutes.practiceGeneratorSetup);
+    context.push(AppRoutes.practiceGeneratorSetup);
   }
 
   void _openTodayPlan(BuildContext context) {
-    context.go(AppRoutes.practiceGeneratorToday);
+    context.push(AppRoutes.practiceGeneratorToday);
   }
 }
 

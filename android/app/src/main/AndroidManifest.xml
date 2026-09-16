@@ -11,9 +11,16 @@
          schedule → no exact-alarm permission needed. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Predictive back (Android 13+). Safe to opt in here: the tree contains
+         NO `WillPopScope` (which predictive back breaks) — every back gate is
+         the modern `PopScope`/`onPopInvokedWithResult` API
+         (`ss_stage_scaffold.dart`, `song_editor_screen.dart`,
+         `plan_preview_screen.dart`), which is exactly what the framework
+         registers an `OnBackInvokedCallback` for. -->
     <application
         android:label="StrumSight"
         android:name="${applicationName}"
+        android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

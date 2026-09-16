@@ -78,7 +78,7 @@ class TutorHomeScreen extends StatelessWidget {
                 key: const Key('tutorHomeStartCta'),
                 icon: Icons.chat,
                 label: l10n.aiTutorHomeStart,
-                onPressed: () => context.go(AppRoutes.tutorChat),
+                onPressed: () => context.push(AppRoutes.tutorChat),
               ),
               // A tutor három MELLÉK-képernyője (profil, adatvédelem,
               // adatok) be volt kötve a routerbe, de a szállított felületről

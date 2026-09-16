@@ -64,7 +64,7 @@ class SettingsScreen extends ConsumerWidget {
                 title: Text(l10n.progressTitle),
                 subtitle: Text(l10n.progressTotalPractice),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.go(AppRoutes.progress),
+                onTap: () => context.push(AppRoutes.progress),
               ),
             ),
             const SizedBox(height: 28),

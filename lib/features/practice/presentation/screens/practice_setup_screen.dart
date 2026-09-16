@@ -46,12 +46,19 @@ import '../practice_route_args.dart';
 import '../widgets/practice_mode_card.dart';
 import '../widgets/practice_readiness_row.dart';
 
-/// Resolves the definition id from the route. Reads the URI through the
-/// `GoRouter` (no `BuildContext`-based state). Returns a structured
+/// Resolves the definition id from the route. Returns a structured
 /// [PracticeSetupArgs] — never throws, never returns null.
+///
+/// Reads THIS route's own [GoRouterState], not
+/// `routeInformationProvider.value`. The latter is only refreshed by the
+/// `Router`'s POST-frame "report route information" callback, so on the first
+/// build after a `context.push` it still holds the PREVIOUS location and the
+/// `?id=` would silently vanish (the Practice hub entries push since the
+/// 2026-09-16 navigation fix). `GoRouterState` is resolved from the enclosing
+/// route, and for an imperative push go_router builds it from the pushed
+/// location's own match list — correct for both `go` and `push`.
 PracticeSetupArgs _readArgs(BuildContext context) {
-  final router = GoRouter.of(context);
-  final id = router.routeInformationProvider.value.uri.queryParameters['id'];
+  final id = GoRouterState.of(context).uri.queryParameters['id'];
   return parsePracticeSetupArgs(id);
 }
 
@@ -109,7 +116,16 @@ class PracticeSetupScreen extends ConsumerWidget {
     return _SetupForm(definition: definition, controller: controller);
   }
 
+  /// Setup is now PUSHED from the Practice hub (E17-nav fix), so the honest
+  /// "back" is a pop — it returns to whichever hub actually opened this
+  /// screen and keeps the rest of the history. `go` stays as the fallback
+  /// for the entry points that still land here with an empty stack (a
+  /// `/practice/setup` deep link, or `onException`'s reset).
   void _backToHub(BuildContext context) {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
     context.go(AppRoutes.practiceHub);
   }
 }

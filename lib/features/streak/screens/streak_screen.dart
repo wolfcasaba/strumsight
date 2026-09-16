@@ -49,7 +49,7 @@ class StreakScreen extends ConsumerWidget {
           IconButton(
             tooltip: l10n.progressOpen,
             icon: const Icon(Icons.insights_outlined),
-            onPressed: () => context.go(AppRoutes.progress),
+            onPressed: () => context.push(AppRoutes.progress),
           ),
         ],
       ),
@@ -146,7 +146,7 @@ class StreakScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     TextButton(
-                      onPressed: () => context.go(AppRoutes.live),
+                      onPressed: () => context.push(AppRoutes.live),
                       child: Text(l10n.challengeTryInLive),
                     ),
                   ],

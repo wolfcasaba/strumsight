@@ -67,7 +67,7 @@ class ProfileHubScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             OutlinedButton(
-              onPressed: () => context.go(AppRoutes.gamificationHub),
+              onPressed: () => context.push(AppRoutes.gamificationHub),
               child: Text(l10n.profileHubAchievementsSectionTitle),
             ),
             if (aiTutorEnabled) ...[
@@ -108,18 +108,18 @@ class ProfileHubScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               FilledButton(
                 key: const ValueKey('profile-hub-community-entry'),
-                onPressed: () => context.go(AppRoutes.community),
+                onPressed: () => context.push(AppRoutes.community),
                 child: Text(l10n.profileHubCommunityOpen),
               ),
             ],
             const SizedBox(height: 24),
             OutlinedButton(
-              onPressed: () => context.go(AppRoutes.profileLibrary),
+              onPressed: () => context.push(AppRoutes.profileLibrary),
               child: Text(l10n.navLibrary),
             ),
             const SizedBox(height: 12),
             OutlinedButton(
-              onPressed: () => context.go(AppRoutes.profileSettings),
+              onPressed: () => context.push(AppRoutes.profileSettings),
               child: Text(l10n.settingsTitle),
             ),
           ],
@@ -173,7 +173,7 @@ class _AccountSection extends ConsumerWidget {
                 child: Text(l10n.profileHubSignOutCta),
               )
             : OutlinedButton(
-                onPressed: () => context.go(AppRoutes.login),
+                onPressed: () => context.push(AppRoutes.login),
                 child: Text(l10n.profileHubSignInCta),
               ),
       ],
