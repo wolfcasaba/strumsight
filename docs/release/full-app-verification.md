@@ -205,7 +205,7 @@ megfigyelt) képernyő-osztályok:
 | 8 | `ProfileHubScreen` | `lib/features/profile_hub/screens/profile_hub_screen.dart` |
 | 9 | `SettingsScreen` | `lib/features/settings/screens/settings_screen.dart` |
 
-### 3.2 Kimaradó halmaz (85) — gazdával és körrel
+### 3.2 Kimaradó halmaz (84) — gazdával és körrel
 
 | Screen | Indok | Gazda | Kör |
 | --- | --- | --- | --- |
@@ -293,8 +293,8 @@ megfigyelt) képernyő-osztályok:
 | `lib/features/practice_generator/presentation/screens/plan_preview_screen.dart` | `practiceGeneratorEnabled` BE, de a Practice Area Hubon nincs UI-belépési pont a Generátorba — a kör mag-útja nem éri el. A képernyők 2026-09-05 óta route-oltak (a katalógus-feloldó és a terv-bemenet építő bekötésével), az előnézet és a változás-áttekintés `extra`-vezérelt folyamat-lépés. | Practice Generator feature | E15-R07 |
 | `lib/features/practice_generator/presentation/screens/plan_privacy_screen.dart` | `practiceGeneratorEnabled` BE, de a Practice Area Hubon nincs UI-belépési pont a Generátorba — a kör mag-útja nem éri el. A képernyők 2026-09-05 óta route-oltak (a katalógus-feloldó és a terv-bemenet építő bekötésével), az előnézet és a változás-áttekintés `extra`-vezérelt folyamat-lépés. | Practice Generator feature | E15-R07 |
 | `lib/features/practice_generator/presentation/screens/weekly_plan_screen.dart` | `practiceGeneratorEnabled` BE, de a Practice Area Hubon nincs UI-belépési pont a Generátorba — a kör mag-útja nem éri el. A képernyők 2026-09-05 óta route-oltak (a katalógus-feloldó és a terv-bemenet építő bekötésével), az előnézet és a változás-áttekintés `extra`-vezérelt folyamat-lépés. | Practice Generator feature | E15-R07 |
-| `lib/features/onboarding/screens/first_win_stage_screen.dart` | A First-Win állomás a folyamat egy LÉPÉSE, nem top-level route (ADR 0520 §5.1): a mini-lecke alá kerül be, és a lecke lezárultakor jön elő. A kör mag-útja (§1) az onboardingot a Skip/finish ágon zárja, nem a first-win kísérlet ágán. | Onboarding feature | E17-R01 |
-**Összegzés:** 9 (bejárt) + 64 (kimaradó) = 73 (mért elérhető) — a két
+
+**Összegzés:** 9 (bejárt) + 84 (kimaradó) = 93 (mért elérhető) — a két
 halmaz diszjunkt (egyik screen sem szerepel mindkettőben) és uniójuk
 pontosan lefedi a mért elérhető halmazt. Egyik kimaradó sor sem üres
 `Indok`/`Gazda`/`Kör` cellával; minden `Kör` érték `E\d+-R\d+` alakú vagy
