@@ -27,12 +27,12 @@ import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/song_trainer/application/editor/song_editor_controller.dart';
 import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_practice_compiler.dart';
+import 'package:strumsight/features/song_trainer/application/trainer/song_trainer_session_launcher.dart';
 import 'package:strumsight/features/song_trainer/data/importers/file_picker_adapter.dart';
 import 'package:strumsight/features/song_trainer/data/importers/song_importer.dart';
 import 'package:strumsight/features/song_trainer/data/local/file_song_asset_repository.dart';
 import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repository.dart';
 import 'package:strumsight/features/song_trainer/domain/models/meter_map.dart';
-import 'package:strumsight/features/song_trainer/domain/models/song_asset_reference.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_document.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_id.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_measure.dart';
@@ -222,7 +222,7 @@ void main() {
     final persisted = (await repository.get(document.id)).valueOrNull!;
     final inputs = SongTrainerControllerInputs(
       compilation: const SongPracticeCompilation.playbackOnly(),
-      backingAsset: _backingAssetOf(persisted),
+      backingAsset: backingAssetOf(persisted),
     );
     expect(inputs.backingAsset, isNotNull);
     expect(inputs.backingAsset!.sha256, hash);
@@ -277,18 +277,6 @@ AppLocalizations _localizations(WidgetTester tester) => AppLocalizations.of(
 Future<void> _drainSnackBar(WidgetTester tester) async {
   await tester.pump(const Duration(seconds: 5));
   await tester.pumpAndSettle();
-}
-
-/// What a launcher does: the backing track names an asset id, the document
-/// carries the matching reference.
-SongAssetReference? _backingAssetOf(SongDocument document) {
-  for (final track in document.tracks) {
-    if (track is! BackingAudioTrack) continue;
-    for (final asset in document.assets) {
-      if (asset.id == track.assetId) return asset;
-    }
-  }
-  return null;
 }
 
 SongDocument _document(String id) {
