@@ -1725,6 +1725,8 @@ final class _NoopFilePicker implements FilePickerAdapter {
   Future<void> dispose() async {}
   @override
   Future<ImportSourceFile?> pickSongFile() async => null;
+  @override
+  Future<ImportSourceFile?> pickAudioFile() async => null;
 }
 
 Widget _songImportScreen() => const SongImportScreen();

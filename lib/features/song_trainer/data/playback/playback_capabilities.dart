@@ -1,3 +1,25 @@
+/// Backing-audio container extensions the on-device player accepts.
+///
+/// The set mirrors `PlatformFilePickerAdapter.supportedAudioExtensions`:
+/// what the editor can attach is exactly what the trainer can play. The
+/// Android backend (MediaPlayer) decodes all seven.
+///
+/// iOS caveat — AVFoundation has no built-in Ogg Vorbis or FLAC-in-Ogg
+/// decoder, so an `ogg` (and, on older versions, a `flac`) asset can still
+/// fail when the platform loads it. That is deliberately NOT special-cased
+/// here: the player surfaces the real platform failure
+/// (`backingAudioPlayer.prepare`, retryable) instead of pretending the
+/// user's file was never a valid choice.
+const Set<String> supportedBackingAudioFormats = <String>{
+  'mp3',
+  'm4a',
+  'mp4',
+  'aac',
+  'ogg',
+  'flac',
+  'wav',
+};
+
 final class PlaybackCapabilities {
   const PlaybackCapabilities({
     required this.canSeek,

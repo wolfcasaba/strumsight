@@ -1299,6 +1299,19 @@
   "songEditorBacking": "Alapzene",
   "songEditorAttachBacking": "Alapzene csatolása",
   "songEditorDetachBacking": "Alapzene leválasztása",
+  "songEditorBackingAttached": "Csatolva: {name} ({size})",
+  "@songEditorBackingAttached": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "songEditorBackingTooLarge": "Ez a fájl túl nagy. Az alapzene legfeljebb 32 MB lehet.",
+  "songEditorBackingUnsupported": "Ez a hangformátum nem használható alapzeneként.",
   "songEditorUnsavedTitle": "Nem mentett módosítások",
   "songEditorUnsavedBody": "Mented, elveted vagy tovább szerkeszted a draftot?",
   "songEditorStay": "Szerkesztés folytatása",

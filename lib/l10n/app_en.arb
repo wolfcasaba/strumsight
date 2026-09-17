@@ -3975,6 +3975,19 @@
   "songEditorArtistField": "Artist",
   "songEditorAttachBacking": "Attach backing audio",
   "songEditorBacking": "Backing audio",
+  "songEditorBackingAttached": "Attached: {name} ({size})",
+  "@songEditorBackingAttached": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "songEditorBackingTooLarge": "That file is too large. A backing track may be at most 32 MB.",
+  "songEditorBackingUnsupported": "That audio format can't be used as a backing track.",
   "songEditorChordField": "Chord",
   "songEditorConflict": "This song changed elsewhere. Your draft was kept.",
   "songEditorDetachBacking": "Detach backing audio",

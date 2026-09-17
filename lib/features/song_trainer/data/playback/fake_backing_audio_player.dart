@@ -18,7 +18,10 @@ final class FakeBackingAudioPlayer implements BackingAudioPlayer {
             canChangeRate: true,
             preservesPitchWhenRateChanges: false,
             positionPrecision: Duration(milliseconds: 17),
-            supportedFormats: <String>{'mp3', 'wav'},
+            // The SAME set the real player declares: a fake that accepted
+            // more (or less) would green-light an attach the device
+            // rejects.
+            supportedFormats: supportedBackingAudioFormats,
             minimumRate: 0.5,
             maximumRate: 1.5,
           );

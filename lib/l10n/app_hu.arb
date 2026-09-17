@@ -3929,6 +3929,19 @@
   "songEditorArtistField": "Előadó",
   "songEditorAttachBacking": "Alapzene csatolása",
   "songEditorBacking": "Alapzene",
+  "songEditorBackingAttached": "Csatolva: {name} ({size})",
+  "@songEditorBackingAttached": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "songEditorBackingTooLarge": "Ez a fájl túl nagy. Az alapzene legfeljebb 32 MB lehet.",
+  "songEditorBackingUnsupported": "Ez a hangformátum nem használható alapzeneként.",
   "songEditorChordField": "Akkord",
   "songEditorConflict": "A dal máshol megváltozott. A drafted megmaradt.",
   "songEditorDetachBacking": "Alapzene leválasztása",

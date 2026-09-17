@@ -261,4 +261,7 @@ final class _OneShotPicker implements FilePickerAdapter {
     _source = null;
     return source;
   }
+
+  @override
+  Future<ImportSourceFile?> pickAudioFile() async => null;
 }
