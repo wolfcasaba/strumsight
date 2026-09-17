@@ -52,6 +52,12 @@ abstract final class FailureCode {
       'audio.unsupported_channel_count';
   static const String audioClipTooShort = 'audio.clip_too_short';
   static const String audioClipTooLong = 'audio.clip_too_long';
+  // Compressed-file decoding through the platform decoder (round K2).
+  static const String audioFileNotFound = 'audio.file_not_found';
+  static const String audioNoAudioTrack = 'audio.no_audio_track';
+  static const String audioUnsupportedContainer = 'audio.unsupported_container';
+  static const String audioDecoderFailed = 'audio.decoder_failed';
+  static const String audioUnsupportedPlatform = 'audio.unsupported_platform';
 
   // --- camera --------------------------------------------------------------
   static const String cameraSessionBusy = 'camera.session_busy';
