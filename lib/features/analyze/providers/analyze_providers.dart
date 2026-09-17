@@ -120,6 +120,21 @@ Future<AnalyzeResult> computeClipAnalysis(
   ));
 }
 
+/// Analyse audio the user IMPORTED from a file (K3 privacy seam).
+///
+/// Identical DSP to [computeClipAnalysis], with one difference that is the
+/// whole point: Lab mode is pinned OFF, so the returned result carries
+/// `diagnostics == null` and the diagnostics uploader — which only ever
+/// packages a result that HAS diagnostics — has nothing to send. Imported
+/// audio is very often music the user does not own; it must not leave the
+/// device even when Lab mode and the upload consent are both on.
+///
+/// The gate is the entry point, not a flag inside the uploader: a future
+/// caller that forgets the flag cannot accidentally opt the user in, because
+/// this function has no flag to forget.
+Future<AnalyzeResult> computeImportedClipAnalysis(List<double> pcm, int sr) =>
+    computeClipAnalysis(pcm, sr, false);
+
 /// Drives the Analyze screen: record → analyse (off-thread) → result.
 class AnalyzeController extends Notifier<AnalyzeState> {
   /// [recorder] is injectable for tests; defaults to one holding an
@@ -185,27 +200,43 @@ class AnalyzeController extends Notifier<AnalyzeState> {
     // reset the state under the analysis (round 114, review R2).
     state = const AnalyzeState(phase: AnalyzePhase.analyzing);
     final pcm = await _recorder.stop();
-    await _analyze(pcm, _recorder.sampleRate);
+    await _analyze(pcm, _recorder.sampleRate, allowDiagnostics: true);
   }
 
-  /// Analyze an IMPORTED clip (round 179): the user picks/shares a `.wav` from
-  /// their device, the UI decodes it to mono PCM, and it runs through the
-  /// identical DSP a mic recording does — no mic involved. Ignored mid-record
-  /// (the mic take owns the pipeline) and no-ops on empty audio.
+  /// Analyze an IMPORTED clip (round 179): the user picks/shares an audio
+  /// file from their device, the UI decodes it to mono PCM, and it runs
+  /// through the identical DSP a mic recording does — no mic involved.
+  /// Ignored mid-record (the mic take owns the pipeline) and no-ops on empty
+  /// audio.
+  ///
+  /// K3 PRIVACY: this path never uploads. The clip is the user's file, very
+  /// often music they do not own, so `allowDiagnostics: false` keeps Lab mode
+  /// out of the analysis entirely — no ML diagnostics are computed and the
+  /// uploader is never called, whatever the Lab-mode switch and the upload
+  /// consent say. Only the microphone path (the user's OWN playing) can
+  /// produce an upload.
   Future<void> analyzeImported(List<double> pcm, int sampleRate) async {
     if (state.phase == AnalyzePhase.recording) return;
     if (pcm.isEmpty || sampleRate <= 0) return;
     state = const AnalyzeState(phase: AnalyzePhase.analyzing);
-    await _analyze(pcm, sampleRate);
+    await _analyze(pcm, sampleRate, allowDiagnostics: false);
   }
 
   /// Shared tail: run the analysis off the UI isolate, publish the result, and
   /// credit practice if it found real content. Assumes the state is already
   /// `analyzing` (set by the caller before its own awaits).
-  Future<void> _analyze(List<double> pcm, int sr) async {
+  ///
+  /// [allowDiagnostics] is the single privacy switch. False means the Lab-mode
+  /// branch is not even consulted, so no ML diagnostics are attached and the
+  /// upload below cannot fire (it requires `result.diagnostics != null`).
+  Future<void> _analyze(
+    List<double> pcm,
+    int sr, {
+    required bool allowDiagnostics,
+  }) async {
     // Lab mode gates the ML chord path: when OFF, the chord weights aren't even
     // loaded and the isolate does zero extra work (r197).
-    final labMode = ref.read(labModeProvider);
+    final labMode = allowDiagnostics && ref.read(labModeProvider);
     // A fresh analyze clears any prior upload status.
     ref.read(diagnosticsUploadProvider.notifier).reset();
     // Off the UI isolate — a 30 s clip is thousands of FFTs. Shared helper so
