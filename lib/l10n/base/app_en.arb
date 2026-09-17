@@ -1226,7 +1226,7 @@
   "songLibraryImport": "Import",
   "songLibraryRetry": "Try again",
   "songLibrarySearch": "Search songs",
-  "songLibrarySourceFilter": "Source",
+  "songLibrarySourceFilter": "Origin",
   "songLibraryAllSources": "All sources",
   "songLibrarySourceLegacy": "Legacy library",
   "songLibrarySourceCreated": "Created in StrumSight",

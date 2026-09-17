@@ -91,6 +91,36 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
     );
   }
 
+  /// Origin kinds the LOADED library actually contains.
+  Set<SongSourceType> _presentOrigins(SongLibraryState state) =>
+      <SongSourceType>{
+        for (final summary in state.summaries) summary.sourceType,
+      };
+
+  /// Whether the origin filter earns its place (owner feedback 2026-09-17:
+  /// "why so many libraries, all empty").
+  ///
+  /// A dropdown offering eight import formats over a library that holds one
+  /// kind — or none — reads as eight empty libraries. It renders only when
+  /// there is something to choose between, and stays put while a filter is
+  /// active so it cannot vanish under the user's own selection.
+  bool _showsOriginFilter(SongLibraryState state) =>
+      state.query.sourceType != null || _presentOrigins(state).length >= 2;
+
+  /// The offered origins. Guitar Pro is left out while there is no direct
+  /// `.gp*` importer — the conversion guidance elsewhere stays — unless the
+  /// library somehow already holds such a document.
+  List<SongSourceType> _originOptions(SongLibraryState state) {
+    final present = _presentOrigins(state);
+    return <SongSourceType>[
+      for (final sourceType in SongSourceType.values)
+        if (sourceType != SongSourceType.guitarPro ||
+            present.contains(sourceType) ||
+            state.query.sourceType == sourceType)
+          sourceType,
+    ];
+  }
+
   /// Opens the trainer setup for [songId] — the row's Play affordance.
   void _openTrainerSetup(SongId songId) {
     context.push(
@@ -167,38 +197,40 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
                     const SizedBox(height: SsSpacing.space3),
                     Row(
                       children: <Widget>[
-                        Expanded(
-                          child: DropdownButtonFormField<SongSourceType?>(
-                            key: const Key('song-library-source-filter'),
-                            initialValue: state.query.sourceType,
-                            isExpanded: true,
-                            decoration: InputDecoration(
-                              labelText: l10n.songLibrarySourceFilter,
-                            ),
-                            items: <DropdownMenuItem<SongSourceType?>>[
-                              DropdownMenuItem<SongSourceType?>(
-                                value: null,
-                                child: Text(l10n.songLibraryAllSources),
+                        if (_showsOriginFilter(state)) ...<Widget>[
+                          Expanded(
+                            child: DropdownButtonFormField<SongSourceType?>(
+                              key: const Key('song-library-source-filter'),
+                              initialValue: state.query.sourceType,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                labelText: l10n.songLibrarySourceFilter,
                               ),
-                              for (final sourceType in SongSourceType.values)
+                              items: <DropdownMenuItem<SongSourceType?>>[
                                 DropdownMenuItem<SongSourceType?>(
-                                  value: sourceType,
-                                  child: Text(
-                                    songSourceTypeLabel(l10n, sourceType),
-                                  ),
+                                  value: null,
+                                  child: Text(l10n.songLibraryAllSources),
                                 ),
-                            ],
-                            onChanged: (sourceType) => _applyQuery(
-                              SongLibraryQuery(
-                                searchText: state.query.searchText,
-                                sourceType: sourceType,
-                                favoritesOnly: state.query.favoritesOnly,
-                                sort: state.query.sort,
+                                for (final sourceType in _originOptions(state))
+                                  DropdownMenuItem<SongSourceType?>(
+                                    value: sourceType,
+                                    child: Text(
+                                      songSourceTypeLabel(l10n, sourceType),
+                                    ),
+                                  ),
+                              ],
+                              onChanged: (sourceType) => _applyQuery(
+                                SongLibraryQuery(
+                                  searchText: state.query.searchText,
+                                  sourceType: sourceType,
+                                  favoritesOnly: state.query.favoritesOnly,
+                                  sort: state.query.sort,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
+                          const SizedBox(width: 12),
+                        ],
                         Expanded(
                           child: DropdownButtonFormField<SongLibrarySort>(
                             key: const Key('song-library-sort'),
