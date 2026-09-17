@@ -8,6 +8,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../application/library/song_library_state.dart';
 import '../../application/library/song_query.dart';
 import '../../application/song_trainer_providers.dart';
+import '../../domain/models/song_id.dart';
 import '../../domain/models/song_source.dart';
 import '../widgets/song_source_badge.dart';
 import '../widgets/song_summary_tile.dart';
@@ -89,6 +90,19 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
       ),
     );
   }
+
+  /// Opens the trainer setup for [songId] — the row's Play affordance.
+  void _openTrainerSetup(SongId songId) {
+    context.push(
+      AppRoutes.songTrainerSetup.replaceFirst(
+        ':songId',
+        Uri.encodeComponent(songId.value),
+      ),
+    );
+  }
+
+  /// Empty-state secondary CTA: the guided Learn highway.
+  void _openLearnHighway() => context.push(AppRoutes.practiceLearn);
 
   @override
   Widget build(BuildContext context) {
@@ -225,8 +239,7 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
                 child: state.summaries.isEmpty
                     ? _LibraryEmpty(
                         onRestoreSeeds: _restoreSeedSongs,
-                        onOpenLearn: () =>
-                            context.push(AppRoutes.practiceLearn),
+                        onOpenLearn: _openLearnHighway,
                       )
                     : ListView.builder(
                         itemCount: state.summaries.length,
@@ -266,14 +279,8 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
                             },
                             child: SongSummaryTile(
                               summary: summary,
-                              onPlay: () => context.push(
-                                AppRoutes.songTrainerSetup.replaceFirst(
-                                  ':songId',
-                                  Uri.encodeComponent(
-                                    summary.documentId.value,
-                                  ),
-                                ),
-                              ),
+                              onPlay: () =>
+                                  _openTrainerSetup(summary.documentId),
                               isFavorite:
                                   summary.favorite ||
                                   state.favoriteIds.contains(
