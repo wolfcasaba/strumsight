@@ -93,6 +93,16 @@ Future<_Walk> _bootLibrary(
   WidgetTester tester, {
   MicrophonePermissionState permission = MicrophonePermissionState.granted,
 }) async {
+  // MEASURED (record-goldens 35207783427): on the default 800x600 surface the
+  // trainer setup's `ListView` never LAYS OUT its last child, so
+  // `trainer-setup-start` is not in the element tree and `find.byKey` sees
+  // nothing — the walk failed on a viewport, not on the wiring. A tall
+  // surface renders the whole form at once and keeps the assertion about
+  // navigation rather than about scrolling.
+  tester.view.physicalSize = const Size(1200, 2400);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+
   final document = _loadSeedDocument();
   final repository = InMemorySongRepository(
     clock: () => DateTime.utc(2026, 9, 17),
