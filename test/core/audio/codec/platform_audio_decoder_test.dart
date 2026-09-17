@@ -25,9 +25,10 @@ void main() {
   late Future<Object?> Function(MethodCall call) handler;
 
   void answerWith(List<double> samples, {int durationMs = 3000}) {
-    handler = (call) async => call.method == 'probe'
-        ? _probeReply(durationMs: durationMs)
-        : _decodeReply(samples);
+    handler = (call) async {
+      if (call.method == 'probe') return _probeReply(durationMs: durationMs);
+      return _decodeReply(samples);
+    };
   }
 
   setUp(() {
