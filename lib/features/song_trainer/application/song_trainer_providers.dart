@@ -19,9 +19,12 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:path_provider/path_provider.dart';
+import 'package:strumsight/features/analyze/public.dart'
+    show computeImportedClipAnalysis;
 import 'package:strumsight/features/practice/public.dart';
 import 'package:strumsight/features/progress/public.dart' as progress;
 
+import '../../../core/audio/audio_decoder_providers.dart';
 import '../../../core/foundation/app_failure.dart';
 import '../../../core/foundation/app_result.dart';
 import '../../../core/logging/logger_provider.dart';
@@ -30,6 +33,7 @@ import '../../../core/storage/key_value_store.dart';
 import '../../../core/storage/storage_providers.dart';
 import '../data/playback/backing_audio_player.dart';
 import '../data/playback/local_backing_audio_player.dart';
+import 'import/audio_song_import_controller.dart';
 import 'import/song_import_controller.dart';
 import 'import/song_import_state.dart';
 import 'library/song_library_controller.dart';
@@ -327,6 +331,64 @@ final songImportControllerProvider = Provider.autoDispose<SongImportController>(
     return controller;
   },
 );
+
+/// Per-operation scratch directory for the AUDIO import (K3).
+///
+/// The platform decoder needs a real path, and the picker deliberately hands
+/// out a byte stream instead of one, so the compressed bytes are written here
+/// for exactly the length of one operation. It is a sibling of the notation
+/// import workspace, NOT the same directory: the notation workspace enforces
+/// an 8 MiB budget that a recording would blow through instantly.
+final audioImportWorkspaceRootProvider = Provider<SongTrainerRootResolver>((
+  ref,
+) {
+  final resolveSongsRoot = ref.watch(songTrainerProductionRootResolverProvider);
+  return () async {
+    final songsRoot = await resolveSongsRoot();
+    return Directory('${songsRoot.path}/audio-import');
+  };
+});
+
+/// The decode seam of the audio import: the K2 platform decoder.
+///
+/// No `targetSampleRate` is requested — the decoder's own rate survives and
+/// the analyzer is told what it is (ADR 0535 §3: a quality resample is the
+/// DSP's job, not the reader's).
+final audioSongImportDecoderProvider = Provider<AudioPcmDecode>((ref) {
+  final decoder = ref.watch(platformAudioDecoderProvider);
+  return decoder.decodeToPcm;
+});
+
+/// The analysis seam of the audio import.
+///
+/// Bound to `computeImportedClipAnalysis`, which pins Lab mode OFF, so an
+/// imported recording can never reach the diagnostics uploader (K3/A3).
+final audioSongImportAnalyzerProvider = Provider<AudioClipAnalyze>(
+  (_) => computeImportedClipAnalysis,
+);
+
+/// Application audio-import flow. Auto-disposed, so leaving the import route
+/// cancels the operation and disowns any decode/analysis still in flight.
+final audioSongImportControllerProvider =
+    Provider.autoDispose<AudioSongImportController>((ref) {
+      final controller = AudioSongImportController(
+        decode: ref.watch(audioSongImportDecoderProvider),
+        analyze: ref.watch(audioSongImportAnalyzerProvider),
+        // Resolved lazily on purpose: mounting the import screen must not be
+        // what forces the song tree open (see SongRepositoryResolver).
+        repository: () => ref.read(songRepositoryProvider),
+        assetRepository: () => ref.read(songAssetRepositoryProvider),
+        workspaceRoot: ref.watch(audioImportWorkspaceRootProvider),
+      );
+      ref.onDispose(() => unawaited(controller.dispose()));
+      return controller;
+    });
+
+/// Reactive audio-import state for presentation consumers.
+final audioSongImportStateProvider =
+    StreamProvider.autoDispose<AudioSongImportState>(
+      (ref) => ref.watch(audioSongImportControllerProvider).states,
+    );
 
 /// Production picker boundary. Widgets receive this adapter through the
 /// provider instead of calling a platform plugin directly.

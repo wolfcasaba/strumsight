@@ -340,6 +340,47 @@ final class _EditorBody extends ConsumerWidget {
                 ],
               ),
             ),
+          // K3/A2: an audio-derived document is a DRAFT. The banner is
+          // driven by the document's own provenance
+          // (`SongSourceType.audioAnalysis`), not by how the editor was
+          // reached, so a deep link or a later re-open says the same thing.
+          // The measured chord accuracy is ~57% on full-band music and
+          // 76–92% on solo guitar — the user is told to review before
+          // practising, and the import flow never sends them anywhere else.
+          if (draft.source.type == SongSourceType.audioAnalysis)
+            Padding(
+              key: const Key('song-editor-draft-banner'),
+              padding: const EdgeInsets.only(bottom: SsSpacing.space3),
+              child: Semantics(
+                label: l10n.songEditorDraftBannerTitle,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Icon(Icons.auto_awesome, color: colors.warning),
+                    const SizedBox(width: SsSpacing.space2),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            l10n.songEditorDraftBannerTitle,
+                            style: typography.bodyMedium.copyWith(
+                              color: colors.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            l10n.songEditorDraftBannerBody,
+                            style: typography.bodyMedium.copyWith(
+                              color: colors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           SongMetadataEditor(
             metadata: draft.metadata,
             onChanged: controller.editMetadata,

@@ -134,6 +134,19 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
   /// Empty-state secondary CTA: the guided Learn highway.
   void _openLearnHighway() => context.push(AppRoutes.practiceLearn);
 
+  /// Opens the import sheet and RELOADS on the way back.
+  ///
+  /// The library only loaded in `initState`, so a song created while this
+  /// route stayed mounted underneath (the K3 audio import lands in the editor
+  /// on top of it) was invisible until the user left the tab and came back.
+  Future<void> _openImport() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => const SongImportScreen()),
+    );
+    if (!mounted) return;
+    await ref.read(songLibraryControllerProvider).load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -160,9 +173,7 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(builder: (_) => const SongImportScreen()),
-        ),
+        onPressed: _openImport,
         icon: const Icon(Icons.upload_file_outlined),
         label: Text(l10n.songLibraryImport),
       ),

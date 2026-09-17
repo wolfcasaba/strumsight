@@ -12,6 +12,7 @@
 // which is exactly what `pumpAndSettle` cannot settle.
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,19 +25,29 @@ import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
+import 'package:strumsight/core/audio/codec/platform_audio_decoder.dart';
+import 'package:strumsight/core/foundation/app_result.dart';
+import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/core/platform/microphone_permission.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
 import 'package:strumsight/features/practice/application/practice_session_providers.dart';
 import 'package:strumsight/features/practice/public.dart'
     show PracticeAttemptResult, PracticeFinishReason, PracticeSessionResult;
+import 'package:strumsight/features/analyze/public.dart';
+import 'package:strumsight/features/song_trainer/application/import/audio_song_import_controller.dart';
 import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_trainer_result.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_transport_tick_source.dart';
+import 'package:strumsight/features/song_trainer/data/importers/file_picker_adapter.dart';
+import 'package:strumsight/features/song_trainer/data/importers/song_importer.dart';
+import 'package:strumsight/features/song_trainer/data/local/file_song_asset_repository.dart';
 import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repository.dart';
 import 'package:strumsight/features/song_trainer/data/playback/fake_backing_audio_player.dart';
 import 'package:strumsight/features/song_trainer/data/local/song_document_codec.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_document.dart';
+import 'package:strumsight/features/song_trainer/presentation/screens/song_editor_screen.dart';
+import 'package:strumsight/features/song_trainer/presentation/screens/song_import_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_library_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_result_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_trainer_screen.dart';
@@ -92,6 +103,7 @@ SongDocument _loadSeedDocument() {
 Future<_Walk> _bootLibrary(
   WidgetTester tester, {
   MicrophonePermissionState permission = MicrophonePermissionState.granted,
+  List<Override> extraOverrides = const <Override>[],
 }) async {
   // MEASURED (record-goldens 35207783427): on the default 800x600 surface the
   // trainer setup's `ListView` never LAYS OUT its last child, so
@@ -148,6 +160,7 @@ Future<_Walk> _bootLibrary(
           appVersion: 'test',
         ),
       ),
+      ...extraOverrides,
     ],
   );
   addTearDown(() async {
@@ -224,6 +237,69 @@ void main() {
     expect(
       find.byKey(const Key('song-trainer-paused-position')),
       findsOneWidget,
+    );
+  });
+
+  // K3/A6 — the audio import walk. Only two seams are faked (the platform
+  // decoder, which has no host implementation, and the analyzer, which would
+  // otherwise run thousands of FFTs inside a widget test); everything between
+  // them is production: the picker port, the limit profile, the mapper, the
+  // asset store, the repository and the router.
+  testWidgets('an audio file imports as a draft and lands in the editor', (
+    tester,
+  ) async {
+    final assetRoot = await Directory.systemTemp.createTemp('k3-e2e-assets');
+    final scratchRoot = await Directory.systemTemp.createTemp('k3-e2e-tmp');
+    addTearDown(() async {
+      if (await assetRoot.exists()) await assetRoot.delete(recursive: true);
+      if (await scratchRoot.exists()) {
+        await scratchRoot.delete(recursive: true);
+      }
+    });
+    final assets = await FileSongAssetRepository.openAtDirectory(
+      root: assetRoot,
+      clock: () => DateTime.utc(2026, 9, 17),
+    );
+
+    await _bootLibrary(
+      tester,
+      extraOverrides: <Override>[
+        songAssetRepositoryProvider.overrideWithValue(assets),
+        songFilePickerAdapterProvider.overrideWithValue(
+          const _FakeAudioPicker(),
+        ),
+        audioSongImportDecoderProvider.overrideWithValue(_fakeDecode),
+        audioSongImportAnalyzerProvider.overrideWithValue(_fakeAnalyze),
+        audioImportWorkspaceRootProvider.overrideWithValue(
+          () async => scratchRoot,
+        ),
+      ],
+    );
+    expect(find.byType(SongLibraryScreen), findsOneWidget);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    expect(find.byType(SongImportScreen), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('song-import-choose-audio')));
+    await tester.pumpAndSettle();
+
+    // The draft lands in the EDITOR, behind the review banner — never in a
+    // practice session.
+    expect(find.byType(SongEditorScreen), findsOneWidget);
+    expect(find.byType(SongTrainerScreen), findsNothing);
+    expect(find.byKey(const Key('song-editor-draft-banner')), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SongLibraryScreen), findsOneWidget);
+    expect(
+      find.text('Audio file'),
+      findsWidgets,
+      reason: 'the library must show the new origin on the imported row',
     );
   });
 
@@ -305,3 +381,56 @@ SongTrainerResult _emptyResult() => SongTrainerResult(
   measureResults: const <SongMeasureTrainerResult>[],
   sectionResults: const <SongSectionTrainerResult>[],
 );
+
+/// Returns a fixed audio source; the notation picker is never reached here.
+final class _FakeAudioPicker implements FilePickerAdapter {
+  const _FakeAudioPicker();
+
+  @override
+  Future<ImportSourceFile?> pickSongFile() async => null;
+
+  @override
+  Future<ImportSourceFile?> pickAudioFile() async {
+    final bytes = Uint8List.fromList(
+      List<int>.generate(4096, (index) => index % 251),
+    );
+    return ImportSourceFile(
+      displayName: 'walkthrough.mp3',
+      byteLength: bytes.length,
+      mimeType: 'audio/mpeg',
+      openRead: () => Stream<List<int>>.value(bytes),
+    );
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
+/// Stands in for the Android platform decoder, which has no host build.
+Future<AppResult<DecodedPcm>> _fakeDecode(String path) async {
+  final samples = Float32List(16000 * 4);
+  for (var index = 0; index < samples.length; index++) {
+    samples[index] = (index % 100) / 100 - 0.5;
+  }
+  return Success<DecodedPcm>(DecodedPcm(sampleRate: 16000, samples: samples));
+}
+
+/// A fixed G-C-D reading — the DSP itself is measured by its own suites.
+Future<AnalyzeResult> _fakeAnalyze(List<double> pcm, int sampleRate) async {
+  return const AnalyzeResult(
+    durationSec: 4,
+    bpm: 120,
+    chords: <TimelineChord>[
+      TimelineChord(label: 'G', startSec: 0, endSec: 2),
+      TimelineChord(label: 'C', startSec: 2, endSec: 3),
+      TimelineChord(label: 'D', startSec: 3, endSec: 4),
+    ],
+    strums: <TimelineStrum>[
+      TimelineStrum(
+        direction: StrumDirection.down,
+        timeSec: 0.5,
+        confidence: 0.9,
+      ),
+    ],
+  );
+}
