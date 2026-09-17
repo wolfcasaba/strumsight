@@ -19,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/storage/key_value_store.dart';
 import 'package:strumsight/core/storage/storage_providers.dart';
 import 'package:strumsight/features/song_trainer/application/migration/song_migration_state.dart';
+import 'package:strumsight/features/song_trainer/application/seed/song_seed_installer.dart';
 import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
 import 'package:strumsight/features/song_trainer/domain/repositories/song_repository.dart';
 
@@ -101,6 +102,12 @@ Map<String, dynamic> _song({
   'bpb': 4,
 };
 
+/// E16-R01/A1 — this suite measures the MIGRATION, so the shipped seed
+/// catalogue is pinned empty. The seeding cells live in
+/// `song_repository_wiring_test.dart` and
+/// `application/seed/song_seed_installer_test.dart`.
+const _noSeeds = <SongSeedDefinition>[];
+
 void main() {
   late Directory sandbox;
 
@@ -131,6 +138,7 @@ void main() {
         songTrainerClockProvider.overrideWithValue(
           () => DateTime.utc(2026, 8, 2, 13),
         ),
+        songSeedCatalogProvider.overrideWithValue(_noSeeds),
       ],
     );
     addTearDown(firstContainer.dispose);
@@ -177,6 +185,7 @@ void main() {
         songTrainerClockProvider.overrideWithValue(
           () => DateTime.utc(2026, 8, 2, 14),
         ),
+        songSeedCatalogProvider.overrideWithValue(_noSeeds),
       ],
     );
     addTearDown(secondContainer.dispose);

@@ -11,6 +11,7 @@
 // `buildStorageProductionOverrides` listája MINDEGYIKET feloldja — a lista
 // bármelyik elemének elhagyása pontosan azt a cellát viszi pirosra.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -211,6 +212,54 @@ void main() {
       expect(
         (result as ProductionCompositionFailure).problems.single,
         contains('tutor asset bundle missing'),
+      );
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // E16-R01/A6 (2026-09-17 review §6) — a legacy → V2 migráció a BOOT
+  // úton fut le.
+  //
+  // MÉRT hiba: a `songMigrationOutcomeProvider`-t a `lib/`-ben SENKI nem
+  // olvasta (csak két teszt), így a `/songs/own` alatti legacy dalok soha
+  // nem jelentek meg a V2 könyvtárban. A cella a kompozíción keresztül
+  // méri: legacy envelope a kulcs-érték tárban → compose → a V2 repó
+  // tartalmazza a dalt.
+  // ---------------------------------------------------------------
+  group('a boot út lefuttatja a legacy → V2 migrációt', () {
+    test('a legacy dal a kompozíció után a V2 repóban van', () async {
+      await store.writeString(
+        'ss.songs.songs',
+        jsonEncode(<String, dynamic>{
+          'schemaVersion': 1,
+          'items': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'legacy_song',
+              'name': 'Legacy',
+              'chords': <String>['C', 'G'],
+              'pat': 'd-du-ud-',
+              'bpm': 96,
+              'bpb': 4,
+            },
+          ],
+        }),
+      );
+
+      final result = await composeProductionOverridesOrFailure(
+        bootstrapContainer: bootstrapContainer,
+        buildTutorOverrides: () async => const <Override>[],
+      );
+      expect(result, isA<ProductionCompositionSuccess>());
+
+      final repository = await bootstrapContainer.read(
+        songRepositoryBootProvider.future,
+      );
+      final listed = await repository.list(
+        const SongQuery(includeTrashed: true, includeArchived: true),
+      );
+      expect(
+        listed.valueOrNull!.map((summary) => summary.documentId.value),
+        contains('legacy_song'),
       );
     });
   });
