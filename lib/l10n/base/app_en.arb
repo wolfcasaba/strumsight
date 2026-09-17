@@ -3389,5 +3389,28 @@
   "@communityHubComments": {
     "description": "Feed-card / bookmark-row action that opens the post's comment thread."
   },
-  "communityHubLeaderboard": "Leaderboard"
+  "communityHubLeaderboard": "Leaderboard",
+
+  "songLibraryEmptyPracticeHint": "Up/down strumming drills live in the Practice hub — the library is for whole songs.",
+  "songLibraryRestoreSeeds": "Restore the practice songs",
+  "songLibraryRestoreSeedsDone": "{count} practice song(s) restored.",
+  "@songLibraryRestoreSeedsDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "songLibraryRestoreSeedsFailed": "The practice songs could not be restored ({code}).",
+  "@songLibraryRestoreSeedsFailed": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "songLibraryOpenLearn": "Open the Learn highway",
+  "songTrainerPracticeAgain": "Practice again",
+  "songTrainerBackToLibrary": "Back to the library",
+  "songTrainerPermissionTitle": "The microphone is off"
 }

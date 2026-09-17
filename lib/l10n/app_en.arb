@@ -4072,6 +4072,7 @@
   "songLibraryAllSources": "All sources",
   "songLibraryCreate": "Create song",
   "songLibraryEmpty": "No songs yet. Import a file to start your library.",
+  "songLibraryEmptyPracticeHint": "Up/down strumming drills live in the Practice hub — the library is for whole songs.",
   "songLibraryExport": "Export",
   "songLibraryExportPrepared": "Prepared private export: {filename}",
   "@songLibraryExportPrepared": {
@@ -4083,8 +4084,26 @@
   },
   "songLibraryImport": "Import",
   "songLibraryLoading": "Loading song library…",
+  "songLibraryOpenLearn": "Open the Learn highway",
   "songLibraryReadOnly": "Read-only",
   "songLibraryReadOnlySnackBar": "This song is read-only. Opened in view mode.",
+  "songLibraryRestoreSeeds": "Restore the practice songs",
+  "songLibraryRestoreSeedsDone": "{count} practice song(s) restored.",
+  "@songLibraryRestoreSeedsDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "songLibraryRestoreSeedsFailed": "The practice songs could not be restored ({code}).",
+  "@songLibraryRestoreSeedsFailed": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
   "songLibraryRetry": "Try again",
   "songLibrarySearch": "Search songs",
   "songLibrarySort": "Sort",
@@ -4168,6 +4187,7 @@
   "songTempo": "Tempo",
   "songTrainerABClear": "Clear A–B",
   "songTrainerABSet": "Set A–B loop",
+  "songTrainerBackToLibrary": "Back to the library",
   "songTrainerFailed": "Session failed: {code}",
   "@songTrainerFailed": {
     "placeholders": {
@@ -4205,7 +4225,9 @@
   },
   "songTrainerNextSection": "Next section",
   "songTrainerOverlayCountIn": "Count-in",
+  "songTrainerPermissionTitle": "The microphone is off",
   "songTrainerPlaybackOnlyComplete": "Playback complete — listening only, no score recorded.",
+  "songTrainerPracticeAgain": "Practice again",
   "songTrainerProgressEmpty": "No current-revision progress yet.",
   "songTrainerProgressSummary": "{measures} practiced measures, best score {percent}%.",
   "@songTrainerProgressSummary": {

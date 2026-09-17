@@ -4026,6 +4026,7 @@
   "songLibraryAllSources": "Minden forrás",
   "songLibraryCreate": "Dal létrehozása",
   "songLibraryEmpty": "Még nincsenek dalok. Importálj egy fájlt a könyvtár indításához.",
+  "songLibraryEmptyPracticeHint": "A le/fel pengetés gyakorlatok a Gyakorló hubon várnak — a könyvtár a teljes dalokért van.",
   "songLibraryExport": "Exportálás",
   "songLibraryExportPrepared": "Privát export elkészítve: {filename}",
   "@songLibraryExportPrepared": {
@@ -4037,8 +4038,26 @@
   },
   "songLibraryImport": "Importálás",
   "songLibraryLoading": "Dalkönyvtár betöltése…",
+  "songLibraryOpenLearn": "Ugrás a Tanulás útra",
   "songLibraryReadOnly": "Csak olvasható",
   "songLibraryReadOnlySnackBar": "Ez a dal csak olvasható. Megtekintő nézetben nyílt meg.",
+  "songLibraryRestoreSeeds": "Gyakorló dalok visszaállítása",
+  "songLibraryRestoreSeedsDone": "{count} gyakorló dal visszaállítva.",
+  "@songLibraryRestoreSeedsDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "songLibraryRestoreSeedsFailed": "A gyakorló dalokat nem sikerült visszaállítani ({code}).",
+  "@songLibraryRestoreSeedsFailed": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
   "songLibraryRetry": "Próbáld újra",
   "songLibrarySearch": "Dalok keresése",
   "songLibrarySort": "Rendezés",
@@ -4122,6 +4141,7 @@
   "songTempo": "Tempó",
   "songTrainerABClear": "A–B törlése",
   "songTrainerABSet": "A–B hurok beállítása",
+  "songTrainerBackToLibrary": "Vissza a könyvtárba",
   "songTrainerFailed": "A session sikertelen: {code}",
   "@songTrainerFailed": {
     "placeholders": {
@@ -4159,7 +4179,9 @@
   },
   "songTrainerNextSection": "Következő szakasz",
   "songTrainerOverlayCountIn": "Bevezető",
+  "songTrainerPermissionTitle": "A mikrofon ki van kapcsolva",
   "songTrainerPlaybackOnlyComplete": "Lejátszás kész — csak hallgatás, nincs pontszám rögzítve.",
+  "songTrainerPracticeAgain": "Gyakorlás újra",
   "songTrainerProgressEmpty": "Ehhez a dalverzióhoz még nincs fejlődési adat.",
   "songTrainerProgressSummary": "{measures} gyakorlott ütem, legjobb pontszám: {percent}%.",
   "@songTrainerProgressSummary": {

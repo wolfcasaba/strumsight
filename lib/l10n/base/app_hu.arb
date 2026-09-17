@@ -3311,5 +3311,28 @@
   "@communityHubComments": {
     "description": "Feed-card / bookmark-row action that opens the post's comment thread."
   },
-  "communityHubLeaderboard": "Ranglista"
+  "communityHubLeaderboard": "Ranglista",
+
+  "songLibraryEmptyPracticeHint": "A le/fel pengetés gyakorlatok a Gyakorló hubon várnak — a könyvtár a teljes dalokért van.",
+  "songLibraryRestoreSeeds": "Gyakorló dalok visszaállítása",
+  "songLibraryRestoreSeedsDone": "{count} gyakorló dal visszaállítva.",
+  "@songLibraryRestoreSeedsDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "songLibraryRestoreSeedsFailed": "A gyakorló dalokat nem sikerült visszaállítani ({code}).",
+  "@songLibraryRestoreSeedsFailed": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "songLibraryOpenLearn": "Ugrás a Tanulás útra",
+  "songTrainerPracticeAgain": "Gyakorlás újra",
+  "songTrainerBackToLibrary": "Vissza a könyvtárba",
+  "songTrainerPermissionTitle": "A mikrofon ki van kapcsolva"
 }

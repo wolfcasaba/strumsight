@@ -63,6 +63,33 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
     ref.read(_songLibraryQueryProvider.notifier).save(query);
   }
 
+  /// Empty-state CTA: puts the shipped practice songs back.
+  ///
+  /// The boot path NEVER does this — a seed the user deleted only returns on
+  /// this explicit tap (`SongSeedInstaller.restore`). The outcome is always
+  /// reported: a restored count, or the named failure code.
+  Future<void> _restoreSeedSongs() async {
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final outcome = await ref.read(songSeedRestoreProvider)();
+    if (!mounted) return;
+    await ref.read(songLibraryControllerProvider).load();
+    if (!mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          outcome.isClean
+              ? l10n.songLibraryRestoreSeedsDone(
+                  outcome.installedSeedIds.length,
+                )
+              : l10n.songLibraryRestoreSeedsFailed(
+                  outcome.failures.first.reason,
+                ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -196,7 +223,11 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
               ),
               Expanded(
                 child: state.summaries.isEmpty
-                    ? const _LibraryEmpty()
+                    ? _LibraryEmpty(
+                        onRestoreSeeds: _restoreSeedSongs,
+                        onOpenLearn: () =>
+                            context.push(AppRoutes.practiceLearn),
+                      )
                     : ListView.builder(
                         itemCount: state.summaries.length,
                         itemBuilder: (context, index) {
@@ -235,6 +266,14 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
                             },
                             child: SongSummaryTile(
                               summary: summary,
+                              onPlay: () => context.push(
+                                AppRoutes.songTrainerSetup.replaceFirst(
+                                  ':songId',
+                                  Uri.encodeComponent(
+                                    summary.documentId.value,
+                                  ),
+                                ),
+                              ),
                               isFavorite:
                                   summary.favorite ||
                                   state.favoriteIds.contains(
@@ -334,31 +373,61 @@ final class _LibraryError extends StatelessWidget {
   }
 }
 
-/// Built from design tokens directly rather than [SsEmptyState]: that
-/// component mandates an [SsEmptyState.onAction] (§5.2), and the legacy
-/// empty state took no action at all (measured: `git show
-/// origin/main:…song_library_screen.dart` — a bare `Center(Text(...))`).
-/// Wiring the existing FAB's import action into a new `onAction` here would
-/// be a behaviour change in an appearance-only round (E15-R04 review
-/// MAJOR-3 pattern) — this mirrors [PracticeHubScreen]'s
-/// `_EmptyCatalogLayout`, the same documented §5.2 exception.
+/// The empty library is no longer a dead end (E16-R01/A1).
+///
+/// The measured state before this round was a bare `Center(Text(...))` with
+/// ZERO actions: on a fresh install the Songs tab said "no songs yet" and
+/// offered nothing but the import FAB, so a beginner with no song file had
+/// nowhere to go. It now carries the two honest ways forward — put the
+/// shipped practice songs back, or leave for the Learn highway — plus a
+/// sentence naming where the up/down strumming drills actually live.
+///
+/// Built from design tokens directly rather than [SsEmptyState] because that
+/// component takes exactly one action (§5.2) and this state has two; it is
+/// a [ListView] so the two buttons and the hint still fit at 200% text scale.
 final class _LibraryEmpty extends StatelessWidget {
-  const _LibraryEmpty();
+  const _LibraryEmpty({
+    required this.onRestoreSeeds,
+    required this.onOpenLearn,
+  });
+
+  final VoidCallback onRestoreSeeds;
+  final VoidCallback onOpenLearn;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final typography = Theme.of(context).extension<SsTypography>()!;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(SsSpacing.space6),
-        child: Text(
+    return ListView(
+      key: const Key('song-library-empty'),
+      padding: const EdgeInsets.all(SsSpacing.space6),
+      children: <Widget>[
+        Text(
           l10n.songLibraryEmpty,
           style: typography.bodyMedium.copyWith(color: colors.textSecondary),
           textAlign: TextAlign.center,
         ),
-      ),
+        const SizedBox(height: SsSpacing.space3),
+        Text(
+          l10n.songLibraryEmptyPracticeHint,
+          style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: SsSpacing.space4),
+        SsButton(
+          key: const Key('song-library-restore-seeds'),
+          label: l10n.songLibraryRestoreSeeds,
+          onPressed: onRestoreSeeds,
+        ),
+        const SizedBox(height: SsSpacing.space2),
+        SsButton(
+          key: const Key('song-library-open-learn'),
+          label: l10n.songLibraryOpenLearn,
+          variant: SsButtonVariant.secondary,
+          onPressed: onOpenLearn,
+        ),
+      ],
     );
   }
 }

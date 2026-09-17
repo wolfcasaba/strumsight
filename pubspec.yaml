@@ -71,6 +71,11 @@ flutter:
     # Full-band CHORD-recognition CRNN (CCRN blob, round 195 export; CQT→CNN→
     # BiGRU→25-class majmin). Pure-Dart inference feeds the Viterbi decoder.
     - assets/ml/chord_crnn.bin
+    # Project-original practice songs seeded into the Song Trainer library on
+    # first launch (provenance: assets/songs/README.md).
+    - assets/songs/seed-harom-akkord-g-c-d.song.json
+    - assets/songs/seed-blues-shuffle-a.song.json
+    - assets/songs/seed-keringo-g.song.json
 
   fonts:
     - family: Poppins
