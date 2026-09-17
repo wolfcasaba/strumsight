@@ -14,6 +14,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 
+import '../core/logging/logger_provider.dart';
 import '../core/storage/key_value_store.dart';
 import '../core/storage/storage_providers.dart';
 import '../features/audio_analysis/application/analysis_providers.dart';
@@ -22,6 +23,7 @@ import '../features/audio_analysis/data/migration/analysis_migration_version_sto
 import '../features/audio_analysis/data/migration/legacy_library_migrator.dart';
 import '../features/audio_analysis/domain/analysis_repository.dart';
 import '../features/library/data/library_repository.dart';
+import '../features/song_trainer/application/migration/song_migration_state.dart';
 import '../features/song_trainer/application/song_trainer_providers.dart';
 import '../features/song_trainer/domain/repositories/setlist_repository.dart';
 import '../features/song_trainer/domain/repositories/song_asset_repository.dart';
@@ -152,6 +154,31 @@ Future<ProductionComposition> composeProductionOverridesOrFailure({
     );
     final SongAssetRepository songAssetRepository = await bootstrapContainer
         .read(songAssetRepositoryBootProvider.future);
+    // E16-R01/A6 — a legacy → V2 migráció EGYSZER, a boot úton fut le.
+    //
+    // MÉRT hiba (2026-09-17 review §6): a `songMigrationOutcomeProvider`
+    // doc-kommentje azt írta, „a boot path pontosan egyszer hívja" — a
+    // `lib/`-ben viszont SENKI nem olvasta, csak két teszt. Következmény: a
+    // `/songs/own` alatti legacy dalok soha nem jelentek meg a V2
+    // könyvtárban, a felhasználónak két, egymást nem látó dalgyűjteménye
+    // volt. A provider `FutureProvider`, tehát a konténer élettartamán belül
+    // idempotens; a migrátor maga checkpointolt, így az ismételt futás is az.
+    final migration = await bootstrapContainer.read(
+      songMigrationOutcomeProvider.future,
+    );
+    if (migration.status != SongMigrationStatus.completed) {
+      // NEM néma no-op: a félbemaradt migráció nevesítve kerül a naplóba, és
+      // a következő indítás a checkpointról folytatja.
+      final logger = bootstrapContainer.read(appLoggerProvider);
+      logger.warning(
+        'songMigration.boot.needsResume',
+        fields: <String, Object?>{
+          'totalSongs': migration.totalSongs,
+          'migratedSongs': migration.migratedSongs,
+          'failedSongs': migration.failedSongs.length,
+        },
+      );
+    }
     final storageOverrides = await buildStorageProductionOverrides(
       bootstrapContainer,
     );
