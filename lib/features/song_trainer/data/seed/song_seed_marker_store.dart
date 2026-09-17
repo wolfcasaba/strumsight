@@ -40,10 +40,8 @@ final class SongSeedMarker {
   });
 
   /// Stable constructor for a fresh install (no marker on disk yet).
-  factory SongSeedMarker.empty() => const SongSeedMarker(
-    installedSeedIds: <String>{},
-    installedAt: null,
-  );
+  factory SongSeedMarker.empty() =>
+      const SongSeedMarker(installedSeedIds: <String>{}, installedAt: null);
 
   /// Seed ids the installer has already written to the repository in some
   /// prior run. These are NEVER re-installed — a deleted seed stays deleted.
