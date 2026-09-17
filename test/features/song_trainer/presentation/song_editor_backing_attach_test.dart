@@ -247,6 +247,17 @@ Future<void> _pumpEditor(
   ProviderContainer container,
   String songId,
 ) async {
+  // MEASURED (record-goldens 35217746705): on the default 800x600 surface the
+  // editor's `ListView` never LAYS OUT its last child, so
+  // `song-editor-attach-backing` is not in the element tree at all and
+  // `ensureVisible` throws "Bad state: No element" — the four widget cells
+  // failed on a viewport, not on the attach wiring. Same remedy as the E16
+  // walkthrough: a tall surface renders the whole form at once, and every
+  // assertion below stays about the attach flow rather than about scrolling.
+  tester.view.physicalSize = const Size(1200, 2400);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
