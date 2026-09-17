@@ -20,8 +20,8 @@ const MethodChannel audioDecoderMethodChannel = MethodChannel(
 final class MethodChannelAudioDecoderBridge
     implements AudioDecoderPlatformBridge {
   const MethodChannelAudioDecoderBridge({
-    MethodChannel channel = audioDecoderMethodChannel,
-  }) : _channel = channel;
+    this._channel = audioDecoderMethodChannel,
+  });
 
   final MethodChannel _channel;
 

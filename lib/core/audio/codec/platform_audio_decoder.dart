@@ -106,14 +106,12 @@ AudioFileStat _statFromDisk(String path) {
 /// [FailureCode.audioUnsupportedPlatform] and the channel is never touched.
 final class PlatformAudioDecoder {
   PlatformAudioDecoder({
-    required AudioDecoderPlatformBridge bridge,
+    required this._bridge,
     bool? isSupportedPlatform,
-    AudioFileStatReader statReader = _statFromDisk,
+    this._statReader = _statFromDisk,
     this.maxFileBytes = AudioDecoderLimits.maxFileBytes,
     this.maxDuration = AudioDecoderLimits.maxDuration,
-  }) : _bridge = bridge,
-       _statReader = statReader,
-       _isSupportedPlatform = isSupportedPlatform ?? Platform.isAndroid;
+  }) : _isSupportedPlatform = isSupportedPlatform ?? Platform.isAndroid;
 
   final AudioDecoderPlatformBridge _bridge;
   final AudioFileStatReader _statReader;
