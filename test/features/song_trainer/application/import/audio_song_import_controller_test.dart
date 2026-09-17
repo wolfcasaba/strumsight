@@ -202,7 +202,7 @@ final class _Rig {
     final listed = await repository.list(const SongQuery());
     final summaries = (listed as Success<List<SongSummary>>).value;
     expect(summaries, hasLength(1));
-    final loaded = await repository.get(summaries.single.id);
+    final loaded = await repository.get(summaries.single.documentId);
     return (loaded as Success<SongDocument?>).value!;
   }
 }

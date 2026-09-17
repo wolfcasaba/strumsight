@@ -35,7 +35,6 @@ import 'package:strumsight/features/practice/application/practice_session_provid
 import 'package:strumsight/features/practice/public.dart'
     show PracticeAttemptResult, PracticeFinishReason, PracticeSessionResult;
 import 'package:strumsight/features/analyze/public.dart';
-import 'package:strumsight/features/song_trainer/application/import/audio_song_import_controller.dart';
 import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_trainer_result.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_transport_tick_source.dart';

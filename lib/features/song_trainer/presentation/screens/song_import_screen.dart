@@ -88,7 +88,7 @@ final class _SongImportScreenState extends ConsumerState<SongImportScreen> {
   }
 
   Future<void> _pickAudio() async {
-    final controller = _audio ?? ref.read(audioSongImportControllerProvider);
+    final controller = ref.read(audioSongImportControllerProvider);
     controller.beginSelection();
     final picker = ref.read(songFilePickerAdapterProvider);
     final source = await picker.pickAudioFile();

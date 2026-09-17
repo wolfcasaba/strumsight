@@ -121,7 +121,11 @@ ProviderContainer _rig(DiagnosticsUploader uploader) => ProviderContainer(
       AppConfig(
         environment: AppEnvironment.development,
         apiBaseUrl: AppConfig.devApiBaseUrl,
-        flags: const FeatureFlags(diagnosticsEnabled: true),
+        flags: const FeatureFlags(
+          accountEnabled: false,
+          diagnosticsEnabled: true,
+          labModeAvailable: true,
+        ),
         diagnosticsToken: AppConfig.devDiagnosticsToken,
         buildMode: 'test',
         appVersion: 'test',
