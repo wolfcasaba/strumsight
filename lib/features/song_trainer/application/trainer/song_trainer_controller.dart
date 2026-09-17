@@ -207,6 +207,13 @@ final class SongTrainerController {
             practice.state.status == PracticeSessionStatus.running)) {
       await practice.dispatch(const PausePractice(cause: PauseCause.user));
     }
+    // E16-R01/A3 — "practice again" from the result screen seeks a session
+    // that already FINISHED. A completed transport rejects both seek and
+    // start, so the attempt would have restarted with a frozen playhead;
+    // `RestartSongTransport` puts it back in `ready` first.
+    if (transport.state.phase == SongTransportPhase.completed) {
+      await transport.dispatch(const RestartSongTransport());
+    }
     if (transport.state.phase == SongTransportPhase.playing) {
       await transport.dispatch(const PauseSongTransport());
     }
