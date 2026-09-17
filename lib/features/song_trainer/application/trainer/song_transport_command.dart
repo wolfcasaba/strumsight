@@ -10,7 +10,15 @@ final class PrepareSongTransport extends SongTransportCommand {
     this.gridOffset = Duration.zero,
   });
 
-  final SongAssetReference asset;
+  /// The backing track to load, or `null` for a SILENT transport.
+  ///
+  /// E16-R01/A4: a song with no backing audio still needs a running
+  /// transport — it is what advances the playhead the lanes and the highway
+  /// read. A `null` asset prepares the state machine and its clock while the
+  /// player is left untouched; every other command then behaves identically,
+  /// minus the audio I/O.
+  final SongAssetReference? asset;
+
   final Duration gridOffset;
 }
 
