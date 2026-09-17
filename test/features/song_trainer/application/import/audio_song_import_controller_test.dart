@@ -3,10 +3,11 @@
 // The decoder and the analyzer are the only seams that are faked; everything
 // below them is the production path: the real limit profile, the real mapper,
 // the real normalizer/validator, the real content-hash asset store and the
-// real repository contract. The cells measure the four outcomes that matter:
-// a draft with its backing audio attached, a named refusal instead of a
-// half-written song, cancellation that writes nothing, and a scratch file
-// that does not survive the operation.
+// real repository contract. The cells measure the outcomes that matter: a
+// draft with its backing audio attached, a named refusal instead of a
+// half-written song, and cancellation that writes nothing. The scratch copy
+// the platform decoder needs has its own cell next to its own adapter
+// (`audio_scratch_decoder_test.dart`).
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -52,22 +53,16 @@ void main() {
       root: Directory('${root.path}/assets'),
       clock: () => DateTime.utc(2026, 9, 17),
     );
-    final scratchRoot = Directory('${root.path}/audio-import');
     final controller = AudioSongImportController(
       decode: decode ?? _decodeOk,
       analyze: analyze ?? _analyzeGcd,
       repository: () => repository,
       assetRepository: () => assets,
-      workspaceRoot: () async => scratchRoot,
       clock: () => DateTime.utc(2026, 9, 17),
       maxSourceBytes: maxSourceBytes,
     );
     addTearDown(controller.dispose);
-    return _Rig(
-      controller: controller,
-      repository: repository,
-      scratchRoot: scratchRoot,
-    );
+    return _Rig(controller: controller, repository: repository);
   }
 
   test('an mp3 becomes a draft song with its audio attached', () async {
@@ -98,12 +93,6 @@ void main() {
     expect(document.assets.single.extension, 'mp3');
     expect(document.assets.single.byteLength, _bytes.length);
     expect(document.tracks.whereType<ChordTrack>().single.events, hasLength(3));
-
-    // The scratch copy exists only for the length of the operation.
-    final leftovers = harness.scratchRoot.existsSync()
-        ? harness.scratchRoot.listSync()
-        : const <FileSystemEntity>[];
-    expect(leftovers, isEmpty);
   });
 
   test('a declared size over the audio ceiling is refused by name', () async {
@@ -183,15 +172,10 @@ void main() {
 }
 
 final class _Rig {
-  _Rig({
-    required this.controller,
-    required this.repository,
-    required this.scratchRoot,
-  });
+  _Rig({required this.controller, required this.repository});
 
   final AudioSongImportController controller;
   final InMemorySongRepository repository;
-  final Directory scratchRoot;
 
   Future<int> count() async {
     final listed = await repository.list(const SongQuery());
@@ -218,11 +202,14 @@ ImportSourceFile _source({String name = 'my-song.mp3'}) => ImportSourceFile(
   openRead: () => Stream<List<int>>.value(_bytes),
 );
 
-Future<AppResult<DecodedPcm>> _decodeOk(String path) async {
-  // The controller must have written the picked bytes somewhere real: the
-  // platform decoder takes a PATH, and a fake that ignores it would hide a
-  // missing write.
-  expect(File(path).existsSync(), isTrue, reason: 'no scratch file at $path');
+Future<AppResult<DecodedPcm>> _decodeOk(
+  Uint8List bytes,
+  String extension,
+) async {
+  // The seam receives the PICKED bytes and their container type — a fake
+  // that ignored them would hide a controller that decoded the wrong thing.
+  expect(bytes, hasLength(_bytes.length));
+  expect(extension, 'mp3');
   final samples = Float32List(16000 * 6);
   for (var index = 0; index < samples.length; index++) {
     samples[index] = (index % 100) / 100 - 0.5;
@@ -230,7 +217,10 @@ Future<AppResult<DecodedPcm>> _decodeOk(String path) async {
   return Success<DecodedPcm>(DecodedPcm(sampleRate: 16000, samples: samples));
 }
 
-Future<AppResult<DecodedPcm>> _decodeUnsupportedPlatform(String path) async {
+Future<AppResult<DecodedPcm>> _decodeUnsupportedPlatform(
+  Uint8List bytes,
+  String extension,
+) async {
   return const Failure<DecodedPcm>(
     AudioFailure(code: FailureCode.audioUnsupportedPlatform, retryable: false),
   );

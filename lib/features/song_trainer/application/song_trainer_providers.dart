@@ -40,6 +40,7 @@ import 'library/song_library_controller.dart';
 import 'library/song_library_state.dart';
 import 'editor/song_editor_controller.dart';
 import 'editor/song_editor_state.dart';
+import '../data/importers/audio_scratch_decoder.dart';
 import '../data/importers/file_picker_adapter.dart';
 import '../data/importers/importer_registry.dart';
 import '../data/importers/native_json_importer.dart';
@@ -349,14 +350,19 @@ final audioImportWorkspaceRootProvider = Provider<SongTrainerRootResolver>((
   };
 });
 
-/// The decode seam of the audio import: the K2 platform decoder.
+/// The decode seam of the audio import: the K2 platform decoder, reached
+/// through the adapter that owns the temporary on-disk copy it needs.
 ///
 /// No `targetSampleRate` is requested — the decoder's own rate survives and
 /// the analyzer is told what it is (ADR 0535 §3: a quality resample is the
 /// DSP's job, not the reader's).
 final audioSongImportDecoderProvider = Provider<AudioPcmDecode>((ref) {
   final decoder = ref.watch(platformAudioDecoderProvider);
-  return decoder.decodeToPcm;
+  final scratch = AudioScratchDecoder(
+    workspaceRoot: ref.watch(audioImportWorkspaceRootProvider),
+    decode: decoder.decodeToPcm,
+  );
+  return scratch.decodeBytes;
 });
 
 /// The analysis seam of the audio import.
@@ -378,7 +384,6 @@ final audioSongImportControllerProvider =
         // what forces the song tree open (see SongRepositoryResolver).
         repository: () => ref.read(songRepositoryProvider),
         assetRepository: () => ref.read(songAssetRepositoryProvider),
-        workspaceRoot: ref.watch(audioImportWorkspaceRootProvider),
       );
       ref.onDispose(() => unawaited(controller.dispose()));
       return controller;

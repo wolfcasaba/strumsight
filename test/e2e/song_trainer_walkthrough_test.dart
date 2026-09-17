@@ -40,11 +40,11 @@ import 'package:strumsight/features/song_trainer/application/trainer/song_traine
 import 'package:strumsight/features/song_trainer/application/trainer/song_transport_tick_source.dart';
 import 'package:strumsight/features/song_trainer/data/importers/file_picker_adapter.dart';
 import 'package:strumsight/features/song_trainer/data/importers/song_importer.dart';
-import 'package:strumsight/features/song_trainer/data/local/file_song_asset_repository.dart';
 import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repository.dart';
 import 'package:strumsight/features/song_trainer/data/playback/fake_backing_audio_player.dart';
 import 'package:strumsight/features/song_trainer/data/local/song_document_codec.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_document.dart';
+import 'package:strumsight/features/song_trainer/domain/repositories/song_asset_repository.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_editor_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_import_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_library_screen.dart';
@@ -239,39 +239,25 @@ void main() {
     );
   });
 
-  // K3/A6 — the audio import walk. Only two seams are faked (the platform
-  // decoder, which has no host implementation, and the analyzer, which would
-  // otherwise run thousands of FFTs inside a widget test); everything between
-  // them is production: the picker port, the limit profile, the mapper, the
-  // asset store, the repository and the router.
+  // K3/A6 — the audio import walk. Three seams are faked, each for a named
+  // reason: the platform decoder has no host implementation, the analyzer
+  // would otherwise run thousands of FFTs inside a widget test, and the asset
+  // store is in-memory because real `dart:io` never completes inside
+  // `testWidgets`' fake-async zone. Everything between them is production:
+  // the picker port, the limit profile, the mapper, the normalizer and
+  // validator, the repository and the router.
   testWidgets('an audio file imports as a draft and lands in the editor', (
     tester,
   ) async {
-    final assetRoot = await Directory.systemTemp.createTemp('k3-e2e-assets');
-    final scratchRoot = await Directory.systemTemp.createTemp('k3-e2e-tmp');
-    addTearDown(() async {
-      if (await assetRoot.exists()) await assetRoot.delete(recursive: true);
-      if (await scratchRoot.exists()) {
-        await scratchRoot.delete(recursive: true);
-      }
-    });
-    final assets = await FileSongAssetRepository.openAtDirectory(
-      root: assetRoot,
-      clock: () => DateTime.utc(2026, 9, 17),
-    );
-
     await _bootLibrary(
       tester,
       extraOverrides: <Override>[
-        songAssetRepositoryProvider.overrideWithValue(assets),
+        songAssetRepositoryProvider.overrideWithValue(_MemoryAssetStore()),
         songFilePickerAdapterProvider.overrideWithValue(
           const _FakeAudioPicker(),
         ),
         audioSongImportDecoderProvider.overrideWithValue(_fakeDecode),
         audioSongImportAnalyzerProvider.overrideWithValue(_fakeAnalyze),
-        audioImportWorkspaceRootProvider.overrideWithValue(
-          () async => scratchRoot,
-        ),
       ],
     );
     expect(find.byType(SongLibraryScreen), findsOneWidget);
@@ -406,12 +392,56 @@ final class _FakeAudioPicker implements FilePickerAdapter {
 }
 
 /// Stands in for the Android platform decoder, which has no host build.
-Future<AppResult<DecodedPcm>> _fakeDecode(String path) async {
+Future<AppResult<DecodedPcm>> _fakeDecode(
+  Uint8List bytes,
+  String extension,
+) async {
+  expect(extension, 'mp3');
   final samples = Float32List(16000 * 4);
   for (var index = 0; index < samples.length; index++) {
     samples[index] = (index % 100) / 100 - 0.5;
   }
   return Success<DecodedPcm>(DecodedPcm(sampleRate: 16000, samples: samples));
+}
+
+/// The content-hash asset store, without the filesystem.
+final class _MemoryAssetStore implements SongAssetRepository {
+  final Map<String, Uint8List> _bytes = <String, Uint8List>{};
+
+  @override
+  Future<AppResult<SongAssetStoreReceipt>> put(
+    SongAssetWriteRequest request,
+  ) async {
+    _bytes[request.expectedSha256] = request.bytes;
+    return AppResult<SongAssetStoreReceipt>.success(
+      SongAssetStoreReceipt(
+        assetId: request.assetId,
+        sha256: request.expectedSha256,
+        byteLength: request.bytes.length,
+        duplicate: false,
+      ),
+    );
+  }
+
+  @override
+  Future<AppResult<Uint8List?>> get(String sha256) async =>
+      AppResult<Uint8List?>.success(_bytes[sha256]);
+
+  @override
+  Future<AppResult<SongAssetSummary?>> summary(String sha256) async =>
+      const AppResult<SongAssetSummary?>.success(null);
+
+  @override
+  Future<AppResult<void>> incrementReference(SongAssetHolder holder) async =>
+      const AppResult<void>.success(null);
+
+  @override
+  Future<AppResult<void>> decrementReference(SongAssetHolder holder) async =>
+      const AppResult<void>.success(null);
+
+  @override
+  Future<AppResult<void>> permanentlyDelete(String sha256) async =>
+      const AppResult<void>.success(null);
 }
 
 /// A fixed G-C-D reading — the DSP itself is measured by its own suites.

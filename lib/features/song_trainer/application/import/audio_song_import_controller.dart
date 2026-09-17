@@ -16,10 +16,13 @@
 ///     mapper failure becomes the operation's failure code;
 ///   * it never reports success when the backing asset could not be stored.
 ///     A draft whose audio silently vanished is the worst of both worlds.
+///
+/// The controller owns no `dart:io`: the scratch copy the path-taking
+/// platform decoder needs lives in `AudioScratchDecoder`, behind the
+/// [AudioPcmDecode] seam.
 library;
 
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -102,9 +105,13 @@ final class AudioSongImportState {
   };
 }
 
-/// Decodes a container on disk into mono PCM. Production binds the K2
-/// platform decoder; tests bind a synthetic clip and touch no channel.
-typedef AudioPcmDecode = Future<AppResult<DecodedPcm>> Function(String path);
+/// Decodes the picked container into mono PCM.
+///
+/// Takes the BYTES, not a path: production binds `AudioScratchDecoder`,
+/// which owns the temporary on-disk copy the platform decoder needs, so a
+/// test can bind a synthetic clip and touch neither a channel nor a file.
+typedef AudioPcmDecode =
+    Future<AppResult<DecodedPcm>> Function(Uint8List bytes, String extension);
 
 /// Resolves the song repository WHEN the operation needs it.
 ///
@@ -129,7 +136,6 @@ final class AudioSongImportController {
     required this.analyze,
     required this.repository,
     required this.assetRepository,
-    required this.workspaceRoot,
     this.mapper = const AudioSongDraftMapper(),
     this.normalizer = const SongNormalizer(),
     this.validator = const SongValidator(),
@@ -142,7 +148,6 @@ final class AudioSongImportController {
   final AudioClipAnalyze analyze;
   final SongRepositoryResolver repository;
   final SongAssetRepositoryResolver assetRepository;
-  final Future<Directory> Function() workspaceRoot;
   final AudioSongDraftMapper mapper;
   final SongNormalizer normalizer;
   final SongValidator validator;
@@ -157,7 +162,6 @@ final class AudioSongImportController {
 
   AudioSongImportState _state = const AudioSongImportState.idle();
   Object? _operation;
-  var _operationCount = 0;
   var _disposed = false;
 
   AudioSongImportState get state => _state;
@@ -170,7 +174,6 @@ final class AudioSongImportController {
     if (_disposed || _state.isActive) return;
     final operation = Object();
     _operation = operation;
-    _operationCount += 1;
     const selecting = AudioSongImportState(
       phase: AudioSongImportPhase.selecting,
     );
@@ -258,29 +261,13 @@ final class AudioSongImportController {
       return;
     }
     final hash = sha256.convert(bytes).toString();
-
-    final root = await workspaceRoot();
-    if (!_isCurrent(operation)) return;
-    await root.create(recursive: true);
-    final separator = Platform.pathSeparator;
-    final id = 'audio-import-$_operationCount';
-    final scratch = File('${root.path}$separator$id.$extension');
-    try {
-      await scratch.writeAsBytes(bytes, flush: true);
-      if (!_isCurrent(operation)) return;
-      await _decodeAnalyseAndSave(
-        operation,
-        source: source,
-        extension: extension,
-        bytes: bytes,
-        hash: hash,
-        path: scratch.path,
-      );
-    } finally {
-      // The decoder needs a real path, so the compressed bytes land in the
-      // app's own temp tree for the length of one operation — never longer.
-      await _deleteQuietly(scratch);
-    }
+    await _decodeAnalyseAndSave(
+      operation,
+      source: source,
+      extension: extension,
+      bytes: bytes,
+      hash: hash,
+    );
   }
 
   Future<void> _decodeAnalyseAndSave(
@@ -289,10 +276,9 @@ final class AudioSongImportController {
     required String extension,
     required Uint8List bytes,
     required String hash,
-    required String path,
   }) async {
     final name = source.displayName;
-    final decoded = await decode(path);
+    final decoded = await decode(bytes, extension);
     if (!_isCurrent(operation)) return;
     if (decoded case Failure<DecodedPcm>(:final error)) {
       _fail(operation, error.code);
@@ -451,14 +437,4 @@ final class AudioSongImportController {
 
   bool _isCurrent(Object? operation) =>
       !_disposed && operation != null && identical(_operation, operation);
-
-  static Future<void> _deleteQuietly(File file) async {
-    try {
-      if (await file.exists()) await file.delete();
-    } catch (_) {
-      // A leftover scratch file in the app's own temp tree is not worth
-      // failing an otherwise-successful import over; the next operation
-      // overwrites it by operation id.
-    }
-  }
 }
