@@ -141,7 +141,7 @@ final songRepositoryBootProvider = FutureProvider<SongRepository>((ref) async {
   // Run a startup recovery scan in `no-action` mode so the boot
   // path records available residue without touching user content.
   await SongRepositoryRecovery.scan(root);
-  final repository = FileSongRepository.openAtDirectory(
+  final repository = await FileSongRepository.openAtDirectory(
     directory: root,
     clock: clock,
   );
