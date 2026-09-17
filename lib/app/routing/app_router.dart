@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/foundation/app_result.dart';
 import '../../core/logging/logger_provider.dart';
 import '../../features/analyze/screens/analyze_screen.dart';
 import '../../features/audio_analysis/application/analysis_providers.dart';
@@ -62,12 +63,12 @@ import '../../features/songs/screens/setlist_list_screen.dart';
 import '../../features/songs/screens/song_list_screen.dart';
 import '../../features/streak/screens/streak_screen.dart';
 import '../../features/song_trainer/public.dart';
-import '../../features/song_trainer/application/song_trainer_providers.dart';
-import '../../features/song_trainer/application/trainer/song_trainer_result.dart';
+import '../../features/song_trainer/application/trainer/song_trainer_session_launcher.dart';
+import '../../features/song_trainer/domain/models/trainer_config.dart';
 import '../../features/song_trainer/presentation/screens/song_editor_screen.dart';
 import '../../features/song_trainer/presentation/screens/song_overview_screen.dart';
 import '../../features/song_trainer/presentation/screens/song_result_screen.dart';
-import '../../features/song_trainer/presentation/screens/song_trainer_screen.dart';
+import '../../features/song_trainer/presentation/screens/song_trainer_session_route.dart';
 import '../../features/song_trainer/presentation/screens/trainer_setup_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_chat_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_data_screen.dart';
@@ -187,6 +188,39 @@ bool _hasMasteryMilestoneForSkill(String? skillId) =>
 
 /// App router: a bottom-nav [ShellRoute] over the five tabs, plus full-screen
 /// routes pushed from those destinations.
+/// Compiles a finished trainer setup into a session and opens it.
+///
+/// A failure is NAMED on the setup screen instead of a silent no-op: the
+/// measured pre-round behaviour was "nothing happens", which is exactly what
+/// a swallowed failure looks like.
+Future<void> _startSongTrainerSession(
+  BuildContext context,
+  WidgetRef ref,
+  TrainerConfig config,
+) async {
+  final launcher = ref.read(songTrainerSessionLauncherProvider);
+  final launched = await launcher(config);
+  if (!context.mounted) return;
+  switch (launched) {
+    case Failure(:final error):
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context).songTrainerFailed(error.code),
+          ),
+        ),
+      );
+    case Success(:final value):
+      await context.push<void>(
+        AppRoutes.songTrainerSession.replaceFirst(
+          ':songId',
+          Uri.encodeComponent(value.songId.value),
+        ),
+        extra: value,
+      );
+  }
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
   final refreshNotifier = _RouterRefreshNotifier();
   ref.listen(onboardingSeenProvider, (_, _) => refreshNotifier.refresh());
@@ -643,22 +677,47 @@ final routerProvider = Provider<GoRouter>((ref) {
           builder: (_, state) =>
               SongOverviewScreen(songId: state.pathParameters['songId']!),
         ),
+        // E16-R01/A2 — the measured P0: the setup screen produced a
+        // `TrainerConfig` and the route dropped it, so `Start` was deaf and
+        // there was ZERO `push(songTrainerSession)` in the whole tree. The
+        // route now compiles the config into a session and pushes it.
         GoRoute(
           path: AppRoutes.songTrainerSetup,
-          builder: (_, state) =>
-              TrainerSetupScreen(songId: state.pathParameters['songId']!),
+          builder: (_, state) => Consumer(
+            builder: (context, ref, _) => TrainerSetupScreen(
+              songId: state.pathParameters['songId']!,
+              onComplete: (config) =>
+                  unawaited(_startSongTrainerSession(context, ref, config)),
+            ),
+          ),
         ),
         GoRoute(
           path: AppRoutes.songTrainerSession,
-          builder: (_, state) => SongTrainerScreen(
+          builder: (_, state) => SongTrainerSessionRoute(
             songId: state.pathParameters['songId']!,
-            inputs: state.extra! as SongTrainerControllerInputs,
+            args: state.extra! as SongTrainerSessionArgs,
           ),
         ),
         GoRoute(
           path: AppRoutes.songTrainerResult,
-          builder: (_, state) =>
-              SongResultScreen(result: state.extra! as SongTrainerResult),
+          builder: (_, state) => Builder(
+            builder: (context) {
+              final args = state.extra! as SongTrainerResultArgs;
+              final onPracticeAgain = args.onPracticeAgain;
+              return SongResultScreen(
+                result: args.result,
+                // Pops the result first so "practice again" restarts the
+                // session route still mounted underneath it.
+                onRetry: onPracticeAgain == null
+                    ? null
+                    : () {
+                        context.pop();
+                        onPracticeAgain();
+                      },
+                onBackToLibrary: () => context.go(AppRoutes.songs),
+              );
+            },
+          ),
         ),
       ],
       // E13-R08 (D14 fix round) — `/practice/live` moved OUT of the shell

@@ -25,6 +25,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart'
+    show openAppSettings;
 
 import '../../../../core/design_system/public.dart';
 import '../../../../core/widgets/strum_burst_overlay.dart';
@@ -63,6 +65,7 @@ final class SongTrainerScreen extends ConsumerStatefulWidget {
     this.onABClear,
     this.feedback = const [],
     this.loopRangeEnd,
+    this.openSettings,
   });
 
   /// Route song identifier. Direct widget tests may omit it and inject [state].
@@ -91,6 +94,11 @@ final class SongTrainerScreen extends ConsumerStatefulWidget {
   /// the audible one (§5.2/A3).
   final Duration? loopRangeEnd;
 
+  /// Overridable "take me to the OS permission screen" action. Production
+  /// leaves it `null` and the screen uses `permission_handler`'s
+  /// `openAppSettings`; tests inject a recorder.
+  final Future<void> Function()? openSettings;
+
   @override
   ConsumerState<SongTrainerScreen> createState() => _SongTrainerScreenState();
 }
@@ -105,6 +113,9 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
   // the running lane uses as its spark trigger. Presentation-only.
   PracticeStrumFeedback? _lastStrum;
   int _strumSeq = 0;
+
+  /// Guards the one-shot `prepare()` + `start()` pair per owned controller.
+  bool _sessionStarted = false;
 
   @override
   Widget build(BuildContext context) {
@@ -123,6 +134,8 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
         _strumSubscription = controller.practiceStrumFeedback.listen(
           _onStrumFeedback,
         );
+        _sessionStarted = false;
+        unawaited(_startSession(controller));
       }
       return StreamBuilder<SongTrainerState>(
         stream: _ownedControllerStates,
@@ -132,6 +145,34 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
       );
     }
     return _buildScaffold(context, widget.state);
+  }
+
+  /// E16-R01/A2 — the Stage owns the "go" edge.
+  ///
+  /// MEASURED gap: the screen only ever SUBSCRIBED to the controller. Neither
+  /// `prepare()` nor `start()` was called from anywhere in `lib/`, so even a
+  /// reachable session route would have sat on the loading skeleton forever.
+  /// The pair runs exactly once per owned controller; a session that stops at
+  /// `permissionRequired` is NOT started, so the user sees the explanation
+  /// instead of a silent no-op.
+  Future<void> _startSession(SongTrainerController controller) async {
+    if (_sessionStarted) return;
+    _sessionStarted = true;
+    await controller.prepare();
+    if (!mounted || !identical(_ownedController, controller)) return;
+    if (controller.state.status == SongTrainerStatus.permissionRequired) {
+      return;
+    }
+    await controller.start();
+  }
+
+  /// Re-runs the prepare/start pair after the user has changed the
+  /// microphone permission in the OS settings.
+  Future<void> _retrySession() async {
+    final controller = _ownedController;
+    if (controller == null) return;
+    _sessionStarted = false;
+    await _startSession(controller);
   }
 
   void _onStrumFeedback(PracticeStrumFeedback feedback) {
@@ -158,10 +199,16 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
     final body = switch (status) {
       SongTrainerStatus.idle ||
       SongTrainerStatus.preparing ||
-      SongTrainerStatus.permissionRequired ||
       SongTrainerStatus.ready => Semantics(
         label: AppLocalizations.of(context).songTrainerLoading,
         child: const _TrainerLoading(),
+      ),
+      // E16-R01/A5 — a denied or unavailable microphone used to render the
+      // SAME loading skeleton as `preparing`, so the user watched a spinner
+      // that could never finish. It is its own named state now.
+      SongTrainerStatus.permissionRequired => _PermissionRequiredBody(
+        onOpenSettings: widget.openSettings ?? openAppSettings,
+        onRetry: _retrySession,
       ),
       SongTrainerStatus.countIn => _CountInOverlay(),
       SongTrainerStatus.running => _RunningBody(
@@ -215,6 +262,35 @@ final class _TrainerLoading extends StatelessWidget {
         width: 120,
         height: SsSpacing.space6,
         radius: SsRadius.pill,
+      ),
+    );
+  }
+}
+
+/// Named microphone-permission state (E16-R01/A5).
+final class _PermissionRequiredBody extends StatelessWidget {
+  const _PermissionRequiredBody({
+    required this.onOpenSettings,
+    required this.onRetry,
+  });
+
+  final Future<void> Function() onOpenSettings;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return SingleChildScrollView(
+      child: SsEmptyState(
+        key: const Key('song-trainer-permission-required'),
+        icon: Icons.mic_off,
+        title: l10n.songTrainerPermissionTitle,
+        message: l10n.micPermissionBody,
+        actionLabel: l10n.micPermissionAction,
+        onAction: () async {
+          await onOpenSettings();
+          await onRetry();
+        },
       ),
     );
   }
@@ -283,6 +359,7 @@ final class _RunningBody extends StatelessWidget {
     // transport position on every build, never from an independently
     // ticking Timer: a stale `state` renders a stale (but never drifting)
     // viewport.
+    final l10n = AppLocalizations.of(context);
     final playhead = state.transportState.activePosition;
     final naturalEnd = playhead + _viewportSpan;
     final loopEnd = loopRangeEnd;
@@ -301,25 +378,23 @@ final class _RunningBody extends StatelessWidget {
           onABEntered: onABEntered ?? (_) {},
           onABClear: onABClear ?? () {},
         ),
+        // E16-R01/A3 — this was a `Slider(onChanged: null)`: a control that
+        // LOOKED adjustable and silently refused every drag. The transport
+        // accepts `SetSongTransportSpeed` only in `ready` and `paused`
+        // (`song_transport_test.dart` pins that), so the running Stage gets
+        // an honest read-only readout of the tempo the setup chose instead
+        // of a dead affordance.
         if (state.backingRateSupported)
           Semantics(
-            label: AppLocalizations.of(context).songTrainerSpeedLabel,
-            child: const Slider(
-              key: Key('song-trainer-speed'),
-              value: 1,
-              min: 0.5,
-              max: 1.5,
-              divisions: 20,
-              onChanged: null,
-            ),
+            key: const Key('song-trainer-speed'),
+            label: l10n.songTrainerSpeedLabel,
+            child: Text(l10n.trainerTargetSpeed(_speedPercent(state))),
           )
         else
           ListTile(
             key: const Key('song-trainer-speed-disabled'),
             enabled: false,
-            title: Text(
-              AppLocalizations.of(context).songTrainerSpeedDisabledReason,
-            ),
+            title: Text(l10n.songTrainerSpeedDisabledReason),
           ),
         ChordLane(
           events: chordEvents.cast(),
@@ -348,9 +423,10 @@ final class _RunningBody extends StatelessWidget {
         TransportControls(
           isPlaying: true,
           isPaused: false,
-          onPlay: () {},
+          onPlay: onResume ?? () {},
           onPause: onPause ?? () {},
           onResume: onResume ?? () {},
+          canSeek: true,
           onSeek: onSeek,
         ),
       ],
@@ -398,10 +474,14 @@ final class _PausedBody extends StatelessWidget {
           label: l10n.trainerPausedPosition(_formatPrecisePosition(position)),
           child: Text(_formatPrecisePosition(position)),
         ),
+        // E16-R01/A3 — the paused lane used to render a FIXED 0–4 s window
+        // while the millisecond readout above it showed the real pause
+        // position: the two contradicted each other on every pause past the
+        // fourth second. The lane now follows the playhead.
         StrumLane(
           events: strumEvents.cast(),
-          viewportStart: Duration.zero,
-          viewportEnd: const Duration(seconds: 4),
+          viewportStart: position,
+          viewportEnd: position + const Duration(seconds: 4),
         ),
         ListTile(
           key: const Key('song-trainer-speed-disabled'),
@@ -504,6 +584,10 @@ final class _Mirror extends StatelessWidget {
     );
   }
 }
+
+/// The transport's current tempo scale as a whole percentage.
+int _speedPercent(SongTrainerState state) =>
+    (state.transportState.speed * 100).round();
 
 String _formatPrecisePosition(Duration duration) {
   final minutes = duration.inMinutes;
