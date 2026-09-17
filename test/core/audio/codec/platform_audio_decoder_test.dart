@@ -93,7 +93,10 @@ void main() {
     test('a frame count the payload contradicts fails', () async {
       handler = (call) async {
         if (call.method == 'probe') return _probeReply();
-        return <String, Object?>{..._decodeReply(<double>[0, 1]), 'frames': 7};
+        return <String, Object?>{
+          ..._decodeReply(<double>[0, 1]),
+          'frames': 7,
+        };
       };
 
       final result = await _decoder().decodeToPcm('/sdcard/riff.mp3');
