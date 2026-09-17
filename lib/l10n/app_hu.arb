@@ -3946,6 +3946,8 @@
   "songEditorConflict": "A dal máshol megváltozott. A drafted megmaradt.",
   "songEditorDetachBacking": "Alapzene leválasztása",
   "songEditorDiscard": "Módosítások elvetése",
+  "songEditorDraftBannerBody": "Ez a dal egy hangfájlból származik. Az akkordok, a pengetések és a tempó becslések, nem átirat: ellenőrizd őket, és javítsd, ami hibás.",
+  "songEditorDraftBannerTitle": "Piszkozat — nézd át, mielőtt gyakorolsz",
   "songEditorEventMeasure": "Ütem",
   "songEditorInvalid": "Mentés előtt javítsd a validációs hibákat.",
   "songEditorLoadFailed": "A dal nem nyitható meg.",
@@ -3980,6 +3982,10 @@
   "songEditorUnsavedBody": "Mented, elveted vagy tovább szerkeszted a draftot?",
   "songEditorUnsavedTitle": "Nem mentett módosítások",
   "songFavorite": "Kedvenc",
+  "songImportAudioAnalyzing": "Akkordok és pengetések felismerése…",
+  "songImportAudioDecoding": "A hangfájl beolvasása…",
+  "songImportAudioHint": "A hangfájlból PISZKOZAT dal lesz: a StrumSight az eszközödön ismeri fel az akkordokat és a pengetéseket, feltöltés nincs. Nézd át a szerkesztőben, mielőtt gyakorolsz — az akkordfelismerés teljes zenekari felvételen körülbelül 57%, szólógitáron 76-92% pontosságú.",
+  "songImportAudioSaving": "Piszkozat dal létrehozása…",
   "songImportBlockingFailure": "Ez a fájl nem importálható: {code}",
   "@songImportBlockingFailure": {
     "placeholders": {
@@ -3997,6 +4003,7 @@
     }
   },
   "songImportCancel": "Mégse",
+  "songImportChooseAudioFile": "Hangfájl (piszkozat)",
   "songImportChooseFile": "Fájl kiválasztása",
   "songImportConfirm": "Dal importálása",
   "songImportFailed": "A fájlt nem sikerült importálni.",
@@ -4076,6 +4083,7 @@
   "songLibrarySort": "Rendezés",
   "songLibrarySortRecent": "Legutóbbi",
   "songLibrarySortTitle": "Cím A–Z",
+  "songLibrarySourceAudioAnalysis": "Hangfájl",
   "songLibrarySourceCreated": "StrumSightban készült",
   "songLibrarySourceFilter": "Eredet",
   "songLibrarySourceGuitarPro": "Guitar Pro",

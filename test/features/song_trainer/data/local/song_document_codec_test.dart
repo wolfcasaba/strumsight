@@ -70,6 +70,29 @@ void main() {
       expect(decoded.markers, equals(original.markers));
     });
 
+    // K3/A2: the audio-derived origin is a NEW stable code on the wire. A
+    // decoder that does not know it fails closed (sourceTypeUnknown), so the
+    // round trip is the cell that proves the code shipped with its decoder.
+    test('round-trips the audioAnalysis origin by its stable code', () {
+      final original = _sample(
+        source: SongSource(
+          type: SongSourceType.audioAnalysis,
+          originalFileName: 'my-song.mp3',
+          sha256: 'c' * 64,
+          importedAt: DateTime.utc(2026, 9, 17, 10),
+          importerVersion: 'audioAnalysis@1',
+          warningSummary: const <String>['audioDraft.reviewRequired'],
+        ),
+      );
+      final encoded = codec.encode(original);
+      final decoded = codec.decode(encoded);
+
+      expect(utf8.decode(encoded), contains('"audioAnalysis"'));
+      expect(decoded.source.type, SongSourceType.audioAnalysis);
+      expect(decoded.source, equals(original.source));
+      expect(songSourceTypeFromCode('audioAnalysis'), isNotNull);
+    });
+
     test('preserves the complete structural timeline', () {
       final original = _sample(
         sections: <SongSection>[

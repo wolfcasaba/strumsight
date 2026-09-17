@@ -1190,6 +1190,7 @@
   "songLibrarySourceMxl": "Tömörített MusicXML",
   "songLibrarySourceMidi": "MIDI",
   "songLibrarySourceGuitarPro": "Guitar Pro",
+  "songLibrarySourceAudioAnalysis": "Hangfájl",
   "songLibrarySort": "Rendezés",
   "songLibrarySortRecent": "Legutóbbi",
   "songLibrarySortTitle": "Cím A–Z",
@@ -3347,5 +3348,12 @@
   "songLibraryOpenLearn": "Ugrás a Tanulás útra",
   "songTrainerPracticeAgain": "Gyakorlás újra",
   "songTrainerBackToLibrary": "Vissza a könyvtárba",
-  "songTrainerPermissionTitle": "A mikrofon ki van kapcsolva"
+  "songTrainerPermissionTitle": "A mikrofon ki van kapcsolva",
+  "songImportChooseAudioFile": "Hangfájl (piszkozat)",
+  "songImportAudioHint": "A hangfájlból PISZKOZAT dal lesz: a StrumSight az eszközödön ismeri fel az akkordokat és a pengetéseket, feltöltés nincs. Nézd át a szerkesztőben, mielőtt gyakorolsz \u2014 az akkordfelismerés teljes zenekari felvételen körülbelül 57%, szólógitáron 76-92% pontosságú.",
+  "songImportAudioDecoding": "A hangfájl beolvasása\u2026",
+  "songImportAudioAnalyzing": "Akkordok és pengetések felismerése\u2026",
+  "songImportAudioSaving": "Piszkozat dal létrehozása\u2026",
+  "songEditorDraftBannerTitle": "Piszkozat \u2014 nézd át, mielőtt gyakorolsz",
+  "songEditorDraftBannerBody": "Ez a dal egy hangfájlból származik. Az akkordok, a pengetések és a tempó becslések, nem átirat: ellenőrizd őket, és javítsd, ami hibás."
 }

@@ -3992,6 +3992,8 @@
   "songEditorConflict": "This song changed elsewhere. Your draft was kept.",
   "songEditorDetachBacking": "Detach backing audio",
   "songEditorDiscard": "Discard changes",
+  "songEditorDraftBannerBody": "This song was derived from an audio file on your device. The chords, the strums and the tempo are estimates, not a transcription: check them and fix what is wrong.",
+  "songEditorDraftBannerTitle": "Draft — review it before you practise",
   "songEditorEventMeasure": "Measure",
   "songEditorInvalid": "Fix validation issues before saving.",
   "songEditorLoadFailed": "This song could not be opened.",
@@ -4026,6 +4028,10 @@
   "songEditorUnsavedBody": "Save, discard, or keep editing this draft?",
   "songEditorUnsavedTitle": "Unsaved changes",
   "songFavorite": "Favorite",
+  "songImportAudioAnalyzing": "Detecting chords and strums…",
+  "songImportAudioDecoding": "Reading the audio file…",
+  "songImportAudioHint": "An audio file becomes a DRAFT song: StrumSight detects the chords and strums on your device, and nothing is uploaded. Review it in the editor before you practise — chord detection is roughly 57% accurate on full-band music and 76-92% on solo guitar.",
+  "songImportAudioSaving": "Creating the draft song…",
   "songImportBlockingFailure": "This file can't be imported: {code}",
   "@songImportBlockingFailure": {
     "placeholders": {
@@ -4043,6 +4049,7 @@
     }
   },
   "songImportCancel": "Cancel",
+  "songImportChooseAudioFile": "Audio file (draft)",
   "songImportChooseFile": "Choose a file",
   "songImportConfirm": "Import song",
   "songImportFailed": "The file could not be imported.",
@@ -4122,6 +4129,7 @@
   "songLibrarySort": "Sort",
   "songLibrarySortRecent": "Most recent",
   "songLibrarySortTitle": "Title A–Z",
+  "songLibrarySourceAudioAnalysis": "Audio file",
   "songLibrarySourceCreated": "Created in StrumSight",
   "songLibrarySourceFilter": "Origin",
   "songLibrarySourceGuitarPro": "Guitar Pro",

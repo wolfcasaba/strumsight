@@ -1235,6 +1235,7 @@
   "songLibrarySourceMxl": "Compressed MusicXML",
   "songLibrarySourceMidi": "MIDI",
   "songLibrarySourceGuitarPro": "Guitar Pro",
+  "songLibrarySourceAudioAnalysis": "Audio file",
   "songLibrarySort": "Sort",
   "songLibrarySortRecent": "Most recent",
   "songLibrarySortTitle": "Title A–Z",
@@ -3425,5 +3426,12 @@
   "songLibraryOpenLearn": "Open the Learn highway",
   "songTrainerPracticeAgain": "Practice again",
   "songTrainerBackToLibrary": "Back to the library",
-  "songTrainerPermissionTitle": "The microphone is off"
+  "songTrainerPermissionTitle": "The microphone is off",
+  "songImportChooseAudioFile": "Audio file (draft)",
+  "songImportAudioHint": "An audio file becomes a DRAFT song: StrumSight detects the chords and strums on your device, and nothing is uploaded. Review it in the editor before you practise \u2014 chord detection is roughly 57% accurate on full-band music and 76-92% on solo guitar.",
+  "songImportAudioDecoding": "Reading the audio file\u2026",
+  "songImportAudioAnalyzing": "Detecting chords and strums\u2026",
+  "songImportAudioSaving": "Creating the draft song\u2026",
+  "songEditorDraftBannerTitle": "Draft \u2014 review it before you practise",
+  "songEditorDraftBannerBody": "This song was derived from an audio file on your device. The chords, the strums and the tempo are estimates, not a transcription: check them and fix what is wrong."
 }

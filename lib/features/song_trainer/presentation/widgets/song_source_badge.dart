@@ -13,6 +13,7 @@ String songSourceTypeLabel(AppLocalizations l10n, SongSourceType sourceType) =>
       SongSourceType.compressedMusicXml => l10n.songLibrarySourceMxl,
       SongSourceType.midi => l10n.songLibrarySourceMidi,
       SongSourceType.guitarPro => l10n.songLibrarySourceGuitarPro,
+      SongSourceType.audioAnalysis => l10n.songLibrarySourceAudioAnalysis,
     };
 
 /// Compact provenance chip shown wherever a [SongSourceType] must be
