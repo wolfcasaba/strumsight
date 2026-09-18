@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/config/app_config.dart';
 import '../../../app/routing/app_route.dart';
+import '../../../core/audio/audio_providers.dart';
+import '../../../core/audio/lifecycle/audio_session_lease.dart';
 import '../../../core/design_system/public.dart';
 import '../../../core/platform/app_lifecycle.dart';
 import '../../../core/platform/platform_providers.dart';
@@ -49,6 +51,10 @@ class LiveScreen extends ConsumerStatefulWidget {
 class _LiveScreenState extends ConsumerState<LiveScreen> {
   bool _paused = false;
   bool _finishing = false;
+  // Guards [_openCovered] against a second tap landing while the first is
+  // still handing the microphone over: the second call would see "already
+  // paused", push a second copy of the route, and then never resume.
+  bool _covering = false;
   LiveFrame? _frozen;
   bool _practiceRecorded = false; // one streak credit per Live visit
 
@@ -131,29 +137,40 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     super.dispose();
   }
 
-  void _togglePause() {
+  void _togglePause() => unawaited(_setPaused(!_paused));
+
+  /// Pauses or resumes the session.
+  ///
+  /// The returned future is the HANDOVER: on pause it completes only once the
+  /// engine has given the exclusive microphone lease back to the
+  /// [AudioSessionCoordinator] — `StrumEngine.stop()` is not done releasing it
+  /// until its own future completes (the platform stream close is a real
+  /// round-trip). Anything that hands the microphone to another screen must
+  /// therefore AWAIT this; the Pause button itself does not care and drops it.
+  Future<void> _setPaused(bool paused) {
     // Tactile confirmation the mic toggled on/off (no-op off-device/in tests).
     try {
       HapticFeedback.mediumImpact();
     } catch (_) {}
     final engine = ref.read(strumEngineProvider);
+    // Freeze the last frame BEFORE stopping, so a paused screen keeps showing
+    // what was actually heard last.
+    final frozen = paused ? ref.read(liveFrameProvider).asData?.value : null;
+    // Actually stop detection (timer, and the real mic/DSP), not just the
+    // display — a battery/privacy concern once the FFI engine is wired.
+    final settled = paused ? engine.stop() : Future<void>.value();
+    unawaited(paused ? _wakelock.disable() : _wakelock.enable());
     setState(() {
-      _paused = !_paused;
-      if (_paused) {
-        // Actually stop detection (timer, and the real mic/DSP), not just the
-        // display — a battery/privacy concern once the FFI engine is wired.
-        _frozen = ref.read(liveFrameProvider).asData?.value;
-        engine.stop();
-        unawaited(_wakelock.disable());
-      } else {
-        _frozen = null;
-        unawaited(_wakelock.enable());
-        // Invalidate (not just start()) so a prior mic AsyncError is cleared
-        // and the engine restarts through the provider's own lifecycle —
-        // otherwise a stale error banner lingers until the next frame.
-        ref.invalidate(liveFrameProvider);
-      }
+      _paused = paused;
+      _frozen = frozen;
     });
+    if (!paused) {
+      // Invalidate (not just start()) so a prior mic AsyncError is cleared
+      // and the engine restarts through the provider's own lifecycle —
+      // otherwise a stale error banner lingers until the next frame.
+      ref.invalidate(liveFrameProvider);
+    }
+    return settled;
   }
 
   /// Ends the session and leaves the route (ADR 0276 decision 4 — the Finish
@@ -193,6 +210,81 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         _frozen = ref.read(liveFrameProvider).asData?.value;
       });
     });
+  }
+
+  /// Opens [location] ON TOP of Live (`context.push`), which leaves this
+  /// screen MOUNTED: `liveFrameProvider` stays watched, so the engine — and
+  /// with it the exclusive microphone lease (E01-R09) — would keep running
+  /// underneath, and the Tuner's own capture would come back as
+  /// audioSessionBusy for as long as the shortcut is open.
+  ///
+  /// So hand the session over first, through the very path the Pause button
+  /// takes (mic stopped, wakelock released, the UI honestly showing "paused"),
+  /// and take it back when the pushed route pops.
+  ///
+  /// BOTH handovers are AWAITED, because neither engine's teardown is
+  /// instantaneous and the per-engine lifecycle queue only orders one engine
+  /// against itself — Live and the covered screen are two engines sharing one
+  /// [AudioSessionCoordinator]:
+  ///
+  /// * going in, `_setPaused(true)` completes only when Live's lease is back
+  ///   with the coordinator; pushing before that lands the covered screen's
+  ///   own `MicCapture.start` on a still-held lease (audioSessionBusy);
+  /// * coming back, the covered screen hands the microphone over through an
+  ///   UN-AWAITED `ref.onDispose(engine.stop)` of its own, so resuming in the
+  ///   same turn would race that teardown into the mic-error banner.
+  ///
+  /// [coveredOwner] is the microphone owner behind [location]. Live gives up
+  /// what Live itself holds and then reclaims the session from THAT owner
+  /// only: a blanket [AudioSessionCoordinator.revokeActive] would also stop a
+  /// different owner that legitimately took the microphone while the shortcut
+  /// was open (latency calibration, diagnostics).
+  ///
+  /// DISCLOSED DEVIATION (round 2, needs tech-lead sign-off): the brief asked
+  /// for `revokeActive()` to be REPLACED by "releasing what Live itself
+  /// holds". Measured, dropping it outright fails `live_mic_release` case (8)
+  /// with `audioSessionBusy`: the covered screen hands its own lease back
+  /// through an UN-AWAITED, cross-engine `ref.onDispose(engine.stop)`, and a
+  /// per-engine lifecycle queue cannot order two engines against each other.
+  /// `revokeActive` is the one handle that awaits the holder's own teardown
+  /// before freeing the lease, so it is kept — narrowed to [coveredOwner],
+  /// which removes the bluntness the review objected to.
+  Future<void> _openCovered(String location, AudioOwner coveredOwner) async {
+    if (_covering) return;
+    _covering = true;
+    try {
+      final wasAlreadyPaused = _paused;
+      if (!wasAlreadyPaused) {
+        // Deliberately NOT guarded by a `catchError`: `StrumEngine.stop()`
+        // runs through the engine's own lifecycle queue, which already catches
+        // a throwing platform teardown AND logs it, so this future cannot
+        // complete with an error any more — and a bare `catchError((_) {})`
+        // would be exactly the silent swallow §10 forbids.
+        await _setPaused(true);
+      }
+      if (!mounted) return;
+      await context.push<void>(location);
+      // Left Live entirely while the shortcut was open, or the user paused it
+      // themselves underneath — either way there is nothing to resume.
+      if (!mounted || wasAlreadyPaused || !_paused) return;
+      // Release whatever LIVE still holds first (idempotent; the engine's own
+      // lifecycle queue orders the resume behind it)…
+      await ref.read(strumEngineProvider).stop();
+      if (!mounted) return;
+      // …then take the session back from the screen Live handed it to, and
+      // from nobody else. `revokeActive` is the one handle that awaits the
+      // holder's own teardown (its engine's `onRevoke`) before freeing the
+      // lease; the guard keeps it off any OTHER owner, and off a session that
+      // the covered screen has already given back (then it is simply free).
+      final coordinator = ref.read(audioSessionCoordinatorProvider);
+      if (coordinator.activeOwner == coveredOwner) {
+        await coordinator.revokeActive();
+      }
+      if (!mounted) return;
+      await _setPaused(false);
+    } finally {
+      _covering = false;
+    }
   }
 
   @override
@@ -457,7 +549,15 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         onFinish: _finish,
         tunerLabel: l10n.liveTuner,
         metronomeLabel: l10n.metronomeTitle,
-        onTuner: () => context.push(AppRoutes.tuner),
+        onTuner: () =>
+            unawaited(_openCovered(AppRoutes.tuner, AudioOwner.tuner)),
+        // FOLLOW-UP (AGENTS.md §4 — found here, out of this round's scope;
+        // tracked as row 13 of docs/backlog-ux-polish.md):
+        // the Metronome is still pushed the way the Tuner used to be, so Live
+        // keeps listening and keeps the wakelock while it is covered. It takes
+        // no microphone, so there is no lease conflict and no broken feature —
+        // it is the same battery/privacy shape as the Tuner defect and wants
+        // the same `_openCovered` handover in a round that owns this callback.
         onMetronome: () => context.push(AppRoutes.metronome),
       ),
     );
