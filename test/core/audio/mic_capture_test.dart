@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/audio/capture/audio_capture.dart';
 import 'package:strumsight/core/audio/lifecycle/audio_session_coordinator.dart';
 import 'package:strumsight/core/audio/lifecycle/audio_session_lease.dart';
+import 'package:strumsight/core/audio/mic_capture.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/platform/microphone_permission.dart';
 
@@ -241,4 +243,71 @@ void main() {
 
     expect(chunks, hasLength(1));
   });
+
+  test('a start during a pending stop keeps its own lease', () async {
+    // Two teardowns overlap in production (AnalysisRecorder.stop() and its
+    // revocation path both call MicCapture.stop()), so one stop can still be
+    // waiting on the platform while the next session is already opening.
+    final closing = Completer<void>();
+    final closingCapture = _SlowStopAudioCapture(closing.future);
+    final restartCapture = FakeAudioCapture();
+    final captures = <AudioCapture>[closingCapture, restartCapture];
+    final coordinator = AudioSessionCoordinator();
+    final mic = MicCapture(
+      owner: AudioOwner.live,
+      coordinator: coordinator,
+      permissions: FakeMicrophonePermissionGateway(),
+      captureFactory: () => captures.removeAt(0),
+    );
+
+    await mic.start((_) {});
+    final pendingStop = mic.stop(); // the platform is still closing the stream
+    await mic.stop(); // the second teardown hands the lease back
+    final restarted = await mic.start((_) {});
+    expect(restarted.valueOrNull, isNotNull, reason: 'the new session is up');
+
+    closing.complete();
+    await pendingStop; // the stale stop lands on top of the new session
+
+    expect(
+      coordinator.activeOwner,
+      AudioOwner.live,
+      reason: 'the stale stop must not release the NEW lease (§5)',
+    );
+    expect(mic.isActive, isTrue);
+    expect(restartCapture.isRunning, isTrue);
+    expect(restartCapture.stopCalls, 0);
+
+    await coordinator.revokeActive();
+
+    expect(
+      restartCapture.isRunning,
+      isFalse,
+      reason: 'backgrounding must still stop the microphone (§5)',
+    );
+  });
+}
+
+/// A capture whose `stop()` stays open until the test lets go — closing a
+/// platform stream is not instantaneous, and that window is the race.
+class _SlowStopAudioCapture implements AudioCapture {
+  _SlowStopAudioCapture(this._closing);
+
+  final Future<void> _closing;
+
+  int stopCalls = 0;
+  bool isRunning = false;
+
+  @override
+  Future<int> start(void Function(List<double> chunk) onChunk) async {
+    isRunning = true;
+    return 44100;
+  }
+
+  @override
+  Future<void> stop() async {
+    stopCalls++;
+    await _closing;
+    isRunning = false;
+  }
 }

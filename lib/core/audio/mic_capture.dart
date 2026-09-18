@@ -122,12 +122,21 @@ class MicCapture {
 
   /// Stops the capture and gives the session back. Idempotent, and safe to
   /// call while a [start] is still in flight — that start then unwinds itself.
+  ///
+  /// Only the capture and the lease this call found are torn down: a [start]
+  /// that raced in while this stop was awaiting the platform owns a session of
+  /// its own and survives the stop untouched.
   Future<void> stop() async {
     _stopRequested = true;
+    // Snapshot the capture AND its lease together, before the await: a start()
+    // that lands while the platform is still closing this stream installs a
+    // NEW lease, and releasing that one would leave a live capture with no
+    // session behind it — `revokeActive()` would then find nothing to stop and
+    // backgrounding would no longer free the microphone (§5, round 114).
     final capture = _capture;
+    final lease = _lease;
     _capture = null;
     await capture?.stop();
-    final lease = _lease;
     if (lease != null) await _release(lease);
   }
 
