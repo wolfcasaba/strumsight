@@ -116,6 +116,13 @@ class _Probe {
 /// `guitar_C-G-Am-F_backing_1.wav` → {C, G, Am, F}. Empty when the name has no
 /// chord token (no ground truth for that clip).
 final _chordRe = RegExp(r'^[A-G][#b]?(m|maj7|m7|7|sus4|sus2|dim|aug)?$');
+
+/// The filename part of [path], whichever separator the platform reports —
+/// `Directory.listSync` yields `\` on Windows, where splitting on `/` alone
+/// handed the WHOLE path to the chord-token parser and silently produced an
+/// empty ground-truth set. A no-op on POSIX.
+final _pathSeparators = RegExp(r'[/\\]');
+String _basename(String path) => path.split(_pathSeparators).last;
 Set<String> _expectedChords(String name) {
   for (final tok in name.replaceAll('.wav', '').split('_')) {
     final parts = tok.split('-');
@@ -130,7 +137,7 @@ _Probe _run(String path, String kind) {
   final (full, sr) = _readWav(path);
   final cap = (sr * _maxSeconds).round();
   final pcm = full.length > cap ? Float64List.sublistView(full, 0, cap) : full;
-  final p = _Probe(path.split('/').last, kind);
+  final p = _Probe(_basename(path), kind);
   p.expected.addAll(_expectedChords(p.name));
 
   // LIVE path — stream in mic-sized chunks, watch what the UI would show.
@@ -316,7 +323,7 @@ void main() {
     () {
       if (!_enabled) return; // dev-only; set DSP_PROBE=1
       final clips = _discover()
-          .where((c) => _expectedChords(c.$1.path.split('/').last).isNotEmpty)
+          .where((c) => _expectedChords(_basename(c.$1.path)).isNotEmpty)
           .toList();
       if (clips.isEmpty) return;
       const windows = [1, 3, 5, 7, 9, 13];
@@ -330,7 +337,7 @@ void main() {
       for (final w in windows) {
         final vals = <double>[];
         for (final (file, _) in clips) {
-          final exp = _expectedChords(file.path.split('/').last);
+          final exp = _expectedChords(_basename(file.path));
           final v = _analyzeInSetAt(file.path, exp, w);
           if (v >= 0) vals.add(v);
         }
@@ -353,7 +360,7 @@ void main() {
       for (final b in bws) {
         final vals = <double>[];
         for (final (file, _) in clips) {
-          final exp = _expectedChords(file.path.split('/').last);
+          final exp = _expectedChords(_basename(file.path));
           final v = _analyzeInSetAt(file.path, exp, 1, b);
           if (v >= 0) vals.add(v);
         }

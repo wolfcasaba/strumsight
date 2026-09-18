@@ -396,16 +396,18 @@ void main() {
         'silently changing trips this cell', () {
       final repository = Directory.current;
       final libDir = Directory('${repository.path}/lib');
-      final declaringFile = File(
-        '${repository.path}/lib/features/ai_tutor/data/model_gateway/'
-        'http_tutor_stream_transport.dart',
-      ).absolute.path;
+      final declaringFile = _posixPath(
+        File(
+          '${repository.path}/lib/features/ai_tutor/data/model_gateway/'
+          'http_tutor_stream_transport.dart',
+        ).absolute.path,
+      );
       final constructionPattern = RegExp(r'\bHttpTutorStreamTransport\s*\(');
       final gatewayConstructedElsewhere = libDir
           .listSync(recursive: true)
           .whereType<File>()
           .where((f) => f.path.endsWith('.dart'))
-          .where((f) => f.absolute.path != declaringFile)
+          .where((f) => _posixPath(f.absolute.path) != declaringFile)
           .any((f) => constructionPattern.hasMatch(f.readAsStringSync()));
 
       final providersSource = File(
@@ -604,3 +606,10 @@ final class _WireProbe implements HttpClientAdapter {
     correlationIdGenerator: () => 'consent-enforcement-probe',
   );
 }
+
+/// `Directory.listSync` reports paths with the platform separator (`\` on
+/// Windows) while the expected paths above are built with `/` — compare on one
+/// form. A no-op wherever `/` already is the separator (Linux CI).
+String _posixPath(String path) => Platform.pathSeparator == '/'
+    ? path
+    : path.replaceAll(Platform.pathSeparator, '/');

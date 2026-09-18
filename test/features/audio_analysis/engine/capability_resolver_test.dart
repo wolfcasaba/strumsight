@@ -205,7 +205,9 @@ void main() {
       final assignments = <String>[];
       for (final file in files) {
         final content = file.readAsStringSync();
-        if (content.contains('CapabilityStatus.')) assignments.add(file.path);
+        if (content.contains('CapabilityStatus.')) {
+          assignments.add(_posixPath(file.path));
+        }
       }
 
       expect(assignments, <String>[
@@ -214,6 +216,13 @@ void main() {
     },
   );
 }
+
+/// `Directory.listSync` reports paths with the platform separator (`\` on
+/// Windows) while the expected list above is written POSIX-style — compare on
+/// one form. A no-op wherever `/` already is the separator (Linux CI).
+String _posixPath(String path) => Platform.pathSeparator == '/'
+    ? path
+    : path.replaceAll(Platform.pathSeparator, '/');
 
 Map<AnalysisCapability, CapabilityStatus> _all(CapabilityStatus status) =>
     <AnalysisCapability, CapabilityStatus>{

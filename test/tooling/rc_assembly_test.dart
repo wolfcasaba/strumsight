@@ -32,6 +32,13 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+/// The filename part of [path], whichever separator the platform reports —
+/// `Directory.listSync` yields `\` on Windows while the fixture paths below
+/// are built with `/`, so splitting on `/` alone compared a whole path against
+/// a bare file name. A no-op on POSIX.
+final _pathSeparators = RegExp(r'[/\\]');
+String _basename(String path) => path.split(_pathSeparators).last;
+
 const _tool = 'tool/release/assemble_rc.py';
 const _proposalPath = 'docs/release/workflows/release-candidate.proposal.yml';
 
@@ -114,16 +121,14 @@ void main() {
           jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>;
       final files = (manifest['files'] as List).cast<Map<String, Object?>>();
 
-      final expectedNames = inputPaths.values
-          .map((p) => p.split('/').last)
-          .toSet();
+      final expectedNames = inputPaths.values.map(_basename).toSet();
       final manifestNames = files.map((f) => f['path'] as String).toSet();
       expect(manifestNames, expectedNames);
 
       final actualNames = packageDir
           .listSync()
           .whereType<File>()
-          .map((f) => f.path.split('/').last)
+          .map((f) => _basename(f.path))
           .where((name) => name != 'checksum-manifest.json')
           .toSet();
       expect(actualNames, expectedNames);
@@ -647,7 +652,13 @@ jobs:
         'the job from the assertions above', () {
       final source = File(_proposalPath).readAsStringSync();
       final workflow = parseWorkflowJobs(source, sourceLabel: _proposalPath);
-      final jobsBlockStart = source.indexOf('\njobs:\n');
+      // Line-ending agnostic: a literal '\njobs:\n' is absent from a CRLF
+      // checkout. The regex anchors on the same line, and `$` in Dart's
+      // multiLine mode matches before `\r` as well as before `\n`, so the
+      // block text this slices is identical on an LF checkout.
+      final jobsBlockStart = source.indexOf(
+        RegExp(r'^jobs:$', multiLine: true),
+      );
       expect(jobsBlockStart, greaterThanOrEqualTo(0));
       final jobsBlockText = source.substring(jobsBlockStart);
       final rawJobHeaderCount = RegExp(
@@ -905,7 +916,11 @@ ParsedWorkflow parseWorkflowJobs(
   String contents, {
   required String sourceLabel,
 }) {
-  final lines = contents.split('\n');
+  // Split on either line ending: a CRLF checkout leaves a trailing `\r` on
+  // every line, which made each `line == 'jobs:'` style comparison below
+  // miss and the parser throw "no top-level \"jobs:\" key found". On LF
+  // input this is bit-identical to `split('\n')`.
+  final lines = contents.split(RegExp(r'\r?\n'));
   final jobsLineIndex = lines.indexWhere((line) => line == 'jobs:');
   if (jobsLineIndex == -1) {
     throw FormatException('$sourceLabel: no top-level "jobs:" key found');

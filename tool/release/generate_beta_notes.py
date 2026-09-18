@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import stat
 import sys
 from pathlib import Path
 
@@ -166,16 +167,70 @@ def render(notes: BetaNotes) -> str:
     return "\n".join(lines)
 
 
+# Windows reparse-tag values (winnt.h). These two — and ONLY these two —
+# redirect an open() to another location the way a POSIX symlink does, so
+# they are the ones the N2 refusal has to cover. Every other reparse point
+# (OneDrive/Cloud-Files placeholders, dedup stubs, WSL artefacts, ...) is an
+# ordinary file whose data a filter driver hydrates in place; refusing those
+# would reject a perfectly normal `--output` inside a synced folder.
+_IO_REPARSE_TAG_MOUNT_POINT = 0xA0000003  # directory junction
+_IO_REPARSE_TAG_SYMLINK = 0xA000000C
+
+
+def _is_redirecting_link(status: os.stat_result) -> bool:
+    """Whether [status] (an `os.lstat` result) describes a symlink or a
+    Windows directory junction, as opposed to any other reparse point."""
+    if stat.S_ISLNK(status.st_mode):
+        return True
+    return getattr(status, "st_reparse_tag", 0) in (
+        _IO_REPARSE_TAG_SYMLINK,
+        _IO_REPARSE_TAG_MOUNT_POINT,
+    )
+
+
+def _refuse_link_at(path: Path) -> None:
+    """Refuses an output path that is a symlink or a Windows directory
+    junction.
+
+    `O_NOFOLLOW` is POSIX-only, so on Windows the N2 refusal has to be stated
+    explicitly here. On POSIX this check runs in addition to `O_NOFOLLOW`,
+    which still closes the check-to-open race."""
+    try:
+        status = os.lstat(path)
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        raise BetaNotesError(f"cannot write output file: {error}") from error
+    if _is_redirecting_link(status):
+        raise BetaNotesError(
+            "output path is a symlink — refusing to write through it"
+        )
+
+
 def _write_output_file(path: Path, text: str) -> None:
-    """Writes [text] to [path] mode 0600, refusing to follow a symlink
-    (N2, the same fix as `build_diagnostics_bundle.py` — round E12-R22)."""
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
+    """Writes [text] to [path], refusing to follow a symlink or a Windows
+    directory junction at the output path (N2, the same fix as
+    `build_diagnostics_bundle.py` — round E12-R22).
+
+    The 0600 file mode is POSIX-ONLY. NTFS has no POSIX permission bits and
+    `os.fchmod` does not exist on Windows, so there the file is created with
+    whatever ACL it inherits from its parent directory — in practice the
+    user-profile ACL, which is not world-readable but is NOT the 0600
+    guarantee either. The symlink/junction refusal above holds on every
+    platform."""
+    _refuse_link_at(path)
+    # `O_NOFOLLOW` and `fchmod` are POSIX-only: on Windows neither exists and
+    # touching them raised `AttributeError`. On POSIX the flag and the mode
+    # call are unchanged; on Windows the `_refuse_link_at` call above keeps
+    # the link refusal, and the mode guarantee degrades as documented above.
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
     try:
         fd = os.open(path, flags, 0o600)
     except OSError as error:
         raise BetaNotesError(f"cannot write output file: {error}") from error
     try:
-        os.fchmod(fd, 0o600)
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(text)
     except OSError as error:

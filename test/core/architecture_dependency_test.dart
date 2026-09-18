@@ -758,10 +758,11 @@ import 'package:flutter/widgets.dart';
         final offenders = <String>[];
         for (final entity in libDir.listSync(recursive: true)) {
           if (entity is! File || !entity.path.endsWith('.dart')) continue;
-          if (entity.path.contains('/core/design_system/')) continue;
+          final path = _posixPath(entity.path);
+          if (path.contains('/core/design_system/')) continue;
           offenders.addAll(
             _forbiddenDesignSystemInternalImports(
-              entity.path,
+              path,
               entity.readAsStringSync(),
             ),
           );
@@ -1035,12 +1036,10 @@ import 'package:flutter/widgets.dart';
         // Skip the community feature itself — its INTERNAL imports
         // of its own domain are legal (community may import its own
         // entities / value objects).
-        if (entity.path.contains('/features/community/')) continue;
+        final path = _posixPath(entity.path);
+        if (path.contains('/features/community/')) continue;
         offenders.addAll(
-          _forbiddenCommunityInternalImports(
-            entity.path,
-            entity.readAsStringSync(),
-          ),
+          _forbiddenCommunityInternalImports(path, entity.readAsStringSync()),
         );
       }
 
@@ -1456,6 +1455,13 @@ String _withoutTrivia(String source, {required bool maskStrings}) {
 }
 
 // ── E08-R26 helpers ──────────────────────────────────────────────────────
+
+/// `Directory.listSync` reports paths with the platform separator (`\` on
+/// Windows) while every path literal in this file is POSIX-style — compare on
+/// one form. A no-op wherever `/` already is the separator (Linux CI).
+String _posixPath(String path) => Platform.pathSeparator == '/'
+    ? path
+    : path.replaceAll(Platform.pathSeparator, '/');
 
 /// The OWN feature for an adapter path (used to decide which feature's
 /// internals are off-limits when checking imports).

@@ -142,6 +142,13 @@ int _lineOf(String content, int offset) {
   return line;
 }
 
+/// `Directory.listSync` reports paths with the platform separator (`\` on
+/// Windows) while `frozenViolations` below is written POSIX-style — record one
+/// form. A no-op wherever `/` already is the separator (Linux CI).
+String _posixPath(String path) => Platform.pathSeparator == '/'
+    ? path
+    : path.replaceAll(Platform.pathSeparator, '/');
+
 Set<_Violation> _scan(Iterable<String> scopeDirs) {
   final violations = <_Violation>{};
   for (final dirPath in scopeDirs) {
@@ -160,7 +167,7 @@ Set<_Violation> _scan(Iterable<String> scopeDirs) {
         );
         if (violationClass == null) continue;
         violations.add((
-          file: entity.path,
+          file: _posixPath(entity.path),
           line: _lineOf(stripped, match.start),
           violationClass: violationClass,
         ));

@@ -1,5 +1,11 @@
 import 'dart:io';
 
+// `path` ships with the Flutter SDK and is resolved for every target of this
+// repo, but it is not listed in pubspec.yaml, so the lint below would make
+// `flutter analyze` (the gate) non-zero on an otherwise correct import.
+// ignore: depend_on_referenced_packages
+import 'package:path/path.dart' as p;
+
 /// One data field declared under a route in `docs/privacy/data-inventory.yaml`.
 final class InventoryField {
   const InventoryField({
@@ -725,18 +731,43 @@ List<DiscoveredEgressRoute> _discoverDirectHttpUsage(
   return results;
 }
 
-String _relativePath(Directory repositoryRoot, String absolutePath) {
-  final normalizedRoot = repositoryRoot.absolute.path;
-  final normalizedPath = File(absolutePath).absolute.path;
-  final prefix = '$normalizedRoot${Platform.pathSeparator}';
-  if (!normalizedPath.startsWith(prefix)) {
+String _relativePath(Directory repositoryRoot, String absolutePath) =>
+    repositoryRelativePath(
+      repositoryRoot.absolute.path,
+      File(absolutePath).absolute.path,
+    );
+
+/// The repository-relative, always-`/`-joined spelling of [absolutePath].
+///
+/// The callers build the scanned directories with `/` while `listSync` hands
+/// back the platform separator, so comparing the two raw strings made every
+/// file look "outside repository" on Windows. `package:path`'s [p.Context]
+/// does the containment test and the subtraction instead: it normalises the
+/// separators and any `.` / `..` segment, and in the windows context it is
+/// case-insensitive, matching that platform's own file-identity rule.
+///
+/// The trailing `replaceAll` is the historical POSIX behaviour, kept verbatim:
+/// a literal `\` inside a POSIX file name is still rewritten to `/` (on
+/// Windows `\` is the separator, so it changes nothing there).
+///
+/// [context] exists so the rule can be exercised for both platforms from any
+/// host; production callers leave it unset and get [p.context].
+String repositoryRelativePath(
+  String repositoryRoot,
+  String absolutePath, {
+  p.Context? context,
+}) {
+  final resolved = context ?? p.context;
+  if (!resolved.isWithin(repositoryRoot, absolutePath)) {
     throw ArgumentError.value(
       absolutePath,
       'absolutePath',
       'outside repository',
     );
   }
-  return normalizedPath.substring(prefix.length).replaceAll('\\', '/');
+  return resolved
+      .relative(absolutePath, from: repositoryRoot)
+      .replaceAll('\\', '/');
 }
 
 String _stripLineSuffix(String file) => file.replaceFirst(RegExp(r':\d+$'), '');

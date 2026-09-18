@@ -1,6 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
+// `path` ships with the Flutter SDK and is resolved for every target of this
+// repo, but it is not listed in pubspec.yaml, so the lint below would make
+// `flutter analyze` (the gate) non-zero on an otherwise correct import.
+// ignore: depend_on_referenced_packages
+import 'package:path/path.dart' as p;
+
 import 'package:strumsight/features/ai_tutor/data/knowledge/knowledge_codec.dart';
 import 'package:strumsight/features/ai_tutor/data/knowledge/knowledge_document.dart';
 
@@ -112,17 +118,47 @@ List<File> _contentFiles(Directory contentRoot, File outputFile) {
     throw KnowledgeManifestException(KnowledgeManifestErrorCode.corruptContent);
   }
   final outputPath = outputFile.absolute.path;
-  final manifestPath = File('${contentRoot.path}/manifest.json').absolute.path;
+  final manifestPath = p.join(contentRoot.absolute.path, 'manifest.json');
   final files = <File>[
     for (final entity in contentRoot.listSync(recursive: true))
       if (entity is File &&
           entity.path.endsWith('.json') &&
-          entity.absolute.path != outputPath &&
-          entity.absolute.path != manifestPath)
+          !isExcludedManifestPath(
+            entity.absolute.path,
+            outputPath: outputPath,
+            manifestPath: manifestPath,
+          ))
         entity,
   ];
   files.sort((left, right) => left.path.compareTo(right.path));
   return files;
+}
+
+/// Whether [candidate] names the same file as the manifest this run is about
+/// to write ([outputPath]) or as the conventional `manifest.json` sitting in
+/// the content root ([manifestPath]).
+///
+/// The comparison goes through `package:path`'s [p.Context.equals] instead of
+/// `==` on the raw strings. `listSync` reports paths with the platform
+/// separator while the two excluded paths are built by joining, so on Windows
+/// the `/`-spelled `manifest.json` never matched the `\`-spelled listing entry
+/// and a previous run's output was decoded as if it were a knowledge document.
+/// `equals` normalises the separators and any `.` / `..` segment, and in the
+/// windows context it also compares case-insensitively — which is that
+/// platform's own file-identity rule, so `Assets/...` and `assets/...` name
+/// one file there and two files on POSIX.
+///
+/// [context] exists so the rule can be exercised for both platforms from any
+/// host; production callers leave it unset and get [p.context].
+bool isExcludedManifestPath(
+  String candidate, {
+  required String outputPath,
+  required String manifestPath,
+  p.Context? context,
+}) {
+  final resolved = context ?? p.context;
+  return resolved.equals(candidate, outputPath) ||
+      resolved.equals(candidate, manifestPath);
 }
 
 List<int> _readContent(File sourceFile) {

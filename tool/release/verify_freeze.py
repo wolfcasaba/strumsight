@@ -476,6 +476,8 @@ def get_changes_from_git(since_sha: str) -> list[tuple[str, str]]:
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
     except (subprocess.CalledProcessError, OSError) as error:
         raise VerifyError(
@@ -491,6 +493,8 @@ def get_changes_from_git(since_sha: str) -> list[tuple[str, str]]:
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
     except subprocess.CalledProcessError as error:
         raise VerifyError(
@@ -504,12 +508,16 @@ def get_changes_from_git(since_sha: str) -> list[tuple[str, str]]:
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         ).stdout.strip()
         files = subprocess.run(
             ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", commit_sha],
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         ).stdout.splitlines()
         for changed_path in files:
             if changed_path:

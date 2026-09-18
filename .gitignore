@@ -91,3 +91,8 @@ __pycache__/
 # device_build.example.json trackelt; a valódi profil sosem kerülhet a repóba.
 device_build.json
 device_build.*.json
+
+# Superpowers plugin scratch dir (agent-local, ~5000 files). Untracked it
+# trips test/tooling/legacy_identifier_guard_test.dart and `git add -A` would
+# sweep it into a commit; it is machine state, never repo content.
+.superpowers/

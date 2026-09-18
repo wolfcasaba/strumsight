@@ -269,10 +269,17 @@ void main() {
   });
 }
 
+/// `Directory.listSync` reports paths with the platform separator (`\` on
+/// Windows) while every path literal in this file is POSIX-style — yield one
+/// form. A no-op wherever `/` already is the separator (Linux CI).
+String _posixPath(String path) => Platform.pathSeparator == '/'
+    ? path
+    : path.replaceAll(Platform.pathSeparator, '/');
+
 Iterable<String> _dartFilesUnder(String root) sync* {
   for (final entity in Directory(root).listSync(recursive: true)) {
     if (entity is File && entity.path.endsWith('.dart')) {
-      yield entity.path;
+      yield _posixPath(entity.path);
     }
   }
 }

@@ -1141,6 +1141,8 @@ def check_secrets_delegate(root: Path, command: str) -> list[Finding]:
             cwd=root,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=180,
         )
     except (OSError, subprocess.TimeoutExpired) as error:

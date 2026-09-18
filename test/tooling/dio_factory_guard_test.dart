@@ -10,12 +10,13 @@ void main() {
 
     for (final entity in Directory('lib').listSync(recursive: true)) {
       if (entity is! File || !entity.path.endsWith('.dart')) continue;
-      if (entity.path == allowed) continue;
+      final path = _posixPath(entity.path);
+      if (path == allowed) continue;
 
       final lines = entity.readAsLinesSync();
       for (var index = 0; index < lines.length; index++) {
         if (dioConstructor.hasMatch(lines[index])) {
-          violations.add('${entity.path}:${index + 1}');
+          violations.add('$path:${index + 1}');
         }
       }
     }
@@ -27,3 +28,10 @@ void main() {
     );
   });
 }
+
+/// `Directory.listSync` reports paths with the platform separator (`\` on
+/// Windows) while the allowlist above is written POSIX-style — compare on one
+/// form. A no-op wherever `/` already is the separator (Linux CI).
+String _posixPath(String path) => Platform.pathSeparator == '/'
+    ? path
+    : path.replaceAll(Platform.pathSeparator, '/');

@@ -23,6 +23,10 @@ const _skippedDirs = <String>{
   'Pods',
   '.gradle',
   '.idea',
+  // Agent-tooling scratch space (git-ignored, thousands of generated
+  // markdown chunks). It is not production source, so scanning it only
+  // produced false positives.
+  '.superpowers',
 };
 
 /// Historical documents are allowed to name the old identifiers: the SDD
