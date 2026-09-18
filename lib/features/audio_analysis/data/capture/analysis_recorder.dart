@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:math' as math;
 
 import '../../../../core/audio/mic_capture.dart';
+import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/foundation/app_result.dart';
 import '../../domain/recording_level.dart';
 import '../input/input_limits.dart';
@@ -94,6 +95,14 @@ final class AnalysisRecorder {
     if (started case Failure<int>(:final error)) {
       return Failure(error);
     }
+    // dispose() landed while the platform was still handing us the stream: it
+    // found no active run to stop, so publishing one now would leave the
+    // microphone open and push levels onto an already closed stream (§7
+    // lifecycle). Unwind exactly like MicCapture's own mid-handshake stop.
+    if (_disposed) {
+      await _mic.stop();
+      return const Failure(CancelledFailure());
+    }
 
     final sampleRate = (started as Success<int>).value;
     _samples.clear();
@@ -182,6 +191,10 @@ final class AnalysisRecorder {
     required double squareSum,
     required int sampleCount,
   }) {
+    // A chunk can still be in flight when the stream is already closed (the
+    // platform keeps delivering until its own stop completes); adding to a
+    // closed controller throws per chunk.
+    if (_levels.isClosed) return;
     final peakDbfs = _toDbfs(peak);
     if (!_isClipping && peakDbfs >= clippingOnDbfs - _thresholdEpsilon) {
       _isClipping = true;
@@ -221,7 +234,16 @@ final class AnalysisRecorder {
     try {
       await stop();
     } finally {
-      await _levels.close();
+      try {
+        // stop() returns early when no run is active — precisely the state
+        // while an in-flight start() is still awaiting the mic handshake, so
+        // the lease would survive the dispose. MicCapture.stop() is
+        // idempotent, which makes the unconditional release safe after the
+        // stop() above already tore a running capture down.
+        await _mic.stop();
+      } finally {
+        await _levels.close();
+      }
     }
   }
 }

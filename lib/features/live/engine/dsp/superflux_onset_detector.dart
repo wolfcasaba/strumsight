@@ -2,6 +2,8 @@ import 'dart:collection';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import 'dsp_config.dart';
 import 'log_mel_extractor.dart';
 
@@ -146,6 +148,13 @@ class SuperFluxOnsetDetector {
   /// Flux of the most recent frame (debug/telemetry).
   double lastFlux = 0;
 
+  /// How many frames of decision history are retained right now. Only the
+  /// confirmation window is ever consulted, so this stays bounded no matter how
+  /// long the detector runs — the memory pin in
+  /// `test/features/live/dsp/superflux_history_bound_test.dart` reads it.
+  @visibleForTesting
+  int get decisionHistoryFrames => _fluxHist.length;
+
   /// Process one frame of exactly [window] samples advanced by [hop].
   /// Returns the confirmed onset's time (seconds, frame start) or null.
   double? processFrame(Float64List frame) {
@@ -173,6 +182,7 @@ class SuperFluxOnsetDetector {
       _belowStreak++;
       if (_belowStreak >= _releaseFrames) _eligible = true;
       _fluxPeak *= _peakDecay;
+      _trimHistories();
       return null;
     }
 
@@ -216,8 +226,17 @@ class SuperFluxOnsetDetector {
       _belowStreak = 0;
     }
 
-    // Confirm the local max at (now - _postFrames): it must beat its ±2
-    // neighbours, exceed its threshold, and respect the min inter-onset gap.
+    final onsetSec = _confirmOnset();
+    _trimHistories();
+    return onsetSec;
+  }
+
+  /// Confirm the local max at (now - [_postFrames]): it must beat its ±2
+  /// neighbours, exceed its threshold, and respect the min inter-onset gap.
+  /// Returns the onset TIME in seconds, or null when the candidate fails any
+  /// of those. Reads only the last `2 * _postFrames + 1` history entries, which
+  /// is why [_trimHistories] can bound them.
+  double? _confirmOnset() {
     final c = _fluxHist.length - 1 - _postFrames;
     if (c < 0) return null;
     final fc = _fluxHist[c];
@@ -234,16 +253,25 @@ class SuperFluxOnsetDetector {
     _lastOnsetFrame = absC;
     _eligible = false;
     _belowStreak = 0;
-
-    // Trim histories (only the confirmation window is ever consulted).
-    if (_fluxHist.length > 4 * _medianFrames) {
-      final drop = _fluxHist.length - 2 * _medianFrames;
-      _fluxHist.removeRange(0, drop);
-      _thrHist.removeRange(0, drop);
-      _riseBandsHist.removeRange(0, drop);
-      _dropped += drop;
-    }
     return absC * hop / sampleRate;
+  }
+
+  /// Bound the decision histories. Runs on EVERY frame — silence-gated and
+  /// analysed alike — because a user who leaves Live open in a quiet or noisy
+  /// room confirms no onset for minutes: hanging this off a confirmation (as
+  /// it was until the E14 memory audit) grew the three lists at `sampleRate /
+  /// hop` entries per second (~35 MB/h at 1024/256 @ 44.1 kHz) and made the
+  /// first real onset pay the whole O(n) `removeRange` on the audio path.
+  ///
+  /// Frame indices are unaffected: [_dropped] absorbs every removal, so
+  /// `c + _dropped` stays the absolute frame number whenever the trim runs.
+  void _trimHistories() {
+    if (_fluxHist.length <= 4 * _medianFrames) return;
+    final drop = _fluxHist.length - 2 * _medianFrames;
+    _fluxHist.removeRange(0, drop);
+    _thrHist.removeRange(0, drop);
+    _riseBandsHist.removeRange(0, drop);
+    _dropped += drop;
   }
 
   int _dropped = 0;
