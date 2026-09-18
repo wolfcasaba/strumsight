@@ -420,7 +420,7 @@ List<TechnicalDebtAuditIssue> auditTechnicalDebtItems({
 
 /// The measured `appStorageMigrations` (`lib/core/storage/storage_migrator.dart`)
 /// step count (§0.0/R5, `docs/release/client-migration.md` §1).
-const supportedClientMigrationChainBaseline = 22;
+const supportedClientMigrationChainBaseline = 23;
 
 /// Whether the supported-client boot migration chain is still exactly
 /// [expectedLength] steps — any change (added, removed, or reordered

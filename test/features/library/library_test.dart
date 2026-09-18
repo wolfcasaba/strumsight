@@ -196,9 +196,9 @@ void main() {
       await tester.pumpAndSettle();
 
       // The default (non-production) shell's last bottom-nav destination
-      // is Profile (labelled with the existing tutorProfileTitle string,
-      // home_shell.dart — no dedicated nav ARB keys yet).
-      await tester.tap(find.text('Tutor profile'));
+      // is Profile (labelled with profileHubTitle since the hibavadászat
+      // round, home_shell.dart).
+      await tester.tap(find.text('Profile'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Library'));
       await tester.pumpAndSettle();

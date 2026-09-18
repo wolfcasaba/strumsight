@@ -271,7 +271,7 @@ void main() {
 
   group('A5 — supported legacy client and contract freeze', () {
     test('A5 the supported-client migration chain is intact', () {
-      expect(appStorageMigrations.length, 22);
+      expect(appStorageMigrations.length, 23);
       expect(
         migrationChainIntact(actualLength: appStorageMigrations.length),
         isTrue,

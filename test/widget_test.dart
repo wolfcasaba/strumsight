@@ -32,6 +32,6 @@ void main() {
     expect(find.text('Today'), findsWidgets);
     expect(find.text('Practice hub'), findsWidgets);
     expect(find.text('Song library'), findsWidgets);
-    expect(find.text('Tutor profile'), findsWidgets);
+    expect(find.text('Profile'), findsWidgets);
   });
 }
