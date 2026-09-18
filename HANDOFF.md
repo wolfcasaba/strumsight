@@ -1,5 +1,45 @@
 # HANDOFF — StrumSight 🎸
 
+## 🐞 HIBAVADÁSZAT + JAVÍTÁS — `cb6ab570` → `73394bdb` (kör „hibavadászat + javítás", branch `claude/strum-strings-live`), 2026-09-18
+
+A kör egyetlen mondata: **Fable tech lead vezetésével, Workflow-n indított
+Opus-ágensekkel és Serena MCP-vel 3 kör futott (implementáció → független review →
+javítás → commit)**, és 10 bugfix-commit szállt — mindegyik a saját gyökérokával
+és saját regressziós tesztjével.
+
+| Commit | Terület | Javított gyökérok | Regressziós teszt(ek) |
+|---|---|---|---|
+| `cb6ab570` | audio / mic-lease | a `MicCapture.stop()` az `await capture.stop()` UTÁN olvasta a `_lease`-t, így a közben landoló `start()` ÚJ lease-ét engedte el | `test/core/audio/mic_capture_test.dart` |
+| `7f0e12cf` | live / architektúra | a `live_pipeline.dart` a chords feature belső `chord_shape.dart`-ját importálta a `public.dart` barrel helyett | `test/core/architecture_dependency_test.dart` |
+| `79ee4049` | l10n | rossz nav-címke, hard-coded perc-egység, locale nélküli `DateFormat.MMMd()`, csak az aggregátumban élő ARB kulcs | `shell_destination_labels_test`, `today_hub_localisation_test`, `aggregate_segment_coverage_test`, `date_format_locale_guard_test` |
+| `e6aecbd7` | routing | `state.extra!` cast TypeError deep linken, extra nélküli evidence-linkek, hub CTA-k `go`-val `push` helyett | `song_trainer_extra_guard_test`, `skill_detail_evidence_test`, `hub_push_navigation_test` |
+| `136c53cf` | audio / analysis | a `dispose()` a `stop()`-ra bízta a mic elengedését (függő handshake alatt nyitva maradt), a SuperFlux history-trim a korai return-ok után állt | `analysis_recorder_dispose_test`, `superflux_history_bound_test` |
+| `eaa69fa7` | tooling | nyers string-útvonal-összehasonlítás és Windowson némán lefokozott link-elutasítás (`package:path` Context + valódi reparse tag) | `test/tooling/tooling_path_portability_test.dart` |
+| `9547bd80` | song-import | a picker adapter kitalált `byteLength = limit+1`-et üres `openRead()`-del, a háttérsáv-csatolás némán nem csinált semmit | `file_picker_adapter_limits_test`, `song_editor_backing_limit_test` |
+| `6e95f09b` | audio / mic-lease | a `stop()` csak a platform `capture.stop()` visszatérése után adta vissza a lease-t → dobó teardown (és `dispose()`) után bent ragadt | `real_tuner_engine_restart_test`, `real_strum_engine_restart_test`, `live_mic_release_test` |
+| `62d5a536` | progress / epoch-day | a nap-számítás helyenként helyi idővel, helyenként UTC-vel készült → egy kanonikus `epoch_day` + 23-as séma-lépés ([ADR 0583](docs/adr/0583-one-canonical-epoch-day-and-the-shift-migration.md)) | `epoch_day_shift_migration_test`, `epoch_day_test`, `day_rollover_guard_test`, `upgrade_migration_test` |
+| `73394bdb` | practice / route sweep | a session-kilépés `Navigator.pop`-ra épült (GoRouter alatt üres képernyő); a sweep 15 flag-mögötti route-ot csendben az entry képernyőre ejtett (hamis zöld) | `practice_session_exit_navigation_test`, `practice_area_hub_category_chips_test` |
+
+**Elfogadott ismert pirosak / nyitott tételek:**
+
+- **e13_r17 goldenek:** a „practice area hub — compact" és `..._compact_scale2`
+  cellák elavultak (a 4. chip jogosan tiltott) — push után `record-goldens.yml`-lel
+  újra kell venni őket.
+- **Tiltott Scales chip:** nincs tooltip / „hamarosan" szöveg; új ARB kulcsok
+  kellenek az `app_en.arb` + `app_hu.arb`-ba.
+- **`onMetronome`** a `live_screen.dart`-ban továbbra is nyersen `push`-ol
+  (nincs pause/handover/resume) — a sor a `docs/backlog-ux-polish.md` 13. pontja.
+- **CRLF vs LF:** a worktree CRLF, a git LF-et tárol → ~50 bájt-pontos teszt
+  CSAK Windowson piros; commit után `git add --renormalize .` a rendezés.
+- **`.superpowers/`** már gitignore-olt, de a lemezen ott van.
+- **`test/ui/goldens/failures/`** a lokális golden-futás követetlen mellékterméke.
+- **ADR 0583 migráció:** a dokumentált utazó-korlát (`>=` bound) marad —
+  a nyugatról keletre upgradelő felhasználó egy már bankolt streak-napot veszíthet.
+
+**KÖVETKEZŐ LÉPÉS:** push a branchre, majd CI-gate + `record-goldens.yml` az
+e13_r17 két cellájára; a teljes lokális suite ezután opcionális (a fenti pirosak
+Windows-specifikusak és dokumentáltak).
+
 ## 🔧 ÁGENS-ESZKÖZTÁR BEKÖTVE — Dart MCP + Serena + golden/integration_test (2026-09-18, a Windows dev-boxon)
 
 A tulajdonos kérése: az ágens ne vakon kódoljon — lássa az analyzer-hibákat,
