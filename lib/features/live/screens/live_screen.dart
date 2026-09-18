@@ -128,6 +128,12 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // write is deferred one microtask: Riverpod forbids modifying a provider
     // inside a widget life-cycle (dispose included), and this dispose runs
     // inside the unmount frame when the route is left (measured in CI).
+    //
+    // The deferral means the write lands AFTER this element is gone, so the
+    // provider refresh it triggers needs a live binding to ride: a harness
+    // that lets the tree be torn down by teardown instead of unmounting it
+    // itself leaves that refresh as a pending timer. Every Live harness
+    // therefore unmounts inside the test body — see live_summary_test.dart.
     final log = _log;
     final sessionStart = _sessionStart;
     if (log != null && sessionStart != null && _strokeCount > 0) {

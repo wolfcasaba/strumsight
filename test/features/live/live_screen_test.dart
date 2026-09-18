@@ -80,6 +80,7 @@ void main() {
       // .ignore()s it on dispose (doesn't cancel it) — let it fire so no Timer
       // is left pending at teardown.
       await tester.pump(const Duration(milliseconds: 400));
+      await _unmountAndSettle(tester);
     },
   );
 
@@ -110,6 +111,7 @@ void main() {
 
     // Flush flutter_animate's zero-delay play timer (see note above).
     await tester.pump(const Duration(milliseconds: 400));
+    await _unmountAndSettle(tester);
   });
 
   testWidgets('Pause freezes the display and toggles the action label', (
@@ -147,6 +149,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byTooltip('Pause'), findsOneWidget);
     expect(engine.startCalls, greaterThan(0));
+
+    await _unmountAndSettle(tester);
   });
 
   testWidgets('leaving the Live tab releases the mic (autoDispose timeline)', (
@@ -210,4 +214,25 @@ void main() {
     expect(find.text('Retry'), findsOneWidget);
     expect(find.textContaining('microphone'), findsOneWidget);
   });
+}
+
+/// Unmounts the Live tree and settles the work its `dispose()` schedules.
+///
+/// A Live session in which the learner actually strummed is recorded into
+/// `practiceLogProvider` from `LiveScreen.dispose()`, deferred one microtask
+/// (Riverpod forbids the write inside a widget life-cycle). By then the
+/// `ProviderScope` is gone, so Riverpod has no vsync to hang the refresh that
+/// write triggers on and falls back to a zero-duration `Timer`.
+///
+/// `flutter_test` unmounts the tree itself AFTER the test body and checks
+/// `!timersPending` immediately, leaving no frame in which that timer could
+/// fire — so the unmount happens HERE, inside the body, followed by the pump
+/// that runs it. Same reason the cells above pump 400 ms for flutter_animate's
+/// own zero-delay play timer: the screen's work is let finish, not suppressed.
+Future<void> _unmountAndSettle(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  // The unmount frame flushes the microtask; the timer it schedules is
+  // created during that flush, so it needs a LATER frame with real elapsed
+  // time to run.
+  await tester.pump(const Duration(milliseconds: 1));
 }

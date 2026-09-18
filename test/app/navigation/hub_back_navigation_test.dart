@@ -158,9 +158,78 @@ List<File> _screenSources() {
 
 typedef _GoCall = ({String argument, int line});
 
+/// [source] with every comment blanked out, character for character.
+///
+/// The scanner below matches raw text, so a doc comment that QUOTES a call —
+/// `practice_session_screen.dart` explains its pop contract by naming the
+/// `context.go(AppRoutes.practiceSession)` the setup screen makes — used to
+/// register as a call site the file does not contain. Blanking (rather than
+/// deleting) keeps every offset and line number exact, and it cuts the other
+/// way too: a commented-out `context.go` can no longer smuggle a real one
+/// past the guard by looking like documentation.
+///
+/// String literals are tracked so a `//` INSIDE one (a URL, say) does not
+/// swallow the rest of the line.
+String _withoutComments(String source) {
+  final out = StringBuffer();
+  var index = 0;
+  String? quote;
+  while (index < source.length) {
+    final char = source[index];
+    final next = index + 1 < source.length ? source[index + 1] : '';
+    if (quote != null) {
+      out.write(char);
+      if (char == r'\') {
+        if (next.isNotEmpty) {
+          out.write(next);
+          index += 2;
+          continue;
+        }
+      } else if (char == quote || char == '\n') {
+        quote = null;
+      }
+      index++;
+      continue;
+    }
+    if (char == "'" || char == '"') {
+      quote = char;
+      out.write(char);
+      index++;
+      continue;
+    }
+    if (char == '/' && next == '/') {
+      while (index < source.length && source[index] != '\n') {
+        out.write(' ');
+        index++;
+      }
+      continue;
+    }
+    if (char == '/' && next == '*') {
+      while (index < source.length &&
+          !(source[index] == '*' &&
+              index + 1 < source.length &&
+              source[index + 1] == '/')) {
+        out.write(source[index] == '\n' ? '\n' : ' ');
+        index++;
+      }
+      // The closing `*/` itself.
+      final remaining = source.length - index;
+      out.write(' ' * (remaining < 2 ? remaining : 2));
+      index += 2;
+      continue;
+    }
+    out.write(char);
+    index++;
+  }
+  return out.toString();
+}
+
 /// The argument text of each `context.go(` call in [source], parentheses
 /// balanced so a ternary or a multi-line argument list stays one entry.
-List<_GoCall> _contextGoCalls(String source) {
+/// Comments are blanked first ([_withoutComments]) so only real call sites
+/// are measured.
+List<_GoCall> _contextGoCalls(String rawSource) {
+  final source = _withoutComments(rawSource);
   const marker = 'context.go(';
   final calls = <_GoCall>[];
   var index = source.indexOf(marker);
