@@ -61,7 +61,8 @@ void main() {
       expect(
         find.text('0 perc'),
         findsOneWidget,
-        reason: "'\$todayMinutes min' was a hard-coded English unit "
+        reason:
+            "'\$todayMinutes min' was a hard-coded English unit "
             '(AGENTS.md §7) — progressGoalOption already carries it',
       );
       expect(find.text('0 min'), findsNothing);
@@ -87,8 +88,7 @@ void main() {
           ),
           GoRoute(
             path: AppRoutes.visionSetup,
-            builder: (_, _) =>
-                const Scaffold(body: Text('vision-setup-probe')),
+            builder: (_, _) => const Scaffold(body: Text('vision-setup-probe')),
           ),
         ],
       );
@@ -96,10 +96,7 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _overrides(
-            visionEnabled: true,
-            visionSetupEnabled: true,
-          ),
+          overrides: _overrides(visionEnabled: true, visionSetupEnabled: true),
           child: MaterialApp.router(
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,

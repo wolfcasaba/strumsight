@@ -56,7 +56,8 @@ void main() {
     expect(
       find.text('Tutor profile'),
       findsNothing,
-      reason: 'tutorProfileTitle titles the AI tutor profile SCREEN; the '
+      reason:
+          'tutorProfileTitle titles the AI tutor profile SCREEN; the '
           'Profile tab opens ProfileHubScreen',
     );
   });

@@ -27,15 +27,16 @@ void main() {
     'lib/features/practice/presentation/screens/practice_result_screen.dart',
   };
 
-  List<String> dartSourcesUnderLib() => Directory('lib')
-      .listSync(recursive: true)
-      .whereType<File>()
-      .map((f) => f.path.replaceAll(r'\', '/'))
-      .where((p) => p.endsWith('.dart'))
-      // The generated localisation delegates are not hand-written UI code.
-      .where((p) => !p.startsWith('lib/l10n/'))
-      .toList()
-    ..sort();
+  List<String> dartSourcesUnderLib() =>
+      Directory('lib')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .map((f) => f.path.replaceAll(r'\', '/'))
+          .where((p) => p.endsWith('.dart'))
+          // The generated localisation delegates are not hand-written UI code.
+          .where((p) => !p.startsWith('lib/l10n/'))
+          .toList()
+        ..sort();
 
   Set<String> offenders() => {
     for (final path in dartSourcesUnderLib())
