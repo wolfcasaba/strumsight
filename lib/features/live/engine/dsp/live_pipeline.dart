@@ -20,7 +20,7 @@ import 'chord_matcher.dart';
 import 'dsp_config.dart';
 import 'nnls_chroma.dart';
 import '../../../../core/audio/dsp/sliding_framer.dart';
-import '../../../chords/chord_shape.dart';
+import '../../../chords/public.dart';
 import 'direction/shape_informed_strum_classifier.dart';
 import 'direction/string_arrival_cue.dart';
 import 'strum_analyzer.dart';
