@@ -1,0 +1,89 @@
+name: Publish APK as Release asset
+
+# Felvevő, NEM mérce: egy MÁR ZÖLD `build-apk.yml` futás artefaktumát teszi
+# közzé GitHub Release mellékletként, hogy az APK KICSOMAGOLVA, közvetlen
+# linkről legyen letölthető (az Actions-artefaktum mindig ZIP). Semmit nem
+# fordít, nem tesztel, egyetlen mérce-lépést sem módosít vagy kerül meg — a
+# csatolt fájl bájtra az, amit a hivatkozott futás gate-lánca előállított.
+#
+# Hozzáadva a tulajdonos kifejezett engedélyével (2026-09-16, chat:
+# „Engedélyezem a gate-edit módosításokat", majd „GitHubon csináld").
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'A zöld build-apk.yml futás azonosítója (run id)'
+        required: true
+      tag:
+        description: 'Release tag (pl. integration-2026-09-16)'
+        required: true
+      title:
+        description: 'Release címe'
+        required: false
+        default: 'StrumSight development APK'
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-apk-release-${{ github.event.inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download the APK artifact of the referenced run
+        uses: actions/download-artifact@v4
+        with:
+          pattern: 'strumsight-*.apk'
+          path: dist
+          merge-multiple: true
+          run-id: ${{ github.event.inputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify exactly one non-empty APK was downloaded
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t apks < <(find dist -type f -name '*.apk' | sort)
+          if (( ${#apks[@]} != 1 )); then
+            echo "::error::Expected exactly one APK in the artifact, found ${#apks[@]}."
+            printf '%s\n' "${apks[@]}"
+            exit 1
+          fi
+          if [[ ! -s "${apks[0]}" ]]; then
+            echo "::error::The downloaded APK is empty: ${apks[0]}"
+            exit 1
+          fi
+          echo "apk=${apks[0]}" >> "$GITHUB_ENV"
+          echo "apk_name=$(basename "${apks[0]}")" >> "$GITHUB_ENV"
+          sha256sum "${apks[0]}" | tee dist/SHA256SUMS.txt
+
+      - name: Create or update the prerelease with the APK attached
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ github.event.inputs.title }}
+          prerelease: true
+          fail_on_unmatched_files: true
+          body: |
+            Development APK (debug-signed, sideloadable) from a GREEN `build-apk.yml` run.
+
+            - Source run: https://github.com/${{ github.repository }}/actions/runs/${{ github.event.inputs.run_id }}
+            - Published from: `${{ github.ref_name }}` @ `${{ github.sha }}`
+            - File: `${{ env.apk_name }}` (SHA-256 in `SHA256SUMS.txt`)
+
+            This is NOT a production release: no production signing, no store rollout.
+          files: |
+            ${{ env.apk }}
+            dist/SHA256SUMS.txt
+
+      - name: Print the direct download link
+        shell: bash
+        run: |
+          echo "https://github.com/${GITHUB_REPOSITORY}/releases/download/${{ github.event.inputs.tag }}/${{ env.apk_name }}"
