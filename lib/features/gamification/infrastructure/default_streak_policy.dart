@@ -1,3 +1,4 @@
+import 'package:strumsight/core/foundation/epoch_day.dart';
 import 'package:strumsight/features/practice_generator/public.dart';
 
 import '../domain/activity/learning_activity_event.dart';
@@ -74,6 +75,5 @@ final class DefaultStreakPolicy {
   }
 
   static int _epochDayFor(LocalDate date) =>
-      DateTime(date.year, date.month, date.day).millisecondsSinceEpoch ~/
-      Duration.millisecondsPerDay;
+      EpochDay.ofCalendarDate(date.year, date.month, date.day);
 }

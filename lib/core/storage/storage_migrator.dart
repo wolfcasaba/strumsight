@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../foundation/app_failure.dart';
+import '../foundation/epoch_day.dart';
 import '../logging/app_logger.dart';
 import 'json_document_store.dart';
 import 'key_value_store.dart';
@@ -205,6 +206,271 @@ class WrapJsonDocumentMigration implements StorageMigration {
   }
 }
 
+/// One persisted document that holds epoch days, and where they sit in it.
+///
+/// Only the documents named in an [EpochDayShiftMigration] are rewritten by it;
+/// ADR 0583 lists the epoch-day fields that were deliberately left alone and
+/// why.
+class EpochDayDocument {
+  const EpochDayDocument({
+    required this.key,
+    required this.shape,
+    required this.fields,
+    this.bodyKey = 'items',
+  });
+
+  /// The namespaced key the document lives under.
+  final String key;
+
+  /// Whether the envelope body is the record list or a single object.
+  final JsonBodyShape shape;
+
+  /// Envelope field holding the payload — `items` for a collection, `data` for
+  /// a single object (matches [JsonDocumentStore]).
+  final String bodyKey;
+
+  /// JSON keys of the epoch-day fields, inside the object or inside each list
+  /// record.
+  final List<String> fields;
+}
+
+/// Repairs epoch days written by the pre-[EpochDay] conversion (ADR 0583).
+///
+/// The old conversion anchored a calendar date at **local** midnight and then
+/// truncated, so it answered `trueDay - 1` **at the offset the device had at
+/// write time** when that offset was east of UTC, and `trueDay` at or west of
+/// it. No stored byte records which of the two happened, and ADR 0583's survey
+/// found that **neither** document repaired here carries a co-stored timestamp
+/// that could say (`StreakData` persists `current`/`longest`/`last`/`freezes`/
+/// `total`; `PracticeEntry` persists `day`/`src`/`sec`/`str`/`chd`/`dir`). So
+/// the step is best effort, and the two rules it does have are the decision:
+///
+/// 1. **The device's current offset is the shift.** `+1` east of UTC, nothing
+///    at or west of it. It is a guess about the past, and ADR 0583
+///    §"Known limitation" names the users it is wrong for and what it costs
+///    them. A per-record repair from a co-stored write timestamp would need no
+///    guess — ADR 0583 D4 writes down the rule for the day a persisted day
+///    carries one, and deliberately does not ship it against no caller.
+/// 2. **Never onto today, and never past it.** A `+1` that would put a stored
+///    day on or after "today" is refused **for that record**. Past today is a
+///    day that has not happened; *on* today is just as damaging, because
+///    `StreakLogic.applyPractice` returns early while `today <= lastPracticeDay`
+///    — the user would be shown a practice day they never had, and their
+///    practice on the upgrade day would go unrecorded. The price of the strict
+///    bound (an eastern user whose newest stored day really was short keeps it
+///    short, once) is written down in ADR 0583 D4.
+///
+/// **One step, every document, one reading of the offset.** Every document here
+/// is repaired under a single `deviceUtcOffset()` call, so they can never end up
+/// a day apart from one another — two steps could be interrupted between them
+/// and resumed on a later boot after the device had crossed UTC. The documents
+/// are repaired in memory first and written afterwards; a refused write rolls
+/// the already-written ones back to their exact previous bytes before the
+/// exception leaves here, so the migrator stops with the schema version
+/// unchanged and the retry starts from an unshifted store. That is what keeps
+/// the migrator's version gate the *whole* idempotence: a step that completed is
+/// never entered again, and a step that threw shifted nothing. The step keeps no
+/// marker of its own — an earlier design put one in the document envelope, where
+/// `JsonDocumentStore.write` erases it on the user's very next save.
+///
+/// It keeps the migrator's other contracts:
+///
+/// * **non-destructive** — the one write per document replaces it with a value
+///   derived from its own bytes, and only when something actually changed; a
+///   document that cannot be parsed, or whose body has an unexpected shape, is
+///   logged and **left exactly as it is** (same rule as
+///   [WrapJsonDocumentMigration]) and costs the other documents nothing;
+/// * **loud** — a store that refuses the write throws [StorageException] out of
+///   here, so the migrator stops and the schema version does not advance.
+class EpochDayShiftMigration implements StorageMigration {
+  const EpochDayShiftMigration({
+    required this.version,
+    required this.id,
+    required this.documents,
+    this.deviceUtcOffset = _deviceUtcOffsetNow,
+    this.clock = DateTime.now,
+  });
+
+  static Duration _deviceUtcOffsetNow() => DateTime.now().timeZoneOffset;
+
+  @override
+  final int version;
+
+  @override
+  final String id;
+
+  /// The documents this step repairs, in write order. They share one reading of
+  /// [deviceUtcOffset], and they are written all or none.
+  final List<EpochDayDocument> documents;
+
+  /// The device's current UTC offset — the fallback's only input. Injectable
+  /// so a test pins the east-of-UTC and west-of-UTC behaviour explicitly
+  /// instead of measuring the machine it happens to run on.
+  final Duration Function() deviceUtcOffset;
+
+  /// The migration clock. With [deviceUtcOffset] it gives "today", the day no
+  /// repaired value may reach.
+  final DateTime Function() clock;
+
+  @override
+  Future<void> apply(KeyValueStore store, AppLogger logger) async {
+    final offset = deviceUtcOffset();
+    // East of UTC the old expression lost a day; at or west of it it did not,
+    // so there is nothing to repair — and nothing to read, either.
+    if (offset <= Duration.zero) return;
+    final today = EpochDay.ofInstant(clock(), offset);
+
+    // Decide every document before writing any of them, so the loop below is
+    // the only failure window and it is as short as it can be made.
+    final pending = <_PendingShift>[];
+    for (final document in documents) {
+      final before = store.readString(document.key);
+      if (before == null || before.isEmpty) continue;
+      final after = _repaired(before, document, today, logger);
+      if (after == null) continue;
+      pending.add(_PendingShift(document.key, before, after));
+    }
+
+    final written = <_PendingShift>[];
+    for (final shift in pending) {
+      try {
+        await store.writeString(shift.key, shift.after);
+      } catch (_) {
+        await _rollBack(store, logger, written);
+        rethrow;
+      }
+      written.add(shift);
+    }
+    if (written.isEmpty) return;
+
+    logger.info(
+      'storage.migration.epoch_day_shifted',
+      fields: {
+        'migration': id,
+        'keys': [for (final shift in written) shift.key],
+        'offsetMinutes': offset.inMinutes,
+      },
+    );
+  }
+
+  /// The repaired bytes of [document], or `null` when there is nothing to
+  /// write: unparsable, an unexpected body shape, or no field that moved.
+  String? _repaired(
+    String raw,
+    EpochDayDocument document,
+    int today,
+    AppLogger logger,
+  ) {
+    Object? decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } catch (e) {
+      logger.warning(
+        'storage.migration.unparsable',
+        error: e,
+        fields: {'migration': id, 'key': document.key},
+      );
+      return null;
+    }
+    if (decoded is! Map<String, dynamic>) {
+      logger.warning(
+        'storage.migration.unexpected_shape',
+        fields: {'migration': id, 'key': document.key},
+      );
+      return null;
+    }
+
+    var changed = false;
+
+    Map<String, Object?> repair(Map<String, dynamic> record) {
+      final out = Map<String, Object?>.of(record);
+      for (final field in document.fields) {
+        final stored = record[field];
+        // A negative value is a sentinel ("never practised"), not a day.
+        if (stored is! int || stored < 0) continue;
+        if (stored + 1 >= today) {
+          logger.warning(
+            'storage.migration.epoch_day_not_in_the_past',
+            fields: {
+              'migration': id,
+              'key': document.key,
+              'field': field,
+              'stored': stored,
+              'today': today,
+            },
+          );
+          continue;
+        }
+        out[field] = stored + 1;
+        changed = true;
+      }
+      return out;
+    }
+
+    final body = decoded[document.bodyKey];
+    final Object? repaired = switch (document.shape) {
+      JsonBodyShape.object =>
+        body is Map<String, dynamic> ? repair(body) : null,
+      JsonBodyShape.list =>
+        body is List
+            ? [
+                for (final record in body)
+                  // A record that is not an object is already unreadable to its
+                  // decoder, which skips it and keeps the rest of the history;
+                  // copy it untouched rather than dropping it here.
+                  if (record is Map<String, dynamic>)
+                    repair(record)
+                  else
+                    record,
+              ]
+            : null,
+    };
+    if (repaired == null) {
+      logger.warning(
+        'storage.migration.unexpected_shape',
+        fields: {'migration': id, 'key': document.key},
+      );
+      return null;
+    }
+    if (!changed) return null;
+
+    return jsonEncode({...decoded, document.bodyKey: repaired});
+  }
+
+  /// Puts back the exact bytes of the documents this run already rewrote, so a
+  /// refused write leaves the store as if the step had never started and the
+  /// retry cannot shift a document a second time. Best effort: a restore that
+  /// is refused too is logged, and the original failure is still what reaches
+  /// the migrator.
+  Future<void> _rollBack(
+    KeyValueStore store,
+    AppLogger logger,
+    List<_PendingShift> written,
+  ) async {
+    for (final shift in written.reversed) {
+      try {
+        await store.writeString(shift.key, shift.before);
+      } catch (e, stackTrace) {
+        logger.error(
+          'storage.migration.epoch_day_rollback_failed',
+          error: e,
+          stackTrace: stackTrace,
+          fields: {'migration': id, 'key': shift.key},
+        );
+      }
+    }
+  }
+}
+
+/// One document's repaired bytes, held until every document has been decided.
+class _PendingShift {
+  const _PendingShift(this.key, this.before, this.after);
+
+  final String key;
+  final String before;
+  final String after;
+}
+
 /// What a [StorageMigrator.migrate] run did — the caller logs it, tests assert
 /// on it.
 class StorageMigrationReport {
@@ -303,10 +569,15 @@ class StorageMigrator {
 /// [StorageKeys] entries; **17–22** (E01-R07) move the six user-content
 /// documents and wrap them in the versioned envelope. Each key is renamed in
 /// the same round that moves its owner onto [KeyValueStore] — renaming while
-/// the owner still reads the old key would lose the user's data.
+/// the owner still reads the old key would lose the user's data. **23**
+/// (ADR 0583) is the first step that repairs a *value* rather than a key: the
+/// epoch days stored by the old local-midnight conversion.
 ///
-/// One version per key, rather than one bulk step: a run interrupted after the
-/// eighth rename resumes at the ninth instead of replaying eight no-ops.
+/// One version per key for the renames, rather than one bulk step: a run
+/// interrupted after the eighth rename resumes at the ninth instead of
+/// replaying eight no-ops. The value repair is the one step that covers two
+/// keys, because both of its documents must move under the *same* reading of
+/// the device's UTC offset — see [EpochDayShiftMigration].
 const List<StorageMigration> appStorageMigrations = [
   RenameKeyMigration.string(
     version: 1,
@@ -447,5 +718,36 @@ const List<StorageMigration> appStorageMigrations = [
     to: StorageKeys.streak,
     shape: JsonBodyShape.object,
     bodyKey: 'data',
+  ),
+  // 23 (ADR 0583) repairs the VALUES 1–22 moved: an epoch day written east of
+  // UTC is one short of the true day. It runs last, because it rewrites the
+  // namespaced documents that 20 and 22 create — and it is ONE step covering
+  // both of them, because a single reading of the device's UTC offset has to
+  // decide both: split into two versions, a write failure between them could be
+  // retried on a later boot, after the device had crossed UTC, and leave the
+  // streak and the practice log a day apart from each other.
+  EpochDayShiftMigration(
+    version: 23,
+    id: 'r-c1.epoch_day_shift',
+    documents: [
+      EpochDayDocument(
+        key: StorageKeys.streak,
+        shape: JsonBodyShape.object,
+        bodyKey: 'data',
+        // `StreakData.lastPracticeDay`. Also the source of gamification's
+        // `StreakState.lastQualifiedDay` (`LegacyStreakMigrator` reads this
+        // very document), so one repair serves both readers. The record carries
+        // no write timestamp, so the shift is the device-offset guess.
+        fields: ['last'],
+      ),
+      EpochDayDocument(
+        key: StorageKeys.practiceLog,
+        shape: JsonBodyShape.list,
+        // `PracticeEntry.day`, which is what `PracticeStats.lastDays` rolls
+        // into the `DayTotal`s the weekly chart renders. `PracticeEntry`
+        // persists no timestamp either (`day`/`src`/`sec`/`str`/`chd`/`dir`).
+        fields: ['day'],
+      ),
+    ],
   ),
 ];

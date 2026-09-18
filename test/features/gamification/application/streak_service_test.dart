@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/foundation/epoch_day.dart';
 import 'package:strumsight/features/gamification/public.dart';
 import 'package:strumsight/features/practice_generator/public.dart';
 
@@ -105,7 +106,7 @@ void main() {
   group('A2, A6, and A10 — planned rest uses the public schedule contract', () {
     final service = StreakService();
     final restDate = LocalDate(2026, 8, 20);
-    final restDay = _shippingLocalMidnightEpochDay(restDate);
+    final restDay = _shippingEpochDayFor(restDate);
 
     test('a real typed rest decision protects the streak without a freeze', () {
       final previous = _state(
@@ -135,26 +136,23 @@ void main() {
       expect(nextDay.state.freezes, 1);
     });
 
-    test(
-      'a local-midnight request epoch day recognizes the typed planned rest',
-      () {
-        final shippingRestDay = _shippingLocalMidnightEpochDay(restDate);
-        final result = service.evaluate(
-          StreakEvaluationRequest(
-            previous: _state(
-              current: 4,
-              longest: 4,
-              lastQualifiedDay: shippingRestDay - 1,
-              totalQualifiedDays: 4,
-            ),
-            epochDay: shippingRestDay,
-            weeklySchedule: _restSchedule(restDate),
+    test('a canonical request epoch day recognizes the typed planned rest', () {
+      final shippingRestDay = _shippingEpochDayFor(restDate);
+      final result = service.evaluate(
+        StreakEvaluationRequest(
+          previous: _state(
+            current: 4,
+            longest: 4,
+            lastQualifiedDay: shippingRestDay - 1,
+            totalQualifiedDays: 4,
           ),
-        );
+          epochDay: shippingRestDay,
+          weeklySchedule: _restSchedule(restDate),
+        ),
+      );
 
-        expect(result.reason, StreakEvaluationReason.plannedRest);
-      },
-    );
+      expect(result.reason, StreakEvaluationReason.plannedRest);
+    });
 
     test(
       'the service reads the typed public rest reason without a string guess',
@@ -298,9 +296,15 @@ WeeklyScheduleDecision _restSchedule(LocalDate restDate) =>
       policy: SchedulingPolicy.defaultPolicy,
     );
 
-int _shippingLocalMidnightEpochDay(LocalDate date) =>
-    DateTime(date.year, date.month, date.day).millisecondsSinceEpoch ~/
-    Duration.millisecondsPerDay;
+/// The epoch day the SHIPPING policy derives for a planned-rest date.
+///
+/// It was a hand-copied `DateTime(y, m, d).millisecondsSinceEpoch ~/ …` — a
+/// fifth copy of the local-midnight conversion, so it drifted with the
+/// production copies rather than measuring them. Since ADR 0583 both sides go
+/// through the one canonical function, which is the point: a planned-rest date
+/// and a request epoch day must be the same integer on every device.
+int _shippingEpochDayFor(LocalDate date) =>
+    EpochDay.ofCalendarDate(date.year, date.month, date.day);
 
 StreakState _state({
   int current = 0,

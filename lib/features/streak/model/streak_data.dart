@@ -3,8 +3,15 @@ import 'package:flutter/foundation.dart';
 import '../../../core/foundation/json_validation.dart';
 
 /// Persisted practice-streak state. Days are stored as an integer **epoch day**
-/// (local-midnight days since the Unix epoch) so streak maths is pure integer
-/// arithmetic — no timezone/DST drift inside the logic (see streak_logic.dart).
+/// — the user's LOCAL calendar date, anchored at UTC midnight (`EpochDay`,
+/// ADR 0583) — so streak maths is pure integer arithmetic and consecutive
+/// local days are exactly 1 apart, with no timezone/DST drift inside the logic
+/// (see streak_logic.dart).
+///
+/// The anchor is deliberately UTC and not local midnight: local midnight east
+/// of UTC falls *before* the epoch-day boundary, which is what made the old
+/// conversion store `trueDay - 1` there. Schema 23 repairs the days written
+/// that way.
 @immutable
 class StreakData {
   const StreakData({

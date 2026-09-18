@@ -1,5 +1,6 @@
 import 'package:meta/meta.dart';
 
+import '../../../../core/foundation/epoch_day.dart';
 import '../../../progress/public.dart';
 import '../../domain/model/practice_history_entry.dart';
 import '../../domain/model/practice_metrics.dart';
@@ -220,10 +221,10 @@ final class PracticeProgressAggregator {
     }
   }
 
-  /// Local-midnight epoch day — mirrors [StreakLogic.epochDayOf] to keep the
-  /// two domains aligned. Copied here (instead of importing) because the
-  /// aggregator must stay free of cross-feature deps (ADR 0068 §4).
-  static int _epochDayOf(DateTime d) =>
-      DateTime(d.year, d.month, d.day).millisecondsSinceEpoch ~/
-      Duration.millisecondsPerDay;
+  /// The epoch day of the local calendar date [d] falls on. Routed through the
+  /// app's one canonical conversion ([EpochDay.of], ADR 0583) — a `core`
+  /// primitive, so the aggregator still takes no cross-feature dependency
+  /// (ADR 0068 §4) and can no longer drift from the streak domain the way the
+  /// copied definition it replaces did.
+  static int _epochDayOf(DateTime d) => EpochDay.of(d);
 }

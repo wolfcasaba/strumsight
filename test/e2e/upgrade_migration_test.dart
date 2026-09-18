@@ -43,6 +43,7 @@ void main() {
         final report = await StorageMigrator(
           store: store,
           logger: const NoopAppLogger(),
+          migrations: _onADeviceAt(),
         ).migrate();
 
         expect(report.isComplete, isTrue, reason: 'no step should fail');
@@ -62,8 +63,8 @@ void main() {
       },
     );
 
-    test('legacy_v2_storage.json (mid-upgrade, fromVersion 16): the six '
-        'r07.* content migrations run, invariants hold, app boots', () async {
+    test('legacy_v2_storage.json (mid-upgrade, fromVersion 16): every step '
+        'this fixture has not seen runs, invariants hold, app boots', () async {
       final store = InMemoryKeyValueStore(
         _loadFixtureStore('legacy_v2_storage.json'),
       );
@@ -72,15 +73,77 @@ void main() {
       final report = await StorageMigrator(
         store: store,
         logger: const NoopAppLogger(),
+        migrations: _onADeviceAt(),
       ).migrate();
 
       expect(report.isComplete, isTrue, reason: 'no step should fail');
       expect(report.fromVersion, 16);
       expect(report.toVersion, appStorageMigrations.last.version);
-      expect(report.applied, hasLength(6));
+      expect(
+        report.applied,
+        hasLength(appStorageMigrations.where((m) => m.version > 16).length),
+        reason: 'every step this fixture has not seen yet runs',
+      );
 
       final after = _MigratedContent.readFrom(store);
       before.expectPreservedIn(after);
+
+      final result = await AppBootstrap.run(
+        openStore: () async => Success(store),
+        loadVersion: () async => 'e12-r23-test',
+        loadOnboardingSeen: () async => true,
+      );
+      expect(result, isA<BootstrapSuccess>());
+    });
+
+    test('legacy_v1_storage.json on a device EAST of UTC: the one documented '
+        'exception to bit-for-bit preservation — schema 23 moves every '
+        'stored epoch day forward by exactly one, and nothing else about the '
+        'content changes (ADR 0583 D4)', () async {
+      final store = InMemoryKeyValueStore(
+        _loadFixtureStore('legacy_v1_storage.json'),
+      );
+      final before = _LegacyContent.readFrom(store);
+
+      final report = await StorageMigrator(
+        store: store,
+        logger: const NoopAppLogger(),
+        migrations: _onADeviceAt(utcOffset: const Duration(hours: 2)),
+      ).migrate();
+
+      expect(report.isComplete, isTrue, reason: 'no step should fail');
+      expect(report.toVersion, appStorageMigrations.last.version);
+
+      final after = _MigratedContent.readFrom(store);
+      expect(
+        after.practiceLogDays,
+        equals(before.practiceLogDays.map((day) => day + 1).toSet()),
+        reason:
+            'the old conversion stored trueDay - 1 east of UTC, so every '
+            'practice-log day is repaired by exactly +1',
+      );
+      expect(
+        after.practiceLogDays,
+        hasLength(before.practiceLogDays.length),
+        reason: 'a uniform shift can neither add nor merge records',
+      );
+      expect(
+        after.streak['last'],
+        (before.streak['last']! as int) + 1,
+        reason: 'the stored last-practice day moves with them',
+      );
+      for (final field in const ['current', 'longest', 'freezes', 'total']) {
+        expect(
+          after.streak[field],
+          before.streak[field],
+          reason: '$field is a counter, not an epoch day',
+        );
+      }
+      // Everything the repair is NOT about is still bit-for-bit preserved.
+      expect(after.librarySessionIds, equals(before.librarySessionIds));
+      expect(after.songIds, equals(before.songIds));
+      expect(after.setlistIds, equals(before.setlistIds));
+      expect(after.lessonProgress, equals(before.lessonProgress));
 
       final result = await AppBootstrap.run(
         openStore: () async => Success(store),
@@ -148,7 +211,7 @@ void main() {
               .map((m) => m.id)
               .toList(),
         ),
-        reason: 'only the remaining 13 steps run — no replay of 1-9',
+        reason: 'only the steps past 9 run — no replay of 1-9',
       );
 
       final afterResume = _MigratedContent.readFrom(interruptedStore);
@@ -406,7 +469,7 @@ void main() {
       ).migrate();
 
       expect(report.fromVersion, 0);
-      expect(report.toVersion, 22);
+      expect(report.toVersion, appStorageMigrations.last.version);
       expect(
         report.applied,
         equals(appStorageMigrations.map((m) => m.id).toList()),
@@ -420,8 +483,8 @@ void main() {
       expect(after.lessonProgress.keys, hasLength(3));
     });
 
-    test('legacy_v2_storage.json: applied id-list covers only the six '
-        'r07.* steps, and the per-key migrated record counts match the '
+    test('legacy_v2_storage.json: applied id-list covers only the steps '
+        'past version 16, and the per-key migrated record counts match the '
         'fixture', () async {
       final seed = _loadFixtureStore('legacy_v2_storage.json');
       final store = InMemoryKeyValueStore(seed);
@@ -432,7 +495,7 @@ void main() {
       ).migrate();
 
       expect(report.fromVersion, 16);
-      expect(report.toVersion, 22);
+      expect(report.toVersion, appStorageMigrations.last.version);
       expect(
         report.applied,
         equals(
@@ -452,6 +515,43 @@ void main() {
     });
   });
 }
+
+// ---------------------------------------------------------------------------
+// The migration list, run on an explicitly named device
+// ---------------------------------------------------------------------------
+
+/// 2026-09-18 12:00 UTC — the clock every pinned run below migrates at, so the
+/// epoch-day repair's "never into the future" bound is decided by the fixture
+/// and not by the day the suite happens to run.
+final _migrationClock = DateTime.utc(2026, 9, 18, 12);
+
+/// `appStorageMigrations` with the ADR 0583 epoch-day repair (schema 23)
+/// pinned to a device at [utcOffset], instead of to whatever zone the machine
+/// running the suite is in.
+///
+/// That step deliberately changes a stored VALUE: east of UTC the old
+/// conversion wrote `trueDay - 1`, so the repair adds one. That is the single
+/// thing the A1/A2 no-loss invariants — written for the rename/wrap steps, and
+/// asserting bit-for-bit equality — cannot express. Pinning the device makes
+/// every cell that uses this helper mean the same on the UTC+2 dev box and on a
+/// UTC CI runner: the invariant cells run at UTC (where the repair is a no-op
+/// by design), and the cell that measures the repair runs at an explicit
+/// `+02:00`. The A5 cells below are the deliberate exception — they assert the
+/// step LIST, not any repaired value, so they run the shipped migrations at the
+/// box's own offset.
+List<StorageMigration> _onADeviceAt({Duration utcOffset = Duration.zero}) => [
+  for (final migration in appStorageMigrations)
+    if (migration is EpochDayShiftMigration)
+      EpochDayShiftMigration(
+        version: migration.version,
+        id: migration.id,
+        documents: migration.documents,
+        deviceUtcOffset: () => utcOffset,
+        clock: () => _migrationClock,
+      )
+    else
+      migration,
+];
 
 // ---------------------------------------------------------------------------
 // Fixture loading

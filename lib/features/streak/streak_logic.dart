@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../../core/foundation/epoch_day.dart';
 import 'model/streak_data.dart';
 
 /// Pure practice-streak maths (RAG chunk 013 — retention). Kept free of clocks
@@ -13,11 +14,18 @@ class StreakLogic {
   /// …up to this many banked.
   static const int maxFreezes = 3;
 
-  /// The local-midnight epoch day for [d] (days since 1970-01-01, local time).
-  /// Using local midnight keeps consecutive calendar days exactly 1 apart.
-  static int epochDayOf(DateTime d) =>
-      DateTime(d.year, d.month, d.day).millisecondsSinceEpoch ~/
-      Duration.millisecondsPerDay;
+  /// The epoch day of the calendar date [d] falls on — the app's one canonical
+  /// conversion (ADR 0583). Kept here as the name the streak feature and its
+  /// callers already use.
+  ///
+  /// [utcOffset] is the deterministic seam (AGENTS.md §10). Left out, the
+  /// device's own offset decides, which is what every shipping call site
+  /// wants. Passed explicitly, the answer is the day a device at THAT offset
+  /// would record — so a test can pin the east-of-UTC behaviour this function
+  /// used to get wrong (it answered `trueDay - 1` there) without depending on
+  /// the timezone of the machine running it.
+  static int epochDayOf(DateTime d, {Duration? utcOffset}) =>
+      utcOffset == null ? EpochDay.of(d) : EpochDay.ofInstant(d, utcOffset);
 
   /// Apply a practice event on [today] to [prev], returning the new state.
   ///

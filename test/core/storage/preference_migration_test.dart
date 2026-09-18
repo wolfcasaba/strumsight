@@ -95,6 +95,35 @@ void main() {
     ),
   };
 
+  /// The steps that repair a stored VALUE instead of renaming a key
+  /// (ADR 0583). They are the reason the migration count is no longer simply
+  /// "one per migrated key" — and there is exactly ONE of them covering BOTH
+  /// repaired documents, because the two have to move under the same reading of
+  /// the device's UTC offset.
+  final valueRepairs = appStorageMigrations
+      .whereType<EpochDayShiftMigration>()
+      .toList();
+
+  /// The shipped list with every value repair pinned to a device AT UTC.
+  ///
+  /// The rename/wrap tests below measure that a returning user's content
+  /// arrives at its new key unchanged; with the real device offset the
+  /// epoch-day repair would legitimately rewrite two of those documents and
+  /// the assertion would depend on the box's timezone. The repair itself is
+  /// measured in `epoch_day_shift_migration_test.dart`.
+  final renameAndWrapOnly = <StorageMigration>[
+    for (final migration in appStorageMigrations)
+      if (migration is EpochDayShiftMigration)
+        EpochDayShiftMigration(
+          version: migration.version,
+          id: migration.id,
+          documents: migration.documents,
+          deviceUtcOffset: () => Duration.zero,
+        )
+      else
+        migration,
+  ];
+
   test('every migrated preference has exactly one migration', () {
     final versions = appStorageMigrations.map((m) => m.version).toList();
     expect(
@@ -109,8 +138,22 @@ void main() {
     );
     expect(
       appStorageMigrations.length,
-      legacyValues.length + legacyDocuments.length,
-      reason: 'each migrated key — preference or document — has one migration',
+      legacyValues.length + legacyDocuments.length + valueRepairs.length,
+      reason:
+          'each migrated key — preference or document — has one '
+          'migration, plus the value repairs that fix what those keys hold',
+    );
+    expect(
+      valueRepairs.map((m) => m.id),
+      ['r-c1.epoch_day_shift'],
+      reason:
+          'ADR 0583 — the epoch-day shift is the only value repair, and it is '
+          'one step for both repaired documents',
+    );
+    expect(
+      valueRepairs.single.documents.map((d) => d.key),
+      [StorageKeys.streak, StorageKeys.practiceLog],
+      reason: 'both documents move under one reading of the device offset',
     );
   });
 
@@ -122,6 +165,7 @@ void main() {
     final report = await StorageMigrator(
       store: store,
       logger: const NoopAppLogger(),
+      migrations: renameAndWrapOnly,
     ).migrate();
 
     expect(report.isComplete, isTrue);

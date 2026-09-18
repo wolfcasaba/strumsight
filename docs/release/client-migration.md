@@ -12,7 +12,7 @@ does not touch, and the hard limit on "rollback" — there is none, by design.
 
 Every app start runs `StorageMigrator.migrate()`
 (`lib/core/storage/storage_migrator.dart`) against the fixed
-`appStorageMigrations` list — **22 steps**, each a 1-based `version` and a
+`appStorageMigrations` list — **23 steps**, each a 1-based `version` and a
 stable `id`, applied in order starting one past the store's persisted
 `ss.storage.schema_version` (absent means `0`):
 
@@ -20,12 +20,14 @@ stable `id`, applied in order starting one past the store's persisted
 |---|---|---|
 | 1–16 | Sixteen simple preference keys (theme, locale, tuner, capo, latency calibration, onboarding-seen, favorite chords, metronome mute, practice speed, daily goal) from their pre-namespace name to their `ss.*` name. | E01-R06 |
 | 17–22 | Six user-content documents (library sessions, songs, setlists, practice log, lesson progress, streak) — renamed onto `ss.*` **and** wrapped in the versioned `{"schemaVersion":1,"items"/"data":...}` envelope (`documentSchemaVersion`, `lib/core/storage/json_document_store.dart`). | E01-R07 |
+| 23 | The first step that repairs a stored **value** instead of moving a key: the epoch days inside `ss.streak.state` (`data.last`) and `ss.progress.practice_log` (`items[].day`), written one short by a conversion that anchored the calendar date at local midnight. **One** step for both documents, so a single reading of the device's UTC offset decides them both and they can never land a day apart; the two writes are all-or-nothing. Best effort — see [ADR 0583](../adr/0583-one-canonical-epoch-day-and-the-shift-migration.md) for the rules and the accepted limitation. | C1-epoch-day |
 
 The exact key pairs are `LegacyStorageKeys` → `StorageKeys`
 (`lib/core/storage/storage_keys.dart`). A user who updated straight from a
-pre-R06 build starts at version 0 and runs all 22 steps; a user who already
+pre-R06 build starts at version 0 and runs all 23 steps; a user who already
 had an R06-or-later build (but pre-R07) starts at version 16 and runs only
-the six content steps — both paths are exercised by this round's fixtures
+the steps past it (the six content steps, then the one value repair) — both
+paths are exercised by this round's fixtures
 (`legacy_v1_storage.json`, `legacy_v2_storage.json`).
 
 **Scope limit (§0.0/R6):** this is the *only* migration chain that runs at
@@ -36,10 +38,10 @@ claim about those — they are measured by their own tests.
 
 ## 2. The no-loss guarantee, and how it's measured
 
-Per key, migration **moves** a value — it never transforms its content and
-never merges records. The evidence (`test/e2e/upgrade_migration_test.dart`
-A1) compares, before vs. after migration, for every one of the six content
-documents:
+Per key, a **rename/wrap** step (versions 1–22) moves a value: it never
+transforms its content and never merges records. The evidence
+(`test/e2e/upgrade_migration_test.dart` A1) compares, before vs. after
+migration, for every one of the six content documents:
 
 - **record count** (list length, or map-key count for lesson progress);
 - **id-set** (the natural identifier per document: `id` for library
@@ -53,6 +55,20 @@ documents:
 
 "The app starts" is explicitly **not** evidence of any of this — a
 migration that silently dropped a record would still let the app start.
+
+**The one documented exception: version 23 changes a value on purpose.**
+It repairs epoch days that a pre-C1 build stored one short east of UTC
+(ADR 0583). The invariants above still hold in the shape that matters —
+record count, id-set size and every non-day field are unchanged, and no
+record is added, dropped or merged — but the `day` values themselves, and
+the streak's `last`, move by exactly `+1` (a stored day that the `+1` would
+put on or after *today* is left alone instead — ADR 0583 D4). A1 measures
+both sides of this
+explicitly: its no-loss cells run the chain on a device pinned **at UTC**,
+where the repair is a no-op by design, and one further cell runs the same
+fixture at an explicit **+02:00** and asserts the `+1` on every day together
+with the bit-for-bit preservation of everything else. That keeps both claims
+true on any runner, whatever timezone it is in.
 
 ## 3. Interruption: resume, never restart
 

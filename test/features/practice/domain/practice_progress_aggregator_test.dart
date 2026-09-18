@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/foundation/epoch_day.dart';
 import 'package:strumsight/features/practice/domain/model/practice_history_entry.dart';
 import 'package:strumsight/features/practice/domain/model/practice_metric_snapshot.dart';
 import 'package:strumsight/features/practice/domain/model/practice_metrics.dart';
@@ -208,9 +209,13 @@ void main() {
       // A V1 entry for "day X" and a V2 entry whose createdAt lands on the
       // same local epoch day as day X — both must fold into the rollup sum.
       final day = DateTime.utc(2026, 4, 10); // arbitrary fixed local date
-      final epochDay =
-          DateTime(day.year, day.month, day.day).millisecondsSinceEpoch ~/
-          Duration.millisecondsPerDay;
+      // The V1 day must be the SAME integer the aggregator derives from the
+      // V2 entry's `createdAt`, so it goes through the one canonical
+      // conversion (ADR 0583) instead of re-deriving it here — the copied
+      // `DateTime(y, m, d) ~/ msPerDay` this replaces was one day short east
+      // of UTC, and matched the production copy only because that was wrong
+      // in the same way.
+      final epochDay = EpochDay.ofCalendarDate(day.year, day.month, day.day);
       final v1 = <PracticeEntry>[
         PracticeEntry(
           day: epochDay,

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/foundation/epoch_day.dart';
 import '../../../core/logging/logger_provider.dart';
 import '../../../core/storage/storage_providers.dart';
 import '../application/achievement_evaluator.dart';
@@ -124,14 +125,14 @@ final streakStateProvider = Provider<StreakState>((ref) {
       );
 });
 
-/// Today's local epoch day — a dedicated provider (rather than an inline
-/// `DateTime.now()` call) so a test can override it deterministically,
-/// mirroring `DefaultStreakPolicy._epochDayFor`'s conversion.
-final todayEpochDayProvider = Provider<int>((_) {
-  final now = DateTime.now();
-  return DateTime(now.year, now.month, now.day).millisecondsSinceEpoch ~/
-      Duration.millisecondsPerDay;
-});
+/// Today's epoch day — a dedicated provider (rather than an inline
+/// `DateTime.now()` call) so a test can override it deterministically, through
+/// the app's one canonical conversion ([EpochDay.of], ADR 0583).
+///
+/// The value is cached for the provider's lifetime, so it goes stale when the
+/// app sits in the background across midnight; `dayRolloverGuardProvider`
+/// (app shell) invalidates it on resume.
+final todayEpochDayProvider = Provider<int>((_) => EpochDay.of(DateTime.now()));
 
 /// Streak-reason projection (§0.0.A/R3 #5) — the persisted [StreakState] run
 /// through the existing [StreakService], with no canonical activity for

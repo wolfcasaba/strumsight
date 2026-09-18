@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:strumsight/core/foundation/epoch_day.dart';
 import 'package:strumsight/features/progress/public.dart';
 
 import '../../domain/activity/activity_source.dart';
@@ -58,10 +59,11 @@ final class LegacyPracticeAdapter {
     String fingerprint,
     int ordinal,
   ) {
-    final occurredAt = DateTime.fromMillisecondsSinceEpoch(
-      entry.day * Duration.millisecondsPerDay,
-      isUtc: true,
-    );
+    // The LOCAL start of the day, not UTC midnight (ADR 0583): the entry's
+    // `day` is a local calendar day, and only the local anchor round-trips —
+    // `EpochDay.of(occurredAt) == entry.day` in every timezone, where UTC
+    // midnight reads back as the previous day west of UTC.
+    final occurredAt = EpochDay.localStartOf(entry.day);
     return PracticeActivityEvent(
       eventId: 'legacy-practice/v1/$fingerprint/$ordinal',
       occurredAt: occurredAt,

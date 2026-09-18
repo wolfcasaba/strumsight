@@ -8,6 +8,7 @@ import '../core/i18n/locale_provider.dart';
 import '../core/theme/theme_mode_provider.dart';
 import '../features/settings/providers/settings_sync.dart';
 import '../l10n/app_localizations.dart';
+import 'day_rollover_guard.dart';
 import 'routing/app_router.dart';
 
 /// The root widget (moved out of main.dart in E01-R03 §3.4 — main stays
@@ -26,6 +27,10 @@ class StrumSightApp extends ConsumerWidget {
     // The mic must die when the app leaves the foreground (E01-R09 §9.4) —
     // the guard only does that while something keeps it alive.
     ref.watch(audioLifecycleGuardProvider);
+    // The cached "today" must be recomputed when the app comes back, or an
+    // app backgrounded across midnight judges the streak on yesterday
+    // (ADR 0583). Same "kept alive by the shell" shape as the mic guard.
+    ref.watch(dayRolloverGuardProvider);
 
     return MaterialApp.router(
       title: 'StrumSight',

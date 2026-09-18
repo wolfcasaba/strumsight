@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/foundation/epoch_day.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/features/analyze/model/analyze_result.dart';
 import 'package:strumsight/features/chords/providers/favorite_chords_provider.dart';
@@ -36,21 +37,23 @@ void main() {
   }
 
   test('streak: a cold-start practice EXTENDS the stored streak', () async {
+    // Day N−1 is stored and the practice is recorded at LOCAL noon on day N,
+    // so "the day after" holds on every device (ADR 0583). A fixed UTC-noon
+    // instant would not: east of UTC+12 it already falls on the next local
+    // calendar day, which would make this measure the box's timezone instead
+    // of the merge it is here to prove.
+    const practiceDay = 20644;
     const old = StreakData(
       current: 7,
       longest: 9,
-      lastPracticeDay: 20643,
+      lastPracticeDay: practiceDay - 1,
       freezes: 1,
     );
     final c = container({StorageKeys.streak: storedDocument(old.toJson())});
-    // Record for the day AFTER the stored last practice.
     final advanced = await c
         .read(streakProvider.notifier)
         .recordPracticeToday(
-          DateTime.fromMillisecondsSinceEpoch(
-            (20644 * 24 * 3600 + 12 * 3600) * 1000,
-            isUtc: true,
-          ),
+          EpochDay.localStartOf(practiceDay).add(const Duration(hours: 12)),
         );
     expect(advanced, isTrue);
     expect(

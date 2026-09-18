@@ -491,18 +491,52 @@ void main() {
     });
   });
 
-  group('A7 — progress_screen untouched', () {
-    test('lib/features/progress/** is not modified by this round', () {
-      final result = Process.runSync('git', [
-        'diff',
-        '--name-only',
-        'main...HEAD',
-      ]);
-      final stdout = result.stdout.toString();
+  group('A7 — the hub does not take the progress screen\'s job', () {
+    // The original A7 asserted that `lib/features/progress/**` was absent from
+    // `git diff --name-only main...HEAD`. That is a SCOPE guard over the
+    // committed branch diff, not over this screen: it stopped describing its
+    // own round the moment that round merged, and `main...HEAD` has carried
+    // `lib/features/progress/screens/progress_screen.dart` from a LATER round
+    // ever since — red for work it was never about, and nothing done to the
+    // hub could turn it green again. ADR 0583 replaces it with the assertion
+    // it was standing in for, measured on the working tree instead of on the
+    // branch history, over the whole presentation directory, so it stays true
+    // — and stays able to fail — for every future round.
+    test('no file in the gamification presentation layer takes a dependency '
+        'on lib/features/progress', () {
+      // The WHOLE directory, walked recursively — not a hand-written list of
+      // the files that happen to exist today. A guard that names its files can
+      // only fail for those files, so a NEW hub screen or card reaching into
+      // the progress feature would slip past it; that is exactly the
+      // regression this stands in for.
+      const root = 'lib/features/gamification/presentation';
+      final sources = Directory(root)
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((entity) => entity.path.endsWith('.dart'))
+          .toList();
+
       expect(
-        stdout.contains('lib/features/progress/'),
-        isFalse,
-        reason: 'progress directory must stay untouched: $stdout',
+        sources,
+        isNotEmpty,
+        reason:
+            '$root must exist and hold the hub presentation layer — an empty '
+            'walk would make this guard vacuous',
+      );
+
+      final offenders = <String>[
+        for (final source in sources)
+          if (source.readAsStringSync().contains('features/progress'))
+            source.path,
+      ];
+
+      expect(
+        offenders,
+        isEmpty,
+        reason:
+            'nothing under $root may reach into the progress feature: the hub '
+            'renders the gamification projection, the progress screen owns '
+            'practice history (${sources.length} files checked)',
       );
     });
   });

@@ -6,9 +6,12 @@ import '../../../core/foundation/json_validation.dart';
 /// persisted, so never rename an existing value (add new ones at the end).
 enum PracticeSource { live, analyze, learn }
 
-/// One recorded practice moment. Days are an integer **epoch day** (local-midnight
-/// days since the Unix epoch), matching the streak store, so all history maths is
-/// pure integer arithmetic — no timezone/DST drift.
+/// One recorded practice moment. Days are an integer **epoch day** — the user's
+/// LOCAL calendar date, anchored at UTC midnight (`EpochDay`, ADR 0583) —
+/// matching the streak store, so all history maths is pure integer arithmetic
+/// with no timezone/DST drift. The record carries no timestamp beside the day,
+/// which is why schema 23 has to guess from the device's offset when it
+/// repairs the days the old local-midnight conversion wrote.
 ///
 /// [directionAccuracy] is the fraction (0..1) of strokes played in the RIGHT
 /// **strum direction** (↓/↑) during a scored Learn run — the one metric no
@@ -25,7 +28,8 @@ class PracticeEntry {
     this.directionAccuracy,
   });
 
-  /// Epoch day (local midnight) the practice happened on.
+  /// Epoch day of the local calendar date the practice happened on
+  /// (`EpochDay`, ADR 0583).
   final int day;
 
   final PracticeSource source;
