@@ -234,11 +234,18 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   ///   UN-AWAITED `ref.onDispose(engine.stop)` of its own, so resuming in the
   ///   same turn would race that teardown into the mic-error banner.
   ///
-  /// [coveredOwner] is the microphone owner behind [location]. Live gives up
-  /// what Live itself holds and then reclaims the session from THAT owner
-  /// only: a blanket [AudioSessionCoordinator.revokeActive] would also stop a
-  /// different owner that legitimately took the microphone while the shortcut
-  /// was open (latency calibration, diagnostics).
+  /// [coveredOwner] is the microphone owner behind [location], or `null` when
+  /// the covered screen takes no microphone at all (the Metronome, row 13 of
+  /// `docs/backlog-ux-polish.md`: it is a pure synth + ticker). With an owner,
+  /// Live gives up what Live itself holds and then reclaims the session from
+  /// THAT owner only: a blanket [AudioSessionCoordinator.revokeActive] would
+  /// also stop a different owner that legitimately took the microphone while
+  /// the shortcut was open (latency calibration, diagnostics). With `null`
+  /// there is nothing to reclaim FROM — the return path is simply "resume
+  /// Live", and reclaiming anyway would steal the session from whoever did
+  /// legitimately take it meanwhile. The going-in half is identical either
+  /// way: the defect this fixes is the battery/privacy one (a covered Live
+  /// left listening with the wakelock held), not only the lease conflict.
   ///
   /// DISCLOSED DEVIATION (round 2, needs tech-lead sign-off): the brief asked
   /// for `revokeActive()` to be REPLACED by "releasing what Live itself
@@ -249,7 +256,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   /// `revokeActive` is the one handle that awaits the holder's own teardown
   /// before freeing the lease, so it is kept — narrowed to [coveredOwner],
   /// which removes the bluntness the review objected to.
-  Future<void> _openCovered(String location, AudioOwner coveredOwner) async {
+  Future<void> _openCovered(String location, {AudioOwner? coveredOwner}) async {
     if (_covering) return;
     _covering = true;
     try {
@@ -271,16 +278,19 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       // lifecycle queue orders the resume behind it)…
       await ref.read(strumEngineProvider).stop();
       if (!mounted) return;
-      // …then take the session back from the screen Live handed it to, and
-      // from nobody else. `revokeActive` is the one handle that awaits the
-      // holder's own teardown (its engine's `onRevoke`) before freeing the
-      // lease; the guard keeps it off any OTHER owner, and off a session that
-      // the covered screen has already given back (then it is simply free).
-      final coordinator = ref.read(audioSessionCoordinatorProvider);
-      if (coordinator.activeOwner == coveredOwner) {
-        await coordinator.revokeActive();
+      // …then, if the covered screen was a microphone owner at all, take the
+      // session back from the screen Live handed it to, and from nobody else.
+      // `revokeActive` is the one handle that awaits the holder's own teardown
+      // (its engine's `onRevoke`) before freeing the lease; the guard keeps it
+      // off any OTHER owner, and off a session that the covered screen has
+      // already given back (then it is simply free).
+      if (coveredOwner != null) {
+        final coordinator = ref.read(audioSessionCoordinatorProvider);
+        if (coordinator.activeOwner == coveredOwner) {
+          await coordinator.revokeActive();
+        }
+        if (!mounted) return;
       }
-      if (!mounted) return;
       await _setPaused(false);
     } finally {
       _covering = false;
@@ -549,16 +559,15 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         onFinish: _finish,
         tunerLabel: l10n.liveTuner,
         metronomeLabel: l10n.metronomeTitle,
-        onTuner: () =>
-            unawaited(_openCovered(AppRoutes.tuner, AudioOwner.tuner)),
-        // FOLLOW-UP (AGENTS.md §4 — found here, out of this round's scope;
-        // tracked as row 13 of docs/backlog-ux-polish.md):
-        // the Metronome is still pushed the way the Tuner used to be, so Live
-        // keeps listening and keeps the wakelock while it is covered. It takes
-        // no microphone, so there is no lease conflict and no broken feature —
-        // it is the same battery/privacy shape as the Tuner defect and wants
-        // the same `_openCovered` handover in a round that owns this callback.
-        onMetronome: () => context.push(AppRoutes.metronome),
+        onTuner: () => unawaited(
+          _openCovered(AppRoutes.tuner, coveredOwner: AudioOwner.tuner),
+        ),
+        // Row 13 of docs/backlog-ux-polish.md: the Metronome goes through the
+        // same covered hand-over as the Tuner. It takes NO microphone, so
+        // `coveredOwner` is null — Live still pauses (mic released, wakelock
+        // dropped, the UI honestly "paused") and the return path is a plain
+        // resume, with no session to reclaim from anybody.
+        onMetronome: () => unawaited(_openCovered(AppRoutes.metronome)),
       ),
     );
   }

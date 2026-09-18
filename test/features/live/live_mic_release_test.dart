@@ -15,6 +15,7 @@ import 'package:strumsight/core/audio/lifecycle/audio_session_lease.dart';
 import 'package:strumsight/core/audio/mic_capture.dart';
 import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
+import 'package:strumsight/features/metronome/screens/metronome_screen.dart';
 import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
 import 'package:strumsight/features/tuner/screens/tuner_screen.dart';
 import 'package:strumsight/main.dart';
@@ -413,6 +414,51 @@ void main() {
       );
       expect(r.live.session.lifecycleErrors, isEmpty);
       expect(r.wakelock.isHeld, isFalse);
+    },
+  );
+
+  testWidgets(
+    '(10) metronome shortcut — pushing the Metronome over Live releases the '
+    'mic lease and the wakelock, and returning resumes (backlog row 13)',
+    (tester) async {
+      final r = rig();
+      final container = await pumpLive(tester, r);
+      final stopsBefore = r.engine.stopCalls;
+      final startsBefore = r.engine.startCalls;
+      expect(r.wakelock.isHeld, isTrue);
+
+      // The bottom action bar's Metronome shortcut (l10n `metronomeTitle`).
+      await tester.tap(find.text('Metronome'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MetronomeScreen), findsOneWidget);
+      expect(
+        r.engine.stopCalls,
+        greaterThan(stopsBefore),
+        reason:
+            'the pushed Metronome does NOT unmount Live, so without the '
+            'covered hand-over liveFrameProvider keeps the engine — and the '
+            'exclusive mic lease — alive underneath a screen that needs '
+            'neither',
+      );
+      expect(
+        r.wakelock.isHeld,
+        isFalse,
+        reason: 'a covered Live session must not keep the screen awake',
+      );
+
+      container.read(routerProvider).pop();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MetronomeScreen), findsNothing);
+      expect(
+        r.engine.startCalls,
+        greaterThan(startsBefore),
+        reason:
+            'the Metronome owns no microphone, so the return path is a plain '
+            'resume — there is nothing to reclaim the session from',
+      );
+      expect(r.wakelock.isHeld, isTrue);
     },
   );
 }
