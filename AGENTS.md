@@ -215,6 +215,22 @@ python -m pytest -q
 
 ML változtatásnál a fejezetben megadott célzott pytest/parity/evaluation parancsok kötelezők.
 
+**UI-t érintő körben** (képernyő, widget, téma) a mérce-mátrixnak (§6.1 a
+briefben) minden spec-ben leírt képernyő-állapothoz van golden-cellája
+(`test/ui/goldens/`, minta: `e13_r32_screens_golden_test.dart`), és a golden
+mérése CSAK a kapu architektúráján történik ([ADR 0426](docs/adr/0426-golden-rasterization-on-the-gate-architecture.md)):
+
+```bash
+tools/golden-x86.sh check test/ui/goldens/<fájl>.dart
+```
+
+A Windows dev-boxon a natív `flutter test` goldenje 8/10 piros (MÉRVE
+2026-09-18), tehát ott NEM mérce; `flutter test --update-goldens` sehol.
+Készüléken mért viselkedés (route-söprés, fájlból etetett Live):
+`integration_test/` — recept és eszköz-választás (Dart MCP `analyze_files` /
+`run_tests`, Serena szimbolikus szerkesztés):
+[`.claude/skills/strumsight-tooling/SKILL.md`](.claude/skills/strumsight-tooling/SKILL.md).
+
 ## 13. Git szabályok
 
 - Alapértelmezett branch: `main`.

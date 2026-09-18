@@ -166,6 +166,22 @@ nem az orchestrátor ítéli meg, hanem
 ([ADR 0171](../adr/0171-pipeline-throughput-program.md) §3) — a brief dolga csak
 annyi, hogy a `native_gate` mezője IGAZAT mondjon.
 
+**UI-kör kiegészítő sora (kötelező, ha a kör képernyőt/widgetet érint):** a §6.1
+mátrix minden spec-ben leírt képernyő-állapotához egy golden-cella
+(`test/ui/goldens/<kör>_screens_golden_test.dart`, minta: `e13_r32`), és a §7
+gate-sor mellé:
+
+```bash
+tools/golden-x86.sh check test/ui/goldens/<kör>_screens_golden_test.dart
+```
+
+A golden-mérés helye a kapu architektúrája (ADR 0426) — a `round-gate.sh`-ba
+NEM fűzzük (szekvenciális gate-ben a golden-lépés elfedné az `architecture`
+lépést, mért MINOR az E13-R33-ban). Az implementer a golden-diffet nézi meg,
+nem veszi fel újra; felvétel: `tools/golden-x86.sh record` vagy a
+`record-goldens.yml`. Eszköz-választás (Dart MCP, Serena, integration_test):
+[`.claude/skills/strumsight-tooling/SKILL.md`](../../.claude/skills/strumsight-tooling/SKILL.md).
+
 ### 6.1 Mérce-mátrix — a brief KÖTELEZŐ szakasza (ADR 0171 §4, ADR 0175)
 
 Minden briefben álljon egy `### 6.1 Mérce-mátrix` szakasz, amely

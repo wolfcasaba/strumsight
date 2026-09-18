@@ -73,6 +73,20 @@ resolve_flutter_version() {
 flutter_version=$(resolve_flutter_version) || exit 20
 image="$image_repo:$flutter_version"
 
+# --- Windows (Git Bash / MSYS) kompatibilitás -------------------------------
+# MSYS a `/repo`, `-w /repo` és a `$work:/repo` argumentumokat Windows-útvonallá
+# írná át (`C:/Program Files/Git/repo`), a `mktemp` POSIX-útvonalát pedig a
+# Docker Desktop nem érti. Ezért a gazda-oldali útvonal `cygpath -w`-vel megy a
+# konténerbe, az MSYS-konverzió pedig ki van kapcsolva. Linux/macOS boxon
+# mindkettő no-op. MÉRVE 2026-09-18 a Windows dev-boxon: a natív `flutter test`
+# goldenje ott 8/10 piros (Windows-raszterizáció ≠ CI x86-Linux); ez a script
+# Docker Desktop alatt (linux/amd64 natívan, emuláció nélkül) adja a CI-vel
+# azonos mérést.
+host_path() {
+  if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi
+}
+export MSYS_NO_PATHCONV=1
+
 command -v docker >/dev/null 2>&1 || {
   echo "golden-x86.sh: docker nem elérhető" >&2
   exit 20
@@ -80,14 +94,14 @@ command -v docker >/dev/null 2>&1 || {
 
 # --- amd64 emuláció ---------------------------------------------------------
 if ! docker run --rm --platform linux/amd64 "$image" true >/dev/null 2>&1; then
-  if ! grep -qs 'qemu-x86_64' /proc/sys/fs/binfmt_misc/status 2>/dev/null \
+  # x86_64 gazdán (Windows/Linux dev-box) nincs emuláció, a kép hiánya nem hiba
+  # — a build alább jön. Csak nem-x86 gazdán kell binfmt.
+  if [ "$(uname -m)" != "x86_64" ] \
+     && ! grep -qs 'qemu-x86_64' /proc/sys/fs/binfmt_misc/status 2>/dev/null \
      && [ ! -e /proc/sys/fs/binfmt_misc/qemu-x86_64 ]; then
     echo "golden-x86.sh: nincs amd64 binfmt kezelő. Telepítés:" >&2
     echo "  docker run --privileged --rm tonistiigi/binfmt --install amd64" >&2
-    # Az emulátor hiánya környezeti hiba, de a kép hiánya nem — a build alább jön.
-    if [ "$(uname -m)" != "x86_64" ]; then
-      exit 20
-    fi
+    exit 20
   fi
 fi
 
@@ -95,8 +109,8 @@ if ! docker image inspect "$image" >/dev/null 2>&1; then
   echo "golden-x86.sh: x86 Flutter kép építése ($image) — első futáskor hosszú" >&2
   docker build --platform linux/amd64 \
     --build-arg "FLUTTER_VERSION=$flutter_version" \
-    -f "$repo_root/tools/docker/golden-x86.Dockerfile" \
-    -t "$image" "$repo_root/tools/docker" >&2 || exit 20
+    -f "$(host_path "$repo_root/tools/docker/golden-x86.Dockerfile")" \
+    -t "$image" "$(host_path "$repo_root/tools/docker")" >&2 || exit 20
 fi
 
 # --- Teszt-útvonalak --------------------------------------------------------
@@ -125,7 +139,7 @@ work=$(mktemp -d -t golden-x86-XXXXXX) || exit 20
 cleanup() {
   rm -rf "$work" 2>/dev/null && return 0
   docker run --rm --platform linux/amd64 \
-    -v "$(dirname "$work")":/hostwork "$image" \
+    -v "$(host_path "$(dirname "$work")")":/hostwork "$image" \
     rm -rf "/hostwork/$(basename "$work")" >/dev/null 2>&1
 }
 trap cleanup EXIT
@@ -141,7 +155,7 @@ test_cmd=(flutter test)
 echo "golden-x86.sh: $mode — Flutter $flutter_version / linux/amd64, ${#paths[@]} teszt-útvonal" >&2
 
 docker run --rm --platform linux/amd64 \
-  -v "$work:/repo" -v "$pub_volume:/pub-cache" \
+  -v "$(host_path "$work"):/repo" -v "$pub_volume:/pub-cache" \
   -v "$dart_tool_volume:/repo/.dart_tool" -w /repo \
   "$image" \
   bash -c 'set -e; flutter pub get >/dev/null; exec "$@"' _ \

@@ -1,11 +1,13 @@
 {
   "mcpServers": {
     "dart": {
-      "command": "/home/ubuntu/flutter/bin/dart",
+      "command": "node",
       "args": [
-        "mcp-server",
-        "--flutter-sdk",
-        "/home/ubuntu/flutter"
+        "tools/dart-mcp-launcher.mjs",
+        "--enable",
+        "cli",
+        "--enable",
+        "flutter_app_lifecycle"
       ]
     },
     "context7": {
@@ -18,7 +20,7 @@
     "viking": {
       "command": "node",
       "args": [
-        "/home/ubuntu/Recipewiser/dev-tools/viking-bridge/index.mjs"
+        "/home/ubuntu/viking-bridge/index.mjs"
       ],
       "env": {
         "OPENVIKING_ENDPOINT": "http://127.0.0.1:1933",

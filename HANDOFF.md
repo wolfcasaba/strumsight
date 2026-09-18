@@ -1,5 +1,29 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÁGENS-ESZKÖZTÁR BEKÖTVE — Dart MCP + Serena + golden/integration_test (2026-09-18, a Windows dev-boxon)
+
+A tulajdonos kérése: az ágens ne vakon kódoljon — lássa az analyzer-hibákat,
+futtasson tesztet, hot reloadot, navigáljon szimbolikusan, és a spec UI-állapotait
+golden-cellához igazítsa. Az eszköz-választás egy helyen:
+[`.claude/skills/strumsight-tooling/SKILL.md`](.claude/skills/strumsight-tooling/SKILL.md);
+a szabály AGENTS.md §12-ben és a brief-sablon §7-ben.
+
+| Mi | Állapot | MÉRVE |
+|---|---|---|
+| **Dart MCP** (`dart mcp-server` 0.1.4) | `.mcp.json` → `node tools/dart-mcp-launcher.mjs --enable cli --enable flutter_app_lifecycle` (platformfüggetlen: Windows `C:/src/flutter`, Oracle `/home/ubuntu/flutter`, vagy `FLUTTER_SDK`) | `claude mcp list` ✔ Connected; 22 eszköz (a két `--enable` nélkül csak 13 — nincs `run_tests`/`dart_format`/`launch_app`); `analyze_files` a NEM-ASCII fő worktree-n „No errors", első hívás ~2 perc |
+| **Serena** (plugin, Dart LS) | `.serena/project.yml` (`language_servers: [dart]`) + `.serena/memories/project_overview.md`; a Dart LS a projekt SDK-ja junction-nel (`~/.serena/language_servers/static/DartLanguageServer/dart-sdk` → `C:\src\flutter\bin\cache\dart-sdk`, különben 3.7.1-et töltene); a halott user-szintű `serena` MCP-bejegyzés törölve | `get_symbols_overview lib/main.dart` és `find_symbol StrumSightApp` → `lib/app/strumsight_app.dart:14`; a 60 s-os kezdeti elemzési időkorlát WARNING várható, nem hiba |
+| **Golden** | minta `e13_r32_screens_golden_test.dart`; mérés CSAK `tools/golden-x86.sh check` / `record` (ADR 0426); a script Windows-foltot kapott (`cygpath`, `MSYS_NO_PATHCONV`, build-context útvonal, binfmt-ág csak nem-x86 gazdán) | natív `flutter test` a `e13_r16`-on **8/10 PIROS** Windowson (raszterizáció ≠ CI x86-Linux) → natív golden itt NEM mérce. A Docker-futás **nincs végigmérve**: a képépítés közben a C: 100 %-ra telt (Docker VHDX 43 GB; `Temp/z50kptcx` 6,3 GB elavult VS-Installer cache), a build elhalt, a Docker Desktop leállt — lásd lent |
+| **integration_test** | `route_sweep_test.dart` + `live_strum_feedback_headless_test.dart`, recept a skillben és a `strumsight-emulator-headless-recipe` memóriában | változatlan (2026-09-16-i mérés) |
+| **flutter-test-writer ágens** | golden-szakasza átírva: goldent ÍR, nem vesz fel; Dart MCP / Serena használat | — |
+
+**Nyitott (a tulajdonos döntése):** a C: lemez tele; a `Temp/z50kptcx` (6,3 GB,
+VS-Installer csomag-cache, szept. 16.) és a napi ~84 MB-os VS-installer
+bootstrap-mappák törlése után a `tools/golden-x86.sh check
+test/ui/goldens/e13_r16_screens_golden_test.dart` futtatható (kell ~6 GB: Flutter
+3.44.2 kép + pub-kötet). Addig a golden-felvétel/ellenőrzés útja a
+`record-goldens.yml` + CI. A 43 GB-os `docker_data.vhdx` `wsl --shutdown` +
+`diskpart compact vdisk`-kel zsugorítható.
+
 ## ✅ ONSET-FIRST VISSZAJELZÉS + HÚR-SÁV — `2af4260` → `d949b8f` (kör „strum-strings", branch `claude/strum-strings-live`), 2026-09-15
 
 A kör egyetlen mondata: **a pengetés mostantól KÉT szakaszban jelenik meg** — a
@@ -160,7 +184,7 @@ megöli a `flutter analyze` LSP-üzenetét ÉS az `aapt` manifest-olvasást
 |---|---|
 | format, analyze | zöld |
 | test/features/live (478), core/widgets, core/design_system, features/practice, features/song_trainer, features/learn, test/property | zöld (a learn és a property csak LF-checkouttal, ill. nem párhuzamos futással) |
-| test/tooling `beta_profile_test` (2) + `beta_release_notes_test` (28) | **PIROS, ÖRÖKÖLT, csak Windows** — a bázis-commiton (`fb777baa`) ugyanígy piros: CLI-alfolyamat `
+| test/tooling `beta_profile_test` (2) + `beta_release_notes_test` (28) | **PIROS, ÖRÖKÖLT, csak Windows** — a bázis-commiton (`fb777baa`) ugyanígy piros: CLI-alfolyamat `
 ` stdout, 1-es kilépési kód, symlink-jog (1314). CI Linuxon zöld. Nem a kör kódja. |
 
 **Emulátor (Pixel 3a, API 34, fejnélküli, mikrofon nélkül):**

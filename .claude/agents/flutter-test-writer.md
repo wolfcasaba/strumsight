@@ -57,16 +57,32 @@ flutter test            # ALONE, in its OWN Bash call, timeout >=240s
 ```
 **NEVER chain `flutter analyze && flutter test`** — combined memory can OOM a small box → exit 143 (SIGTERM). Run analyze and test as two separate calls.
 
-## Golden / visual verification (local self-check)
-You can render screens to PNGs you can Read:
-```dart
-await expectLater(find.byType(MyScreen), matchesGoldenFile('my_screen.png'));
-```
-then `flutter test --update-goldens test/golden/screenshot_test.dart` writes the PNG.
-- Load system fonts (e.g. DejaVu at `/usr/share/fonts/truetype/dejavu/`) via `FontLoader` under the app's font families for readable text.
-- Per-screen shots need `MaterialApp(theme: AppTheme.light(), …delegates…)`; a full-app shot uses `ProviderScope(child: <AppRoot>())`.
+## Golden tests — the spec's screen states, committed and gated (ADR 0426)
+Goldens ARE committed here and ARE part of the merge gate. Follow the precedent
+`test/ui/goldens/e13_r32_screens_golden_test.dart`: `AppTheme`, one builder per
+screen state named in the round brief §6.1, two frames — 412×915 compact
+portrait and the same at `textScaler 2.0` — PNGs under `test/ui/goldens/goldens/`
+as `<round>_<screen>_compact[_scale2].png`.
 - Call `tester.takeException()` before `expectLater` to swallow overflow noise.
-- **Do NOT commit golden tests** — they're env-flaky and break the CI gate. Delete `test/golden/` after viewing.
+- **Never run `flutter test --update-goldens` on a dev box.** The comparator is
+  zero-tolerance and the CI rasterizes on x86_64 Linux; the Windows box renders
+  8/10 cells differently (measured 2026-09-18). Record and check ONLY via
+  `tools/golden-x86.sh record|check <test file>` (Docker, CI-identical Flutter)
+  or the `record-goldens.yml` workflow. Write the test, leave recording to the
+  orchestrator, and say so in your output.
+- A screen with no stable pixels (animations, live audio) gets a PNG-free
+  variant matrix instead (precedent: `test/ui/goldens/e15_r01_theme_adoption_test.dart`).
+
+## Tooling you may use instead of guessing
+- Dart MCP server (`mcp__dart__analyze_files`, `mcp__dart__run_tests`): analyzer
+  diagnostics and a single-file test run without leaving the tool loop. First
+  `analyze_files` on this project takes ~2 min (whole-project analysis).
+- Serena (`find_symbol`, `find_referencing_symbols`, `get_symbols_overview`):
+  find the provider/repo you must override and every caller of it before
+  writing the test.
+- Device-level behaviour (route sweep, file-fed Live audio) is NOT a widget
+  test — point the orchestrator at `integration_test/` (see
+  `.claude/skills/strumsight-tooling/SKILL.md`).
 
 ## Output
 Write the test file(s), state which providers/repos were overridden, and remind the caller to run `flutter test` ALONE to confirm green.
