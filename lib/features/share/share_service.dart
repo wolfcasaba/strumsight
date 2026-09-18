@@ -80,15 +80,26 @@ class ShareService {
       );
       return;
     }
-    final file = await _writeTemp(png, fileName);
-    await SharePlus.instance.share(
-      ShareParams(
-        files: [XFile(file.path, mimeType: 'image/png')],
-        text: caption,
-        subject: 'StrumSight',
-        sharePositionOrigin: sharePositionOrigin,
-      ),
-    );
+    // Same post-share lifecycle as [shareExportFile]: the PNG lives in a
+    // private per-share directory (never a deterministic path two shares
+    // could collide on) and is deleted whether the share succeeds or throws,
+    // so a captured practice card never stays behind in the system temp dir.
+    final dir = await Directory.systemTemp.createTemp('strumsight_share_');
+    try {
+      final file = await _writeTemp(dir, png, fileName);
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path, mimeType: 'image/png')],
+          text: caption,
+          subject: 'StrumSight',
+          sharePositionOrigin: sharePositionOrigin,
+        ),
+      );
+    } finally {
+      if (await dir.exists()) {
+        await dir.delete(recursive: true);
+      }
+    }
   }
 
   /// Share just the caption text (no image) — the always-available path.
@@ -113,8 +124,7 @@ class ShareService {
     );
   }
 
-  Future<File> _writeTemp(Uint8List bytes, String name) async {
-    final dir = Directory.systemTemp;
+  Future<File> _writeTemp(Directory dir, Uint8List bytes, String name) async {
     final file = File('${dir.path}/$name');
     await file.writeAsBytes(bytes, flush: true);
     return file;

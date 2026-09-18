@@ -11,6 +11,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../application/editor/song_editor_state.dart';
 import '../../application/editor/song_editor_controller.dart';
 import '../../application/song_trainer_providers.dart';
+import '../../data/importers/importer_registry.dart';
 import '../../domain/models/meter_map.dart';
 import '../../domain/models/song_capability.dart';
 import '../../domain/models/song_document.dart';
@@ -372,7 +373,7 @@ final class _EditorBody extends ConsumerWidget {
           const SizedBox(height: SsSpacing.space5),
           BackingAssetEditor(
             hasBacking: draft.tracks.any((track) => track is BackingAudioTrack),
-            onAttach: () => _attachBacking(ref, controller),
+            onAttach: () => _attachBacking(context, ref, controller),
             onDetach: controller.detachBacking,
           ),
         ],
@@ -380,15 +381,37 @@ final class _EditorBody extends ConsumerWidget {
     );
   }
 
+  /// Buffers the picked backing payload before handing it to the controller.
+  ///
+  /// The picker is a budgeted data boundary: a source above
+  /// `ImportLimits.maxSourceBytes` is not buffered, and its `openRead()`
+  /// refuses with [ImportRegistryException]. Attaching is the one consumer
+  /// that reaches that stream directly (the import flow is rejected earlier,
+  /// on `byteLength`), so the refusal is caught and named here — dropping it
+  /// would make an oversize pick a silent no-op.
   Future<void> _attachBacking(
+    BuildContext context,
     WidgetRef ref,
     SongEditorController controller,
   ) async {
     final source = await ref.read(songFilePickerAdapterProvider).pickSongFile();
     if (source == null) return;
     final bytes = <int>[];
-    await for (final chunk in source.openRead()) {
-      bytes.addAll(chunk);
+    try {
+      await for (final chunk in source.openRead()) {
+        bytes.addAll(chunk);
+      }
+    } on ImportRegistryException catch (error) {
+      if (context.mounted) {
+        final l10n = AppLocalizations.of(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            key: const Key('song-editor-backing-failed'),
+            content: Text(l10n.songImportBlockingFailure(error.code)),
+          ),
+        );
+      }
+      return;
     }
     if (bytes.isEmpty) return;
     final hash = sha256.convert(bytes).toString();
