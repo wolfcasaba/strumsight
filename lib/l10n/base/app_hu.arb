@@ -20,6 +20,10 @@
   "@liveFinish": {
     "description": "Ends the current Live session and leaves the screen (ADR 0276 decision 4)."
   },
+  "liveStringsSemantics": "Húrok",
+  "@liveStringsSemantics": {
+    "description": "Semantic label for the Live hero's six-string band, which rings on every confirmed onset and takes the strum direction's colour once the verdict lands."
+  },
   "liveStarting": "Indul…",
   "@liveStarting": {
     "description": "Shown while the detection engine's first frame is still loading."

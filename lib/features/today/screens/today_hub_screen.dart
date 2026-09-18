@@ -131,7 +131,7 @@ class TodayHubScreen extends ConsumerWidget {
           Expanded(
             child: _Metric(
               label: l10n.progressDailyGoal,
-              value: '$todayMinutes min',
+              value: l10n.progressGoalOption(todayMinutes),
             ),
           ),
         ],
@@ -315,7 +315,10 @@ class _VisionCard extends StatelessWidget {
             if (visionEnabled) ...[
               const SizedBox(height: 12),
               TextButton(
-                onPressed: () => context.go(
+                // `push`, not `go`: the Vision screens carry no back
+                // affordance of their own, so replacing the stack would
+                // strand the user there (anti-vacuum, L403).
+                onPressed: () => context.push(
                   visionSetupEnabled
                       ? AppRoutes.visionSetup
                       : AppRoutes.visionSession,

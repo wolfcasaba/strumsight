@@ -426,9 +426,13 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
       streak: ref.read(streakProvider).current,
     );
     final start = nowDate.subtract(const Duration(days: 6));
+    // The week label is user-facing text: a locale-less DateFormat skeleton
+    // always renders en_US ("Aug 25") inside an otherwise Hungarian UI.
+    // Same convention as `WeeklyBars` / `SsFormatters` (ADR 0424 §5.3).
+    final localeName = Localizations.localeOf(context).toString();
     final label =
-        '${DateFormat.MMMd().format(start)} – '
-        '${DateFormat.MMMd().format(nowDate)}';
+        '${DateFormat.MMMd(localeName).format(start)} – '
+        '${DateFormat.MMMd(localeName).format(nowDate)}';
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) =>

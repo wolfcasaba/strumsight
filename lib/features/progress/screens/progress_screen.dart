@@ -50,6 +50,10 @@ class ProgressScreen extends ConsumerWidget {
     final today = StreakLogic.epochDayOf(now ?? DateTime.now());
 
     final nowDate = now ?? DateTime.now();
+    // The week label is user-facing text: a locale-less DateFormat skeleton
+    // always renders en_US ("Aug 25") inside an otherwise Hungarian UI.
+    // Same convention as `WeeklyBars` / `SsFormatters` (ADR 0424 §5.3).
+    final localeName = Localizations.localeOf(context).toString();
 
     return Scaffold(
       appBar: AppBar(
@@ -69,8 +73,8 @@ class ProgressScreen extends ConsumerWidget {
                 );
                 final start = nowDate.subtract(const Duration(days: 6));
                 final label =
-                    '${DateFormat.MMMd().format(start)} – '
-                    '${DateFormat.MMMd().format(nowDate)}';
+                    '${DateFormat.MMMd(localeName).format(start)} – '
+                    '${DateFormat.MMMd(localeName).format(nowDate)}';
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => WrappedPreviewScreen(
