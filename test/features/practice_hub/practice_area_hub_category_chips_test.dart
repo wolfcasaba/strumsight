@@ -47,6 +47,7 @@ const _overrideChordDefinition = PracticeDefinition(
 Future<GoRouter> _pumpHub(
   WidgetTester tester, {
   List<Override> overrides = const [],
+  Locale? locale,
 }) async {
   final router = GoRouter(
     initialLocation: AppRoutes.practiceHub,
@@ -68,6 +69,7 @@ Future<GoRouter> _pumpHub(
       child: MaterialApp.router(
         routerConfig: router,
         theme: AppTheme.dark(),
+        locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
       ),
@@ -191,6 +193,47 @@ void main() {
         isNull,
       );
     });
+
+    // A disabled chip with no feedback is indistinguishable from a broken
+    // one. Both locales are asserted because the strings are NEW ARB keys:
+    // an English-only addition would ship the fallback to Hungarian users,
+    // and a missing `@`-metadata/key pair would not even compile here.
+    for (final locale in const [Locale('en'), Locale('hu')]) {
+      testWidgets('the disabled Scales chip announces its reason '
+          '(${locale.languageCode})', (tester) async {
+        // Disposed INLINE, not via addTearDown: the framework verifies
+        // that no SemanticsHandle is alive before tearDown callbacks run.
+        final semantics = tester.ensureSemantics();
+        final localised = lookupAppLocalizations(locale);
+
+        await _pumpHub(tester, locale: locale);
+        final scales = _chip(localised.practiceAreaHubCategoryScales);
+        await tester.ensureVisible(scales);
+        await tester.pumpAndSettle();
+
+        expect(tester.widget<ActionChip>(scales).onPressed, isNull);
+
+        // Sighted feedback: the long-press/hover tooltip.
+        final tooltip = tester.widget<Tooltip>(
+          find.ancestor(of: scales, matching: find.byType(Tooltip)),
+        );
+        expect(
+          tooltip.message,
+          localised.practiceAreaHubCategoryComingSoonTooltip,
+        );
+
+        // Screen-reader feedback: the reason rides on the chip's own node,
+        // so the label and the hint are announced together.
+        final data = tester.getSemantics(scales).getSemanticsData();
+        expect(data.label, contains(localised.practiceAreaHubCategoryScales));
+        expect(
+          data.hint,
+          contains(localised.practiceAreaHubCategoryComingSoonHint),
+        );
+
+        semantics.dispose();
+      });
+    }
 
     testWidgets('the id comes from the CATALOG, not a hardcoded literal', (
       tester,

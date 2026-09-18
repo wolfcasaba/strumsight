@@ -238,6 +238,12 @@ enum _PracticeCategory {
 ///
 /// Enabled only when [definition] resolved: a chip that navigated without an
 /// id would land on the setup screen's error panel on every tap.
+///
+/// A disabled chip EXPLAINS itself. Greying a chip out with no feedback
+/// reads as a bug ("the app ignored my tap"), so the disabled state carries
+/// both a [Tooltip] (long-press / hover, sighted users) and a semantics hint
+/// merged into the chip's own node, so TalkBack/VoiceOver announce the label
+/// and the reason together instead of an unexplained disabled control.
 class _CategoryChip extends StatelessWidget {
   const _CategoryChip({required this.category, required this.definition});
 
@@ -246,12 +252,24 @@ class _CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final target = definition;
-    return ActionChip(
-      label: Text(category.label(AppLocalizations.of(context))),
+    final chip = ActionChip(
+      label: Text(category.label(l10n)),
       onPressed: target == null
           ? null
           : () => context.go(_practiceSetupUri(target.id)),
+    );
+    if (target != null) return chip;
+
+    return Tooltip(
+      message: l10n.practiceAreaHubCategoryComingSoonTooltip,
+      child: MergeSemantics(
+        child: Semantics(
+          hint: l10n.practiceAreaHubCategoryComingSoonHint,
+          child: chip,
+        ),
+      ),
     );
   }
 }

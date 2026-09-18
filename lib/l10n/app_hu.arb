@@ -2665,6 +2665,14 @@
   "@planSetupUnknown": {},
   "practiceAreaHubCategoriesHeading": "Böngészés cél szerint",
   "practiceAreaHubCategoryChords": "Akkordok",
+  "practiceAreaHubCategoryComingSoonHint": "Ebben a kategóriában még nincs gyakorlat — hamarosan",
+  "@practiceAreaHubCategoryComingSoonHint": {
+    "description": "Screen-reader hint announced with a disabled practice-category chip, spelling out WHY it cannot be activated (the tooltip is sighted-only feedback)."
+  },
+  "practiceAreaHubCategoryComingSoonTooltip": "Hamarosan",
+  "@practiceAreaHubCategoryComingSoonTooltip": {
+    "description": "Tooltip on a DISABLED practice-category chip on the Practice Area Hub: the shipped catalog carries no exercise for that category yet (Scales today), so the chip cannot be tapped."
+  },
   "practiceAreaHubCategoryRhythm": "Ritmus",
   "practiceAreaHubCategoryScales": "Skálák",
   "practiceAreaHubCategoryTechnique": "Technika",
