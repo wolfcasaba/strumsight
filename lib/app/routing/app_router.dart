@@ -33,7 +33,8 @@ import '../../features/practice/presentation/screens/practice_hub_screen.dart';
 import '../../features/practice/presentation/screens/practice_result_screen.dart';
 import '../../features/practice/presentation/screens/practice_setup_screen.dart';
 import '../../features/practice/presentation/screens/practice_session_screen.dart';
-import '../../features/practice/public.dart' show practiceCatalogProvider;
+import '../../features/practice/public.dart'
+    show PracticeHistoryEntry, practiceCatalogProvider;
 import '../../features/practice_generator/presentation/providers/practice_generator_providers.dart';
 import '../../features/practice_generator/presentation/screens/plan_setup_screen.dart';
 import '../../features/practice_generator/presentation/screens/today_plan_screen.dart';
@@ -168,6 +169,56 @@ bool _hasMasteryMilestoneForSkill(String? skillId) =>
     masteryMilestoneCatalogV1.any(
       (milestone) => milestone.skill.code == skillId,
     );
+
+/// A2b — shared guard for the two Song Trainer routes whose payload lives
+/// only in `extra` (`songTrainerSession`, `songTrainerResult`).
+///
+/// Returns `null` (stay) when [hasPayload], otherwise the redirect target:
+/// the song's own overview, rebuilt from the `:songId` already present in
+/// the path. A path parameter is always populated on a matched route, but
+/// an empty one would produce an unroutable `/song-trainer/overview/`, so
+/// that case falls back to the Song Trainer library instead of relying on
+/// `onException`.
+String? _songTrainerPayloadRedirect(
+  GoRouterState state, {
+  required bool hasPayload,
+}) {
+  if (hasPayload) return null;
+  final songId = state.pathParameters['songId'];
+  if (songId == null || songId.isEmpty) return AppRoutes.songTrainerLibrary;
+  return AppRoutes.songTrainerOverview.replaceFirst(':songId', songId);
+}
+
+/// A2b — resolves a Progress V2 evidence `sessionId` to the `LibraryItem`
+/// the unified library's detail route expects in `extra`.
+///
+/// Every mastery evidence sample on this tree is produced by
+/// `masteryEvidenceFromPracticeHistoryEntry` (origin `device`, `sessionId`
+/// = `PracticeHistoryEntry.id`), so the referenced session is always a
+/// practice-history entry. The mapping mirrors `library_v2`'s own
+/// `PracticeItemSource` (`library_v2_providers.dart`) field for field, and
+/// reads the SAME in-memory history the projection was built from — the
+/// four-source `libraryV2ItemsProvider` is deliberately not touched here:
+/// it requires the analysis/song/setlist repositories to be bootstrapped,
+/// which the skill-detail surface does not otherwise depend on.
+///
+/// Returns `null` when no entry matches, leaving the caller to decide
+/// where to send the user.
+PracticeLibraryItem? _practiceLibraryItemForSession({
+  required String sessionId,
+  required List<PracticeHistoryEntry> history,
+}) {
+  for (final entry in history) {
+    if (entry.id != sessionId) continue;
+    return PracticeLibraryItem(
+      id: entry.id,
+      title: entry.displayTitle,
+      createdAt: entry.createdAt,
+      syncStatus: LibrarySyncStatus.synced,
+    );
+  }
+  return null;
+}
 
 /// App router: a bottom-nav [ShellRoute] over the five tabs, plus full-screen
 /// routes pushed from those destinations.
@@ -368,18 +419,37 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, state) => Consumer(
           builder: (context, ref, _) {
             final l10n = AppLocalizations.of(context);
+            final practiceHistory = ref.watch(progressPracticeHistoryProvider);
             final projection = buildSkillDetailProjection(
               skillCode: state.pathParameters['skillId']!,
               milestoneCatalog: masteryMilestoneCatalogV1,
-              practiceHistory: ref.watch(progressPracticeHistoryProvider),
+              practiceHistory: practiceHistory,
               practiceCatalog: ref.watch(practiceCatalogProvider),
               now: ref.watch(progressNowProvider),
               localize: (key) => progressV2LocalizedText(l10n, key),
             )!;
             return SkillDetailScreen(
               projection: projection,
-              onOpenEvidence: (route, sessionId) =>
-                  context.push(route.replaceFirst(':sessionId', sessionId)),
+              // A2b — `profileLibrarySession` REQUIRES a `LibraryItem` in
+              // `extra` (its redirect bounces to the list otherwise), so a
+              // push carrying only the substituted `:sessionId` made every
+              // evidence link a dead end. Resolve the session first; when
+              // it cannot be resolved, go to the list DELIBERATELY rather
+              // than letting the route's redirect swallow the tap.
+              onOpenEvidence: (route, sessionId) {
+                final item = _practiceLibraryItemForSession(
+                  sessionId: sessionId,
+                  history: practiceHistory,
+                );
+                if (item == null) {
+                  context.push(AppRoutes.profileLibrary);
+                  return;
+                }
+                context.push(
+                  route.replaceFirst(':sessionId', sessionId),
+                  extra: item,
+                );
+              },
               onStartRecommendedPractice: () =>
                   context.push(AppRoutes.practiceHub),
             );
@@ -460,8 +530,19 @@ final routerProvider = Provider<GoRouter>((ref) {
           builder: (_, state) =>
               TrainerSetupScreen(songId: state.pathParameters['songId']!),
         ),
+        // A2b — both routes below carry their whole payload in `extra`,
+        // which a deep link, a restored URL or a process-death relaunch
+        // never reproduces. `state.extra! as ...` turned that into a
+        // null-check/cast crash; guarded here exactly like every other
+        // `extra`-carrying route in this file (`librarySession` above,
+        // `analysis*` below), falling back to the song's own overview —
+        // the one surface reachable from `:songId` alone.
         GoRoute(
           path: AppRoutes.songTrainerSession,
+          redirect: (_, state) => _songTrainerPayloadRedirect(
+            state,
+            hasPayload: state.extra is SongTrainerControllerInputs,
+          ),
           builder: (_, state) => SongTrainerScreen(
             songId: state.pathParameters['songId']!,
             inputs: state.extra! as SongTrainerControllerInputs,
@@ -469,6 +550,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
         GoRoute(
           path: AppRoutes.songTrainerResult,
+          redirect: (_, state) => _songTrainerPayloadRedirect(
+            state,
+            hasPayload: state.extra is SongTrainerResult,
+          ),
           builder: (_, state) =>
               SongResultScreen(result: state.extra! as SongTrainerResult),
         ),

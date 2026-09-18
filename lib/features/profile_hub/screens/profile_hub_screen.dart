@@ -60,8 +60,12 @@ class ProfileHubScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 12),
+            // A2b — `push`, never `go`: the gamification hub is a top-level
+            // route, not a sibling shell destination, so `go` REPLACED this
+            // hub and stranded the user there with no back affordance
+            // (`practice_session_screen.dart` ~254-262 documents the rule).
             OutlinedButton(
-              onPressed: () => context.go(AppRoutes.gamificationHub),
+              onPressed: () => context.push(AppRoutes.gamificationHub),
               child: Text(l10n.profileHubAchievementsSectionTitle),
             ),
             const SizedBox(height: 24),
@@ -144,8 +148,12 @@ class _AccountSection extends ConsumerWidget {
                     ref.read(authControllerProvider.notifier).logout(),
                 child: Text(l10n.profileHubSignOutCta),
               )
+            // A2b — `push`, never `go`. Besides stranding the user, `go`
+            // left `LoginScreen` with nothing to pop: it closes itself on a
+            // successful sign-in, which threw a `GoError` on a replaced
+            // (never pushed) location.
             : OutlinedButton(
-                onPressed: () => context.go(AppRoutes.login),
+                onPressed: () => context.push(AppRoutes.login),
                 child: Text(l10n.profileHubSignInCta),
               ),
       ],

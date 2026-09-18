@@ -74,11 +74,15 @@ class TutorHomeScreen extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: SsSpacing.space6),
+              // A2b — `push`, never `go`: `go` REPLACED Tutor Home with the
+              // chat, leaving no back affordance to the entry surface the
+              // user started from (the rule is documented at
+              // `practice_session_screen.dart` ~254-262).
               SsButton(
                 key: const Key('tutorHomeStartCta'),
                 icon: Icons.chat,
                 label: l10n.aiTutorHomeStart,
-                onPressed: () => context.go(AppRoutes.tutorChat),
+                onPressed: () => context.push(AppRoutes.tutorChat),
               ),
             ],
           ),
