@@ -230,6 +230,83 @@ void main() {
       },
     );
 
+    // 2026-09-06 — a klub-kihívások ŐSZINTE „még nem elérhető" állapota.
+    // A provider korábban `UnimplementedError`-t dobott, és a fül a
+    // hiba-ágon a „No active challenges." szöveget rajzolta: a hiányzó
+    // szerver-végpontot a felhasználó „ennek a klubnak nincs kihívása"
+    // állításként olvasta. A cella pontosan ezt a hazugságot tiltja meg.
+    testWidgets('the Challenges tab states that club challenges are NOT '
+        'available yet — never an empty list (no server endpoint)', (
+      tester,
+    ) async {
+      final fake = _RecordingClubRepository.build(
+        _club(
+          publicId: 'club-1',
+          name: 'Blues Lovers',
+          visibility: ClubVisibility.discoverable,
+          memberCount: 12,
+          myRole: ClubRole.member,
+        ),
+      );
+
+      // SZÁNDÉKOSAN nincs `clubChallengesProvider` felülírás: a szállított
+      // provider viselkedését mérjük.
+      await tester.pumpWidget(_wrap(fake, extraOverrides: const <Override>[]));
+      await _pumpScreen(tester);
+
+      await tester.tap(find.text('Challenges'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('club-challenges-unavailable')),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Club challenges are not available yet'),
+        findsOneWidget,
+      );
+      // A „nincs aktív kihívás" ÁLLÍTÁS nem hangozhat el.
+      expect(find.text('No active challenges.'), findsNothing);
+    });
+
+    // A szerződés másik fele: ha egyszer LESZ végpont és tényleg üres a
+    // lista, akkor — és csak akkor — az „üres" üzenet a helyes.
+    testWidgets('a loaded, empty challenge list still renders the empty-state '
+        'copy (the honest state is per-variant, not global)', (tester) async {
+      final fake = _RecordingClubRepository.build(
+        _club(
+          publicId: 'club-1',
+          name: 'Blues Lovers',
+          visibility: ClubVisibility.discoverable,
+          memberCount: 12,
+          myRole: ClubRole.member,
+        ),
+      );
+
+      await tester.pumpWidget(
+        _wrap(
+          fake,
+          extraOverrides: <Override>[
+            clubChallengesProvider.overrideWith(
+              (ref, arg) async => const ClubChallengesLoaded(
+                <CommunityChallengeSummaryPlaceholder>[],
+              ),
+            ),
+          ],
+        ),
+      );
+      await _pumpScreen(tester);
+
+      await tester.tap(find.text('Challenges'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('No active challenges.'), findsOneWidget);
+      expect(
+        find.byKey(const Key('club-challenges-unavailable')),
+        findsNothing,
+      );
+    });
+
     testWidgets('renders the leave-club action when the viewer is a member', (
       tester,
     ) async {
@@ -300,7 +377,9 @@ void main() {
               return const <CommunityPost>[];
             }),
             clubChallengesProvider.overrideWith((ref, arg) async {
-              return const <CommunityChallengeSummaryPlaceholder>[];
+              return const ClubChallengesLoaded(
+                <CommunityChallengeSummaryPlaceholder>[],
+              );
             }),
           ],
           child: MaterialApp(

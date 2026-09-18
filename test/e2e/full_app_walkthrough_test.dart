@@ -33,7 +33,7 @@ import 'package:strumsight/features/practice/presentation/screens/practice_setup
 import 'package:strumsight/features/practice_hub/screens/practice_area_hub_screen.dart';
 import 'package:strumsight/features/profile_hub/screens/profile_hub_screen.dart';
 import 'package:strumsight/features/progress/public.dart'
-    show PracticeStats, practiceLogProvider;
+    show PracticeStats, practiceLogProvider, practiceStatsProvider;
 import 'package:strumsight/features/progress_v2/application/progress_providers.dart'
     show progressPracticeHistoryProvider;
 import 'package:strumsight/features/progress_v2/screens/progress_dashboard_screen.dart';
@@ -226,21 +226,15 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
     reason: 'the finished session must leave exactly one persisted record',
   );
 
-  // MÉRT LELET (recorded in docs/release/full-app-verification.md, §5.2 —
-  // not fixed here): `practiceHistoryV2ListProvider`
-  // (`practice_progress_providers.dart`) is a plain `FutureProvider` —
-  // never `.family`, never invalidated anywhere in `lib/` — so its FIRST
-  // read permanently caches whatever the practice-history repository held
-  // AT THAT MOMENT for the rest of THIS container's life. The Today Hub
-  // stop above already forced that first read (via
-  // `dailyGoalActiveSecondsProvider` -> `aggregatedPracticeFeedProvider` ->
-  // `practiceProgressFeedProvider`), before this session existed — so
-  // `progressPracticeHistoryProvider` (which reads the SAME cached
-  // provider) would stay empty in THIS container even though the session
-  // above genuinely persisted. A real app restart is the only way any
-  // container ever observes a session recorded after its own first Today
-  // Hub render — so this walkthrough restarts here, exactly like a user
-  // relaunching the app, before continuing to Library/Progress/Profile.
+  // §5.2 L5 (docs/release/full-app-verification.md) used to hold here:
+  // `practiceHistoryV2ListProvider` (`practice_progress_providers.dart`)
+  // is a plain `FutureProvider`, and the Today Hub stop above already
+  // forced its first read before this session existed, so a container
+  // never observed a later session. Learner-loop round 2 resolved it (the
+  // effect listener invalidates the provider on `NavigateToResult`). The
+  // restart below is kept on purpose: it measures a real relaunch on the
+  // same store, exactly like a user reopening the app, before the
+  // Library/Progress/Profile stops read the persisted session.
   session = await restartE2eApp(
     tester,
     session,
@@ -306,20 +300,17 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
     expect(find.text(l10n.progressV2SkillsSectionTitle), findsOneWidget);
   }
 
-  // 7. Profile. MÉRT LELET (recorded in
-  // docs/release/full-app-verification.md, §5.2 — not fixed here):
-  // `ProfileHubScreen`'s "sessions" metric reads `practiceLogProvider`
-  // (`lib/features/progress/providers/practice_log_provider.dart`) — the V1
-  // "Learn" practice log (`PracticeSessionRecording`,
-  // `practice_session_recording.dart`) — which is a DIFFERENT store from
-  // the Practice Engine V2 history repository this walkthrough's session
-  // just wrote to (`practiceHistoryRepositoryProvider`, read by Library/
-  // Progress above). A completed V2 quick-start session never appends to
-  // the V1 log, so this metric's value is REAL (a genuinely computed read
-  // of its own real source, §5.1 — not a P1/P2/P3 placeholder literal) but
-  // stays exactly what it was before the session: this round's own
-  // `progressPracticeHistoryProvider`/Library read the V2 store correctly;
-  // this metric simply reads a different, V2-blind store.
+  // 7. Profile. The §5.2 L4 finding (recorded in
+  // docs/release/full-app-verification.md) used to hold here: the
+  // "sessions" metric read `practiceLogProvider` — the V1 "Learn" log — a
+  // DIFFERENT store from the Practice Engine V2 history this walkthrough's
+  // session just wrote to, so the tile stayed at its pre-session value.
+  // Learner-loop round 4 ("one progress model") resolved it: every hub
+  // reads `practiceStatsProvider`, built from the V1 + V2 aggregated feed,
+  // so the session completed above now counts here exactly as it does on
+  // Library/Progress. Both halves are asserted: the tile renders the
+  // unified rollup, and that rollup is the V1 count plus this walk's one
+  // V2 session (the restart above made the V2 list observable).
   session.router.go(AppRoutes.profileHome);
   await tester.pumpAndSettle();
   expect(find.byType(ProfileHubScreen), findsOneWidget);
@@ -327,11 +318,21 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
   final v1SessionCount = PracticeStats(
     session.container.read(practiceLogProvider),
   ).totalSessions;
+  final unifiedSessionCount = session.container
+      .read(practiceStatsProvider)
+      .totalSessions;
+  expect(
+    unifiedSessionCount,
+    v1SessionCount + 1,
+    reason:
+        'the unified rollup must count the V1 log plus the ONE Practice '
+        'V2 session this walkthrough completed (learner-loop round 4)',
+  );
   // Scoped to the "Sessions" _Metric tile's OWN Column (found by walking up
   // from its label text), not `ProfileHubScreen` at large — a bare
-  // `find.text('$v1SessionCount')` under the whole screen would also match
-  // the streak tile whenever both render `0` (MINOR-2, review §4), which
-  // would pass even if the sessions metric rendered nothing at all.
+  // `find.text('$unifiedSessionCount')` under the whole screen could also
+  // match the streak tile (MINOR-2, review §4), which would pass even if
+  // the sessions metric rendered nothing at all.
   final sessionsMetricColumn = find
       .ancestor(
         of: find.text(l10n.progressSessions),
@@ -341,14 +342,13 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
   expect(
     find.descendant(
       of: sessionsMetricColumn,
-      matching: find.text('$v1SessionCount'),
+      matching: find.text('$unifiedSessionCount'),
     ),
     findsOneWidget,
     reason:
-        'the sessions metric must reflect its own real (V1 log) source '
-        'value, whatever that measurably is — scoped to the sessions tile '
-        'so the streak tile (which also renders 0 for a fresh install) '
-        'cannot satisfy this assertion',
+        'the sessions metric must render the unified (V1 + V2) rollup, '
+        'scoped to the sessions tile so the streak tile cannot satisfy '
+        'this assertion',
   );
 
   await tester.tap(find.widgetWithText(OutlinedButton, l10n.settingsTitle));

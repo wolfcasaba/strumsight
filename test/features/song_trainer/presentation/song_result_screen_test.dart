@@ -13,9 +13,7 @@ import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 
 void main() {
-  testWidgets('renders the measure heatmap, retry, and next-section CTAs', (
-    tester,
-  ) async {
+  testWidgets('renders the heatmap and the two wired CTAs', (tester) async {
     final result = _result();
     await tester.pumpWidget(
       ProviderScope(
@@ -31,7 +29,10 @@ void main() {
 
     expect(find.byKey(const Key('song-result-heatmap')), findsOneWidget);
     expect(find.byKey(const Key('song-result-retry')), findsOneWidget);
-    expect(find.byKey(const Key('song-result-next-section')), findsOneWidget);
+    expect(
+      find.byKey(const Key('song-result-back-to-library')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('heatmap cells expose a label semantics for the screen reader', (

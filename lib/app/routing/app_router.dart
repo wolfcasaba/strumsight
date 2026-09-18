@@ -4,9 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/foundation/app_result.dart';
 import '../../core/logging/logger_provider.dart';
 import '../../features/analyze/screens/analyze_screen.dart';
+import '../../features/audio_analysis/application/analysis_providers.dart';
+import '../../features/audio_analysis/application/capture_seed.dart';
 import '../../features/audio_analysis/domain/analysis_document.dart';
+import '../../features/audio_analysis/domain/analysis_input.dart';
+import '../../features/audio_analysis/domain/analysis_mode.dart';
+import '../../features/audio_analysis/domain/analysis_summary.dart';
+import '../../features/audio_analysis/presentation/capture/analysis_home_screen.dart';
+import '../../features/audio_analysis/presentation/capture/analysis_processing_screen.dart';
+import '../../features/audio_analysis/presentation/capture/analysis_recording_screen.dart';
 import '../../features/audio_analysis/domain/comparison/analysis_comparison.dart';
 import '../../features/audio_analysis/presentation/analysis_compare_screen.dart';
 import '../../features/audio_analysis/presentation/analysis_metric_detail_screen.dart';
@@ -35,7 +44,14 @@ import '../../features/practice/presentation/screens/practice_setup_screen.dart'
 import '../../features/practice/presentation/screens/practice_session_screen.dart';
 import '../../features/practice/public.dart'
     show PracticeHistoryEntry, practiceCatalogProvider;
+import '../../features/practice_generator/application/usecase/revise_practice_plan.dart'
+    show PlanRevisionProposal;
+import '../../features/practice_generator/presentation/plan_preview_args.dart';
 import '../../features/practice_generator/presentation/providers/practice_generator_providers.dart';
+import '../../features/practice_generator/presentation/screens/plan_change_review_screen.dart';
+import '../../features/practice_generator/presentation/screens/plan_preview_screen.dart';
+import '../../features/practice_generator/presentation/screens/plan_privacy_screen.dart';
+import '../../features/practice_generator/presentation/screens/weekly_plan_screen.dart';
 import '../../features/practice_generator/presentation/screens/plan_setup_screen.dart';
 import '../../features/practice_generator/presentation/screens/today_plan_screen.dart';
 import '../../features/practice_hub/screens/practice_area_hub_screen.dart';
@@ -48,12 +64,12 @@ import '../../features/songs/screens/setlist_list_screen.dart';
 import '../../features/songs/screens/song_list_screen.dart';
 import '../../features/streak/screens/streak_screen.dart';
 import '../../features/song_trainer/public.dart';
-import '../../features/song_trainer/application/song_trainer_providers.dart';
-import '../../features/song_trainer/application/trainer/song_trainer_result.dart';
+import '../../features/song_trainer/application/trainer/song_trainer_session_launcher.dart';
+import '../../features/song_trainer/domain/models/trainer_config.dart';
 import '../../features/song_trainer/presentation/screens/song_editor_screen.dart';
 import '../../features/song_trainer/presentation/screens/song_overview_screen.dart';
 import '../../features/song_trainer/presentation/screens/song_result_screen.dart';
-import '../../features/song_trainer/presentation/screens/song_trainer_screen.dart';
+import '../../features/song_trainer/presentation/screens/song_trainer_session_route.dart';
 import '../../features/song_trainer/presentation/screens/trainer_setup_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_chat_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_data_screen.dart';
@@ -68,6 +84,7 @@ import '../home_shell.dart';
 import 'adaptive_shell_routes.dart';
 import 'app_route.dart';
 import 'route_guards.dart';
+import 'package:strumsight/features/community/public.dart';
 
 final class _RouterRefreshNotifier extends ChangeNotifier {
   void refresh() => notifyListeners();
@@ -222,6 +239,39 @@ PracticeLibraryItem? _practiceLibraryItemForSession({
 
 /// App router: a bottom-nav [ShellRoute] over the five tabs, plus full-screen
 /// routes pushed from those destinations.
+/// Compiles a finished trainer setup into a session and opens it.
+///
+/// A failure is NAMED on the setup screen instead of a silent no-op: the
+/// measured pre-round behaviour was "nothing happens", which is exactly what
+/// a swallowed failure looks like.
+Future<void> _startSongTrainerSession(
+  BuildContext context,
+  WidgetRef ref,
+  TrainerConfig config,
+) async {
+  final launcher = ref.read(songTrainerSessionLauncherProvider);
+  final launched = await launcher(config);
+  if (!context.mounted) return;
+  switch (launched) {
+    case Failure(:final error):
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context).songTrainerFailed(error.code),
+          ),
+        ),
+      );
+    case Success(:final value):
+      await context.push<void>(
+        AppRoutes.songTrainerSession.replaceFirst(
+          ':songId',
+          Uri.encodeComponent(value.songId.value),
+        ),
+        extra: value,
+      );
+  }
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
   final refreshNotifier = _RouterRefreshNotifier();
   ref.listen(onboardingSeenProvider, (_, _) => refreshNotifier.refresh());
@@ -270,6 +320,30 @@ final routerProvider = Provider<GoRouter>((ref) {
       .read(appConfigProvider)
       .flags
       .analysisComparisonEnabled;
+  // E17 (Ch17 teljes bekötés) — a 13 community képernyő a `communityEnabled`
+  // kapu alatt regisztrálódik. Kapu KI: az útvonalak NEM léteznek, tehát egy
+  // `/community*` cím az alábbi `onException`-re fut és a belépési pontra
+  // esik vissza — ugyanaz a mintázat, amit a Practice és a Vision kapuja
+  // használ, és a szerver-oldali ADR 0497 D1 („a route nincs regisztrálva,
+  // nem futásidejű 403") kliens-oldali párja.
+  final communityEnabled = ref.read(appConfigProvider).flags.communityEnabled;
+  // A community AL-zászlói. A képernyők doc-kommentjei eddig azt ÁLLÍTOTTÁK,
+  // hogy egy kikapcsolt al-zászló mellett a route sincs regisztrálva — a
+  // tábla viszont mindhármat pusztán `communityEnabled` alatt hozta létre
+  // (MÉRT hiba, 2026-09-06 review, MINOR-6). Az állítás itt válik igazzá:
+  // az író-felület, a klubok és a ranglista saját kapuval regisztrálódik.
+  final communityWritesEnabled = ref
+      .read(appConfigProvider)
+      .flags
+      .communityWritesEnabled;
+  final communityClubsEnabled = ref
+      .read(appConfigProvider)
+      .flags
+      .communityClubsEnabled;
+  final communityLeaderboardEnabled = ref
+      .read(appConfigProvider)
+      .flags
+      .communityLeaderboardEnabled;
   final adaptiveShellEnabled = ref
       .read(appConfigProvider)
       .flags
@@ -356,11 +430,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       // E13-R08 (D6) — when the adaptive shell owns `/songs` as a
       // destination root below, this legacy registration is excluded to
       // avoid a silently-shadowed duplicate path.
-      if (!adaptiveShellEnabled)
+      if (!adaptiveShellEnabled) ...[
         GoRoute(
           path: AppRoutes.songs,
           builder: (_, _) => const SongListScreen(),
         ),
+        GoRoute(
+          path: AppRoutes.songsOwn,
+          builder: (_, _) => const SongListScreen(),
+        ),
+      ],
       GoRoute(
         path: AppRoutes.setlists,
         builder: (_, _) => const SetlistListScreen(),
@@ -456,6 +535,85 @@ final routerProvider = Provider<GoRouter>((ref) {
           },
         ),
       ),
+      if (communityEnabled) ...[
+        // A belépési szűrő. Ő maga is a 13 elérhetetlen képernyő közt volt —
+        // a feature kapuja sem volt elérhető.
+        GoRoute(
+          path: AppRoutes.community,
+          builder: (_, _) => const CommunityGateScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityFeed,
+          builder: (_, _) => const FollowingFeedScreen(),
+        ),
+        if (communityWritesEnabled)
+          GoRoute(
+            path: AppRoutes.communityCompose,
+            builder: (_, _) => const PostComposerScreen(),
+          ),
+        GoRoute(
+          path: AppRoutes.communityComments,
+          builder: (_, state) => CommentsScreen(
+            postId: ContentId(state.pathParameters['postId']!),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.communityBookmarks,
+          builder: (_, _) => const BookmarksScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communityNotifications,
+          builder: (_, _) => const CommunityNotificationsScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.communitySearch,
+          builder: (_, _) => const CommunitySearchScreen(),
+        ),
+        // A követők és a követettek KÉT útvonal, egy képernyővel: a lista
+        // iránya nem query-paraméter, mert egy elhagyott paraméter némán a
+        // másik listát mutatná.
+        GoRoute(
+          path: AppRoutes.communityFollowers,
+          builder: (_, state) => FollowersScreen(
+            profileId: PublicUserId(state.pathParameters['profileId']!),
+            mode: FollowersMode.followers,
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.communityFollowing,
+          builder: (_, state) => FollowersScreen(
+            profileId: PublicUserId(state.pathParameters['profileId']!),
+            mode: FollowersMode.following,
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.communityChallenges,
+          builder: (_, _) => const CommunityChallengesScreen(),
+        ),
+        if (communityLeaderboardEnabled)
+          GoRoute(
+            path: AppRoutes.communityLeaderboard,
+            builder: (_, state) => LeaderboardScreen(
+              challengeId: ContentId(state.pathParameters['challengeId']!),
+            ),
+          ),
+        GoRoute(
+          path: AppRoutes.communitySafety,
+          builder: (_, _) => const SafetyRelationshipsScreen(),
+        ),
+        if (communityClubsEnabled) ...[
+          GoRoute(
+            path: AppRoutes.communityClubs,
+            builder: (_, _) => const ClubListScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.communityClubDetail,
+            builder: (_, state) => ClubDetailScreen(
+              clubId: ContentId(state.pathParameters['clubId']!),
+            ),
+          ),
+        ],
+      ],
       if (practiceEnabled) ...[
         // E13-R08 (D6) — excluded when the adaptive shell owns `/practice`
         // as a destination root below, to avoid a silently-shadowed
@@ -501,6 +659,70 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
         ),
+        GoRoute(
+          path: AppRoutes.practiceGeneratorWeekly,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) {
+              final plan = ref.watch(activePracticePlanProvider);
+              // A `plan` a képernyő szerződésében NULLAZHATÓ, és a `null`
+              // ott a „még nincs terv" állapot — nem hiányzó adat. Betöltés
+              // közben tehát nem hazudunk üres tervet: ugyanaz a `null`
+              // megy be, amit a képernyő maga is kezel.
+              return WeeklyPlanScreen(
+                plan: plan.value,
+                today: ref.watch(practiceGeneratorTodayProvider)(),
+              );
+            },
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.practiceGeneratorPrivacy,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) => PlanPrivacyScreen(
+              deleteUseCase: ref.watch(deletePracticePlanningDataProvider),
+              exportUseCase: ref.watch(exportPracticePlanningDataProvider),
+            ),
+          ),
+        ),
+        // Az előnézet és a változás-áttekintés a generálási folyamat
+        // LÉPÉSEI: a megjelenítendő tervet, illetve javaslatot a hívó adja
+        // át. `extra` nélkül nincs mit mutatni — ilyenkor a mai tervre
+        // esünk vissza, nem rajzolunk kitalált tervet. Ugyanaz a
+        // redirect-őr, amit az elemzés-áttekintés használ.
+        GoRoute(
+          path: AppRoutes.practiceGeneratorPreview,
+          redirect: (_, state) => state.extra is PracticePlanPreviewArgs
+              ? null
+              : AppRoutes.practiceGeneratorToday,
+          builder: (_, state) => Consumer(
+            builder: (context, ref, _) {
+              final args = state.extra! as PracticePlanPreviewArgs;
+              return PlanPreviewScreen(
+                controller: ref.watch(planPreviewControllerFactoryProvider)(
+                  initialPlan: args.plan,
+                  validationContext: args.validationContext,
+                ),
+              );
+            },
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.practiceGeneratorChangeReview,
+          redirect: (_, state) => state.extra is PlanRevisionProposal
+              ? null
+              : AppRoutes.practiceGeneratorToday,
+          builder: (_, state) => Builder(
+            builder: (context) => PlanChangeReviewScreen(
+              proposal: state.extra! as PlanRevisionProposal,
+              // Mindkét ág a mai tervre visz vissza. A javaslat
+              // ELFOGADÁSA a `RevisePracticePlan` dolga, és azt a hívó
+              // folyamat végzi el — a route nem ír tervet, mert akkor a
+              // döntés két helyen születne.
+              onAccepted: () => context.go(AppRoutes.practiceGeneratorToday),
+              onRejected: () => context.go(AppRoutes.practiceGeneratorToday),
+            ),
+          ),
+        ),
       ],
       if (songTrainerEnabled) ...[
         GoRoute(
@@ -525,10 +747,19 @@ final routerProvider = Provider<GoRouter>((ref) {
           builder: (_, state) =>
               SongOverviewScreen(songId: state.pathParameters['songId']!),
         ),
+        // E16-R01/A2 — the measured P0: the setup screen produced a
+        // `TrainerConfig` and the route dropped it, so `Start` was deaf and
+        // there was ZERO `push(songTrainerSession)` in the whole tree. The
+        // route now compiles the config into a session and pushes it.
         GoRoute(
           path: AppRoutes.songTrainerSetup,
-          builder: (_, state) =>
-              TrainerSetupScreen(songId: state.pathParameters['songId']!),
+          builder: (_, state) => Consumer(
+            builder: (context, ref, _) => TrainerSetupScreen(
+              songId: state.pathParameters['songId']!,
+              onComplete: (config) =>
+                  unawaited(_startSongTrainerSession(context, ref, config)),
+            ),
+          ),
         ),
         // A2b — both routes below carry their whole payload in `extra`,
         // which a deep link, a restored URL or a process-death relaunch
@@ -541,21 +772,37 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: AppRoutes.songTrainerSession,
           redirect: (_, state) => _songTrainerPayloadRedirect(
             state,
-            hasPayload: state.extra is SongTrainerControllerInputs,
+            hasPayload: state.extra is SongTrainerSessionArgs,
           ),
-          builder: (_, state) => SongTrainerScreen(
+          builder: (_, state) => SongTrainerSessionRoute(
             songId: state.pathParameters['songId']!,
-            inputs: state.extra! as SongTrainerControllerInputs,
+            args: state.extra! as SongTrainerSessionArgs,
           ),
         ),
         GoRoute(
           path: AppRoutes.songTrainerResult,
           redirect: (_, state) => _songTrainerPayloadRedirect(
             state,
-            hasPayload: state.extra is SongTrainerResult,
+            hasPayload: state.extra is SongTrainerResultArgs,
           ),
-          builder: (_, state) =>
-              SongResultScreen(result: state.extra! as SongTrainerResult),
+          builder: (_, state) => Builder(
+            builder: (context) {
+              final args = state.extra! as SongTrainerResultArgs;
+              final onPracticeAgain = args.onPracticeAgain;
+              return SongResultScreen(
+                result: args.result,
+                // Pops the result first so "practice again" restarts the
+                // session route still mounted underneath it.
+                onRetry: onPracticeAgain == null
+                    ? null
+                    : () {
+                        context.pop();
+                        onPracticeAgain();
+                      },
+                onBackToLibrary: () => context.go(AppRoutes.songs),
+              );
+            },
+          ),
         ),
       ],
       // E13-R08 (D14 fix round) — `/practice/live` moved OUT of the shell
@@ -651,8 +898,19 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
             StatefulShellBranch(
               routes: [
+                // Learner-loop round 5: the Songs destination is the Song
+                // Trainer V2 library whenever that rollout is on (the shell
+                // used to open the legacy builder list, leaving the 8-screen
+                // trainer reachable only from an orphaned lesson list). The
+                // legacy builder keeps its own route below.
                 GoRoute(
                   path: AppRoutes.songs,
+                  builder: (_, _) => songTrainerEnabled
+                      ? const SongLibraryScreen()
+                      : const SongListScreen(),
+                ),
+                GoRoute(
+                  path: AppRoutes.songsOwn,
                   builder: (_, _) => const SongListScreen(),
                 ),
                 GoRoute(
@@ -690,9 +948,21 @@ final routerProvider = Provider<GoRouter>((ref) {
                   path: AppRoutes.profileLibrary,
                   builder: (_, _) => const UnifiedLibraryScreen(),
                 ),
+                // Navigation fix (owner report 2026-09-16): the Profile Hub
+                // now PUSHES this route, which places the page on the root
+                // navigator — outside the shell's `Scaffold`. `SettingsScreen`
+                // deliberately renders no `Scaffold`/`AppBar` of its own (it
+                // was written as a shell-hosted body, and four golden suites
+                // pin that widget tree), so the missing `Material` ancestor
+                // and the missing back affordance are supplied HERE, at the
+                // composition root, instead of inside the screen. The bar
+                // carries no title on purpose: the screen's own large
+                // "Settings" heading is the title, so this only contributes
+                // the automatic leading back button.
                 GoRoute(
                   path: AppRoutes.profileSettings,
-                  builder: (_, _) => const SettingsScreen(),
+                  builder: (_, _) =>
+                      Scaffold(appBar: AppBar(), body: const SettingsScreen()),
                 ),
                 // E16-R02 (ADR 0500) — replaces the legacy `ProgressScreen`
                 // adapter with the real Progress V2 dashboard, built from
@@ -780,6 +1050,94 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ],
       if (audioAnalysisV2Enabled) ...[
+        // A felvételi folyamat (2026-09-05). A három képernyő azért volt
+        // elérhetetlen, mert HÁROM darab hiányzott alóla: a vezérlőnek nem
+        // volt providere, a felvevőnek sem, és az `AnalyzeAudioUseCase`
+        // ÜRES mintákat adott tovább — bekötve tehát csendet elemzett volna.
+        GoRoute(
+          path: AppRoutes.analysisCapture,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) {
+              final recent = ref.watch(analysisRecentSummariesProvider);
+              final l10n = AppLocalizations.of(context);
+              return AnalysisHomeScreen(
+                // Betöltés / hiba alatt ÜRES lista megy be — a képernyő
+                // szerződése nem ismer köztes állapotot. A hiba NEM
+                // csendben nyelődik el: a provider hibaága megmarad, és a
+                // lista üres volta itt nem állítás, hanem a még be nem
+                // töltött állapot.
+                recentAnalyses: recent.value ?? const <AnalysisSummary>[],
+                onStartRecording: () => context.go(AppRoutes.analysisRecord),
+                onImportFile: () {
+                  // A hang-importálásnak NINCS folyamata a fában (se
+                  // képernyő, se útvonal). Egy néma no-op itt halott gombot
+                  // adna; a felhasználó azt hinné, elromlott. Ezért a
+                  // hiányt kimondjuk.
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(l10n.analysisHomeImportUnavailable)),
+                  );
+                },
+                onOpenAnalysis: (summary) =>
+                    context.go(AppRoutes.analysisTimeline, extra: summary),
+              );
+            },
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.analysisRecord,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) {
+              // `watch`, nem `read`: az autoDispose felvevőt a widget
+              // életciklusa tartja életben, és a képernyő elhagyásakor
+              // eldobódik — a következő felvétel FRISS példányt kap. Egy
+              // `read` azonnal eldobná, egy nem-autoDispose provider pedig
+              // a képernyő által már lezárt felvevőt adná vissza másodszor.
+              final recorder = ref.watch(analysisCaptureRecorderProvider);
+              return AnalysisRecordingScreen(
+                recorder: recorder,
+                onCancel: () => context.go(AppRoutes.analysisCapture),
+                onFinished: (run, samples) {
+                  final pcm = PcmAnalysisInput(
+                    samples: samples,
+                    sampleRate: run.sampleRate,
+                    channelCount: 1,
+                    source: AnalysisInputSource.microphone,
+                  );
+                  unawaited(
+                    ref
+                        .read(analysisControllerProvider.notifier)
+                        .analyze(
+                          captureSeedDocument(
+                            runId: run.id,
+                            audio: pcm,
+                            createdAt: DateTime.now(),
+                          ),
+                          audio: ValidatedPcmAnalysisInput(input: pcm),
+                        ),
+                  );
+                  context.go(AppRoutes.analysisProcessing);
+                },
+              );
+            },
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.analysisProcessing,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) {
+              final state = ref.watch(analysisControllerProvider);
+              return AnalysisProcessingScreen(
+                state: state,
+                onCancel: () => unawaited(
+                  ref.read(analysisControllerProvider.notifier).cancel(),
+                ),
+                onRestart: () => context.go(AppRoutes.analysisRecord),
+                onViewResult: (document) =>
+                    context.go(AppRoutes.analysisOverview, extra: document),
+              );
+            },
+          ),
+        ),
         GoRoute(
           path: AppRoutes.analysisOverview,
           redirect: (_, state) =>

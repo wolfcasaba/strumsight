@@ -79,7 +79,7 @@ final class LocalBackingAudioPlayer implements BackingAudioPlayer {
         canChangeRate: true,
         preservesPitchWhenRateChanges: false,
         positionPrecision: Duration(milliseconds: 17),
-        supportedFormats: <String>{'mp3', 'wav'},
+        supportedFormats: supportedBackingAudioFormats,
         minimumRate: 0.5,
         maximumRate: 1.5,
       );

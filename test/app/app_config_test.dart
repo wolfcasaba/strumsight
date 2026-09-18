@@ -191,6 +191,92 @@ void main() {
     });
   });
 
+  // WP-G (repair plan 2026-09-06) — the API URL a build resolves when it
+  // passed no `STRUMSIGHT_API_URL`. `flutter test` passes no define, so
+  // `AppConfig.definedApiBaseUrl` is `null` here and the no-argument calls
+  // below measure the REAL shipped resolution.
+  group('WP-G — apiBaseUrlFor', () {
+    test('development without the define resolves the LIVE backend', () {
+      expect(
+        AppConfig.apiBaseUrlFor(AppEnvironment.development),
+        AppConfig.liveApiBaseUrl,
+      );
+      expect(AppConfig.liveApiBaseUrl, 'https://casaba.app/strumsight');
+    });
+
+    test('lab and production without the define keep the emulator '
+        'loopback default', () {
+      expect(
+        AppConfig.apiBaseUrlFor(AppEnvironment.lab),
+        AppConfig.devApiBaseUrl,
+      );
+      expect(
+        AppConfig.apiBaseUrlFor(AppEnvironment.production),
+        AppConfig.devApiBaseUrl,
+      );
+    });
+
+    test('an explicit define wins in every environment — the emulator '
+        'developer gets the loopback back', () {
+      for (final environment in AppEnvironment.values) {
+        expect(
+          AppConfig.apiBaseUrlFor(environment, define: AppConfig.devApiBaseUrl),
+          AppConfig.devApiBaseUrl,
+          reason: '$environment',
+        );
+        expect(
+          AppConfig.apiBaseUrlFor(
+            environment,
+            define: 'https://staging-backend.example',
+          ),
+          'https://staging-backend.example',
+          reason: '$environment',
+        );
+      }
+    });
+
+    test('the live URL passes validation in development (account on)', () {
+      final config = _resolve(
+        apiBaseUrl: AppConfig.apiBaseUrlFor(AppEnvironment.development),
+        accountEnabled: true,
+      );
+
+      expect(config.apiBaseUrl, AppConfig.liveApiBaseUrl);
+      expect(config.flags.usesNetwork, isTrue);
+    });
+
+    // The fail-closed production rules are untouched: WP-G changed the
+    // development DEFAULT, not what the validator accepts.
+    test('production still rejects the loopback it resolves by default', () {
+      final problems = _problemsOf(
+        () => _resolve(
+          environment: AppEnvironment.production,
+          apiBaseUrl: AppConfig.apiBaseUrlFor(AppEnvironment.production),
+          accountEnabled: true,
+        ),
+      );
+
+      expect(problems, hasLength(2));
+      expect(problems.first, contains('requires an HTTPS'));
+      expect(problems.last, contains('must not point at a development host'));
+    });
+
+    test('production accepts the live host (https, not loopback, not '
+        'staging)', () {
+      final config = _resolve(
+        environment: AppEnvironment.production,
+        apiBaseUrl: AppConfig.liveApiBaseUrl,
+        flags: const FeatureFlags(
+          accountEnabled: true,
+          diagnosticsEnabled: false,
+          labModeAvailable: false,
+        ),
+      );
+
+      expect(config.apiBaseUrl, AppConfig.liveApiBaseUrl);
+    });
+  });
+
   group('staging-labelled host outside production', () {
     test('is accepted in lab and development (staging is backend-only, '
         'ADR 0445 D3)', () {

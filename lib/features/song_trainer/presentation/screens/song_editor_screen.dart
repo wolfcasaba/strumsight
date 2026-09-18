@@ -11,6 +11,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../application/editor/song_editor_state.dart';
 import '../../application/editor/song_editor_controller.dart';
 import '../../application/song_trainer_providers.dart';
+import '../../data/importers/file_picker_adapter.dart';
 import '../../data/importers/importer_registry.dart';
 import '../../domain/models/meter_map.dart';
 import '../../domain/models/song_capability.dart';
@@ -45,6 +46,14 @@ bool _canPersist(SongDocument? persisted) {
   );
   return capability.canPersist;
 }
+
+/// Editor-side ceiling for one attached backing track.
+///
+/// The asset store's own `maxSongAssetByteLength` is 1 GiB and refuses an
+/// oversized payload with a machine code only — from the user's seat that
+/// reads as a silent no-op. A backing track is one song, not a library, so
+/// the editor stops far earlier and names the limit.
+const int maxBackingAudioBytes = 32 * 1024 * 1024; // 32 MiB.
 
 /// Route shell for the V2 editor. Editing state lives in the controller.
 final class SongEditorScreen extends ConsumerStatefulWidget {
@@ -332,6 +341,47 @@ final class _EditorBody extends ConsumerWidget {
                 ],
               ),
             ),
+          // K3/A2: an audio-derived document is a DRAFT. The banner is
+          // driven by the document's own provenance
+          // (`SongSourceType.audioAnalysis`), not by how the editor was
+          // reached, so a deep link or a later re-open says the same thing.
+          // The measured chord accuracy is ~57% on full-band music and
+          // 76–92% on solo guitar — the user is told to review before
+          // practising, and the import flow never sends them anywhere else.
+          if (draft.source.type == SongSourceType.audioAnalysis)
+            Padding(
+              key: const Key('song-editor-draft-banner'),
+              padding: const EdgeInsets.only(bottom: SsSpacing.space3),
+              child: Semantics(
+                label: l10n.songEditorDraftBannerTitle,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Icon(Icons.auto_awesome, color: colors.warning),
+                    const SizedBox(width: SsSpacing.space2),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            l10n.songEditorDraftBannerTitle,
+                            style: typography.bodyMedium.copyWith(
+                              color: colors.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            l10n.songEditorDraftBannerBody,
+                            style: typography.bodyMedium.copyWith(
+                              color: colors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           SongMetadataEditor(
             metadata: draft.metadata,
             onChanged: controller.editMetadata,
@@ -394,36 +444,102 @@ final class _EditorBody extends ConsumerWidget {
     WidgetRef ref,
     SongEditorController controller,
   ) async {
-    final source = await ref.read(songFilePickerAdapterProvider).pickSongFile();
+    // Everything the confirmation needs is resolved BEFORE the first
+    // await: the picker and the asset write are async gaps, and a
+    // `BuildContext` must not be read across one.
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final picker = ref.read(songFilePickerAdapterProvider);
+    final source = await picker.pickAudioFile();
     if (source == null) return;
-    final bytes = <int>[];
-    try {
-      await for (final chunk in source.openRead()) {
-        bytes.addAll(chunk);
-      }
-    } on ImportRegistryException catch (error) {
-      if (context.mounted) {
-        final l10n = AppLocalizations.of(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            key: const Key('song-editor-backing-failed'),
-            content: Text(l10n.songImportBlockingFailure(error.code)),
-          ),
-        );
-      }
+    final extension = _fileExtension(source.displayName);
+    const playable = PlatformFilePickerAdapter.supportedAudioExtensions;
+    if (!playable.contains(extension)) {
+      _showBackingMessage(messenger, l10n.songEditorBackingUnsupported);
       return;
     }
+    // The declared size is checked first so an oversized pick costs no
+    // read at all; the running total is checked again while streaming
+    // because a platform picker may under-report (or lie about) length.
+    if (source.byteLength > maxBackingAudioBytes) {
+      _showBackingMessage(messenger, l10n.songEditorBackingTooLarge);
+      return;
+    }
+    final builder = BytesBuilder();
+    try {
+      await for (final chunk in source.openRead()) {
+        if (builder.length + chunk.length > maxBackingAudioBytes) {
+          // Named, user-facing refusal BEFORE hashing or writing: the asset
+          // store's own 1 GiB ceiling would otherwise drop the file with no
+          // message the user could act on.
+          _showBackingMessage(messenger, l10n.songEditorBackingTooLarge);
+          return;
+        }
+        builder.add(chunk);
+      }
+    } on ImportRegistryException catch (error) {
+      // The picker is itself a budgeted data boundary: a source above its
+      // own audio ceiling is never buffered, and its `openRead()` refuses
+      // with this typed failure instead of yielding an empty stream. Attach
+      // is the one consumer that reaches that stream directly (the import
+      // flow is rejected earlier, on `byteLength`), so the refusal is NAMED
+      // here — dropping it would make an oversize pick a silent no-op.
+      _showBackingMessage(
+        messenger,
+        l10n.songImportBlockingFailure(error.code),
+      );
+      return;
+    }
+    final bytes = builder.takeBytes();
     if (bytes.isEmpty) return;
     final hash = sha256.convert(bytes).toString();
     await controller.attachBacking(
       SongAssetWriteRequest(
-        bytes: Uint8List.fromList(bytes),
+        bytes: bytes,
         assetId: SongAssetId('backing-${hash.substring(0, 16)}'),
-        extension: _fileExtension(source.displayName),
+        extension: extension,
         expectedSha256: hash,
         mimeType: source.mimeType,
+        // `durationMs` stays null on purpose: reading it would mean
+        // decoding the container here, and the platform player only
+        // reports a duration once the file is actually loaded. The
+        // transport learns the real duration when it prepares playback.
       ),
     );
+    if (controller.state.status == SongEditorStatus.failure) {
+      // The store refused the write and the named failure banner above
+      // already says so — a confirmation here would be a lie.
+      return;
+    }
+    _showBackingMessage(
+      messenger,
+      l10n.songEditorBackingAttached(
+        source.displayName,
+        _formatByteSize(bytes.length),
+      ),
+    );
+  }
+
+  static void _showBackingMessage(
+    ScaffoldMessengerState messenger,
+    String message,
+  ) {
+    if (!messenger.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        key: const Key('song-editor-backing-message'),
+        content: Text(message),
+      ),
+    );
+  }
+
+  /// Locale-independent, compact size label for the attach confirmation.
+  static String _formatByteSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    }
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   String _fileExtension(String name) {

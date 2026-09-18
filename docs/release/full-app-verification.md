@@ -141,8 +141,13 @@ a saját forrásából helyesen számított érték (§5.1, nem P1/P2/P3
 placeholder-literál), csak épp egy másik, V2-vak tárolót tükröz.
 
 - **Gazda:** Profile Hub / Progress feature (V1↔V2 napló-szétválás).
-- **Kör:** nincs — a két napló összehangolása vagy a mérce forrásának
-  cseréje a felelős feature kör dolga; a lelet itt van rögzítve.
+- **Kör:** **learner-loop 4. kör (2026-09-15) — feloldva.** Minden hub
+  (`TodayHubScreen`, `ProfileHubScreen`, streak- és haladás-képernyő) a
+  `practiceStatsProvider`-t olvassa, amely a V1 + V2 összesített feedből
+  (`aggregatedPracticeFeedProvider`) épül; a bejárás e2e tesztje
+  (`test/e2e/full_app_walkthrough_test.dart`, 7. megálló) azóta azt méri,
+  hogy a „sessions" csempe a V1 darabszám + a bejárás egy V2 sessionjét
+  mutatja.
 
 ### L5 — a `practiceHistoryV2ListProvider` sosem frissül egy konténer élettartamán belül
 
@@ -163,9 +168,13 @@ Library/Progress/Profile állomásokat bejárná — enélkül a Progress-mérce
 konténerben, még a helyes forráskód mellett sem.
 
 - **Gazda:** Practice feature / Progress V2 (V2 history cache invalidáció).
-- **Kör:** nincs — a cache-invalidáció (vagy a provider `.family`/
-  `autoDispose` alakra cserélése) a felelős feature kör dolga; a lelet
-  itt van rögzítve.
+- **Kör:** **learner-loop 2. kör (2026-09-15) — feloldva.** A
+  `PracticeEffectListener` a `NavigateToResult` effektnél
+  `ref.invalidate(practiceHistoryV2ListProvider)`-t hív
+  (`lib/features/practice/presentation/practice_effect_listener.dart`),
+  így a result-képernyő „Következő" ajánlása és a hubok ugyanabban a
+  konténerben látják a frissen mentett sessiont. A bejárás
+  `restartE2eApp` lépése megmaradt: egy valós újraindítást is mér.
 
 **Egyik lelet sem placeholder-literál (P1/P2/P3) — mindegyik a bejárás
 (A2/A3) által mért, valós, explicit állapot vagy valós (de más forrásból
@@ -196,7 +205,7 @@ megfigyelt) képernyő-osztályok:
 | 8 | `ProfileHubScreen` | `lib/features/profile_hub/screens/profile_hub_screen.dart` |
 | 9 | `SettingsScreen` | `lib/features/settings/screens/settings_screen.dart` |
 
-### 3.2 Kimaradó halmaz (64) — gazdával és körrel
+### 3.2 Kimaradó halmaz (84) — gazdával és körrel
 
 | Screen | Indok | Gazda | Kör |
 | --- | --- | --- | --- |
@@ -264,8 +273,28 @@ megfigyelt) képernyő-osztályok:
 | `lib/features/vision/presentation/screens/vision_result_screen.dart` | A Computer Vision capability-csoport (11 flag) KI besorolású — HORIZON valós-eszköz elfogadás nyitott (86 PENDING sor, kamera/thermal/soak/latency). | Computer Vision feature (Epic 5) | nincs — HORIZON valós-eszköz elfogadás (docs/sdd/epic-05-completion-report.md) |
 | `lib/features/vision/presentation/screens/vision_session_screen.dart` | A Computer Vision capability-csoport (11 flag) KI besorolású — HORIZON valós-eszköz elfogadás nyitott (86 PENDING sor, kamera/thermal/soak/latency). | Computer Vision feature (Epic 5) | nincs — HORIZON valós-eszköz elfogadás (docs/sdd/epic-05-completion-report.md) |
 | `lib/features/vision/presentation/screens/vision_setup_screen.dart` | A Computer Vision capability-csoport (11 flag) KI besorolású — HORIZON valós-eszköz elfogadás nyitott (86 PENDING sor, kamera/thermal/soak/latency). | Computer Vision feature (Epic 5) | nincs — HORIZON valós-eszköz elfogadás (docs/sdd/epic-05-completion-report.md) |
+| `lib/features/community/presentation/screens/clubs/club_detail_screen.dart` | A Community capability-csoport PREVIEW besorolású (`bool.fromEnvironment`, dart-define nélkül mindig KI) — a privacy/threat-model kör még végrehajtás előtt áll. A route-ok 2026-09-05 óta LÉTEZNEK (E17 Ch17), a belépési pont a Profile Hub „Közösség megnyitása" gombja; a kör mag-útja (§1) viszont a Today→gyakorlás→eredmény→Library→Progress→Profile magistrálist járja be, nem nyit közösségi ágat. | Community feature (Epic 9) | E12-R17 |
+| `lib/features/community/presentation/screens/clubs/club_list_screen.dart` | A Community capability-csoport PREVIEW besorolású (`bool.fromEnvironment`, dart-define nélkül mindig KI) — a privacy/threat-model kör még végrehajtás előtt áll. A route-ok 2026-09-05 óta LÉTEZNEK (E17 Ch17), a belépési pont a Profile Hub „Közösség megnyitása" gombja; a kör mag-útja (§1) viszont a Today→gyakorlás→eredmény→Library→Progress→Profile magistrálist járja be, nem nyit közösségi ágat. | Community feature (Epic 9) | E12-R17 |
+| `lib/features/community/presentation/screens/bookmarks_screen.dart` | A Community capability-csoport PREVIEW besorolású (`bool.fromEnvironment`, dart-define nélkül mindig KI) — a privacy/threat-model kör még végrehajtás előtt áll. A route-ok 2026-09-05 óta LÉTEZNEK (E17 Ch17), a belépési pont a Profile Hub „Közösség megnyitása" gombja; a kör mag-útja (§1) viszont a Today→gyakorlás→eredmény→Library→Progress→Profile magistrálist járja be, nem nyit közösségi ágat. | Community feature (Epic 9) | E12-R17 |
+| `lib/features/community/presentation/screens/comments_screen.dart` | A Community capability-csoport PREVIEW besorolású (`bool.fromEnvironment`, dart-define nélkül mindig KI) — a privacy/threat-model kör még végrehajtás előtt áll. A route-ok 2026-09-05 óta LÉTEZNEK (E17 Ch17), a belépési pont a Profile Hub „Közösség megnyitása" gombja; a kör mag-útja (§1) viszont a Today→gyakorlás→eredmény→Library→Progress→Profile magistrálist járja be, nem nyit közösségi ágat. | Community feature (Epic 9) | E12-R17 |
+| `lib/features/community/presentation/screens/community_challenges_screen.dart` | A Community capability-csoport PREVIEW besorolású (`bool.fromEnvironment`, dart-define nélkül mindig KI) — a privacy/threat-model kör még végrehajtás előtt áll. A route-ok 2026-09-05 óta LÉTEZNEK (E17 Ch17), a belépési pont a Profile Hub „Közösség megnyitása" gombja; a kör mag-útja (§1) viszont a Today→gyakorlás→eredmény→Library→Progress→Profile magistrálist járja be, nem nyit közösségi ágat. | Community feature (Epic 9) | E12-R17 |
+| `lib/features/community/presentation/screens/community_gate_screen.dart` | A Community capability-csoport PREVIEW besorolású (`bool.fromEnvironment`, dart-define nélkül mindig KI) — a privacy/threat-model kör még végrehajtás előtt áll. A route-ok 2026-09-05 óta LÉTEZNEK (E17 Ch17), a belépési pont a Profile Hub „Közösség megnyitása" gombja; a kör mag-útja (§1) viszont a Today→gyakorlás→eredmény→Library→Progress→Profile magistrálist járja be, nem nyit közösségi ágat. | Community feature (Epic 9) | E12-R17 |
+| `lib/features/community/presentation/screens/community_notifications_screen.dart` | A Community capability-csoport PREVIEW besorolású (`bool.fromEnvironment`, dart-define nélkül mindig KI) — a privacy/threat-model kör még végrehajtás előtt áll. A route-ok 2026-09-05 óta LÉTEZNEK (E17 Ch17), a belépési pont a Profile Hub „Közösség megnyitása" gombja; a kör mag-útja (§1) viszont a Today→gyakorlás→eredmény→Library→Progress→Profile magistrálist járja be, nem nyit közösségi ágat. | Community feature (Epic 9) | E12-R17 |
+| `lib/features/community/presentation/screens/community_search_screen.dart` | A Community capability-csoport PREVIEW besorolású (`bool.fromEnvironment`, dart-define nélkül mindig KI) — a privacy/threat-model kör még végrehajtás előtt áll. A route-ok 2026-09-05 óta LÉTEZNEK (E17 Ch17), a belépési pont a Profile Hub „Közösség megnyitása" gombja; a kör mag-útja (§1) viszont a Today→gyakorlás→eredmény→Library→Progress→Profile magistrálist járja be, nem nyit közösségi ágat. | Community feature (Epic 9) | E12-R17 |
+| `lib/features/community/presentation/screens/followers_screen.dart` | A Community capability-csoport PREVIEW besorolású (`bool.fromEnvironment`, dart-define nélkül mindig KI) — a privacy/threat-model kör még végrehajtás előtt áll. A route-ok 2026-09-05 óta LÉTEZNEK (E17 Ch17), a belépési pont a Profile Hub „Közösség megnyitása" gombja; a kör mag-útja (§1) viszont a Today→gyakorlás→eredmény→Library→Progress→Profile magistrálist járja be, nem nyit közösségi ágat. | Community feature (Epic 9) | E12-R17 |
+| `lib/features/community/presentation/screens/following_feed_screen.dart` | A Community capability-csoport PREVIEW besorolású (`bool.fromEnvironment`, dart-define nélkül mindig KI) — a privacy/threat-model kör még végrehajtás előtt áll. A route-ok 2026-09-05 óta LÉTEZNEK (E17 Ch17), a belépési pont a Profile Hub „Közösség megnyitása" gombja; a kör mag-útja (§1) viszont a Today→gyakorlás→eredmény→Library→Progress→Profile magistrálist járja be, nem nyit közösségi ágat. | Community feature (Epic 9) | E12-R17 |
+| `lib/features/community/presentation/screens/leaderboard_screen.dart` | A Community capability-csoport PREVIEW besorolású (`bool.fromEnvironment`, dart-define nélkül mindig KI) — a privacy/threat-model kör még végrehajtás előtt áll. A route-ok 2026-09-05 óta LÉTEZNEK (E17 Ch17), a belépési pont a Profile Hub „Közösség megnyitása" gombja; a kör mag-útja (§1) viszont a Today→gyakorlás→eredmény→Library→Progress→Profile magistrálist járja be, nem nyit közösségi ágat. | Community feature (Epic 9) | E12-R17 |
+| `lib/features/community/presentation/screens/post_composer_screen.dart` | A Community capability-csoport PREVIEW besorolású (`bool.fromEnvironment`, dart-define nélkül mindig KI) — a privacy/threat-model kör még végrehajtás előtt áll. A route-ok 2026-09-05 óta LÉTEZNEK (E17 Ch17), a belépési pont a Profile Hub „Közösség megnyitása" gombja; a kör mag-útja (§1) viszont a Today→gyakorlás→eredmény→Library→Progress→Profile magistrálist járja be, nem nyit közösségi ágat. | Community feature (Epic 9) | E12-R17 |
+| `lib/features/community/presentation/screens/safety_relationships_screen.dart` | A Community capability-csoport PREVIEW besorolású (`bool.fromEnvironment`, dart-define nélkül mindig KI) — a privacy/threat-model kör még végrehajtás előtt áll. A route-ok 2026-09-05 óta LÉTEZNEK (E17 Ch17), a belépési pont a Profile Hub „Közösség megnyitása" gombja; a kör mag-útja (§1) viszont a Today→gyakorlás→eredmény→Library→Progress→Profile magistrálist járja be, nem nyit közösségi ágat. | Community feature (Epic 9) | E12-R17 |
+| `lib/features/audio_analysis/presentation/capture/analysis_home_screen.dart` | Az Audio Analysis V2 capability-csoport (9 flag) KI besorolású — shadow rollout, Epic 6 release-blokkolók nyitva. A felvételi folyamat 2026-09-05 óta be van kötve (a `AnalyzeAudioUseCase` üres-minta placeholderének megszüntetésével), de a Practice Area Hubon nincs UI-belépési pont a felvételbe. | Audio Analysis V2 (Epic 6) | nincs — Epic 6 release-blokkolók feloldása (docs/sdd/epic-06-completion-report.md) |
+| `lib/features/audio_analysis/presentation/capture/analysis_processing_screen.dart` | Az Audio Analysis V2 capability-csoport (9 flag) KI besorolású — shadow rollout, Epic 6 release-blokkolók nyitva. A felvételi folyamat 2026-09-05 óta be van kötve (a `AnalyzeAudioUseCase` üres-minta placeholderének megszüntetésével), de a Practice Area Hubon nincs UI-belépési pont a felvételbe. | Audio Analysis V2 (Epic 6) | nincs — Epic 6 release-blokkolók feloldása (docs/sdd/epic-06-completion-report.md) |
+| `lib/features/audio_analysis/presentation/capture/analysis_recording_screen.dart` | Az Audio Analysis V2 capability-csoport (9 flag) KI besorolású — shadow rollout, Epic 6 release-blokkolók nyitva. A felvételi folyamat 2026-09-05 óta be van kötve (a `AnalyzeAudioUseCase` üres-minta placeholderének megszüntetésével), de a Practice Area Hubon nincs UI-belépési pont a felvételbe. | Audio Analysis V2 (Epic 6) | nincs — Epic 6 release-blokkolók feloldása (docs/sdd/epic-06-completion-report.md) |
+| `lib/features/practice_generator/presentation/screens/plan_change_review_screen.dart` | `practiceGeneratorEnabled` BE, de a Practice Area Hubon nincs UI-belépési pont a Generátorba — a kör mag-útja nem éri el. A képernyők 2026-09-05 óta route-oltak (a katalógus-feloldó és a terv-bemenet építő bekötésével), az előnézet és a változás-áttekintés `extra`-vezérelt folyamat-lépés. | Practice Generator feature | E15-R07 |
+| `lib/features/practice_generator/presentation/screens/plan_preview_screen.dart` | `practiceGeneratorEnabled` BE, de a Practice Area Hubon nincs UI-belépési pont a Generátorba — a kör mag-útja nem éri el. A képernyők 2026-09-05 óta route-oltak (a katalógus-feloldó és a terv-bemenet építő bekötésével), az előnézet és a változás-áttekintés `extra`-vezérelt folyamat-lépés. | Practice Generator feature | E15-R07 |
+| `lib/features/practice_generator/presentation/screens/plan_privacy_screen.dart` | `practiceGeneratorEnabled` BE, de a Practice Area Hubon nincs UI-belépési pont a Generátorba — a kör mag-útja nem éri el. A képernyők 2026-09-05 óta route-oltak (a katalógus-feloldó és a terv-bemenet építő bekötésével), az előnézet és a változás-áttekintés `extra`-vezérelt folyamat-lépés. | Practice Generator feature | E15-R07 |
+| `lib/features/practice_generator/presentation/screens/weekly_plan_screen.dart` | `practiceGeneratorEnabled` BE, de a Practice Area Hubon nincs UI-belépési pont a Generátorba — a kör mag-útja nem éri el. A képernyők 2026-09-05 óta route-oltak (a katalógus-feloldó és a terv-bemenet építő bekötésével), az előnézet és a változás-áttekintés `extra`-vezérelt folyamat-lépés. | Practice Generator feature | E15-R07 |
 
-**Összegzés:** 9 (bejárt) + 64 (kimaradó) = 73 (mért elérhető) — a két
+**Összegzés:** 9 (bejárt) + 84 (kimaradó) = 93 (mért elérhető) — a két
 halmaz diszjunkt (egyik screen sem szerepel mindkettőben) és uniójuk
 pontosan lefedi a mért elérhető halmazt. Egyik kimaradó sor sem üres
 `Indok`/`Gazda`/`Kör` cellával; minden `Kör` érték `E\d+-R\d+` alakú vagy
@@ -278,6 +307,6 @@ kimondott `nincs — <indok>`.
 | 1 | L1 — Practice Area Hub recommended CTA nem ad át `id`-t | Practice Area Hub | **`E16-R06` — feloldva** (ADR 0508 D3/D4, l. a szakasz Kör sorát) |
 | 2 | L2 — Onboarding mindig `/live`-ra fejez be | Onboarding feature | **`E16-R06` — feloldva** (ADR 0508 D1/D2, l. a szakasz Kör sorát) |
 | 3 | L3 — Library V2 forrásai bootstrap-függők, a harness nem köti be | Library V2 / E12-R11 harness | nincs — a harness-nek vagy a Library kompozíciós rétegének kell ezt bekötnie egy jövőbeli körben; a lelet itt van rögzítve |
-| 4 | L4 — Profile Hub „sessions” mércéje a V1 naplót olvassa | Profile Hub / Progress feature | nincs — a két napló összehangolása vagy a mérce forrásának cseréje a felelős feature kör dolga; a lelet itt van rögzítve |
-| 5 | L5 — `practiceHistoryV2ListProvider` sosem frissül egy konténer élettartamán belül | Practice feature / Progress V2 | nincs — a cache-invalidáció (vagy a provider `.family`/`autoDispose` alakra cserélése) a felelős feature kör dolga; a lelet itt van rögzítve |
+| 4 | L4 — Profile Hub „sessions” mércéje a V1 naplót olvassa | Profile Hub / Progress feature | **learner-loop 4. kör — feloldva** (`practiceStatsProvider`, V1 + V2 összesített feed; l. a szakasz Kör sorát) |
+| 5 | L5 — `practiceHistoryV2ListProvider` sosem frissül egy konténer élettartamán belül | Practice feature / Progress V2 | **learner-loop 2. kör — feloldva** (`ref.invalidate` a `NavigateToResult` effektnél; l. a szakasz Kör sorát) |
 | 6 | A3 — a core utak a termék SAJÁT navigációjával (a két teszt-oldali híd nélkül) mérhetően NEM voltak végigjárhatók (l. L1, L2, §2 bevezető) | Practice Area Hub / Onboarding feature | **`E16-R06` — feloldva, A3 mérve TELJESÜL** (l. §2 bevezető) |

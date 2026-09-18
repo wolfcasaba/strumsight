@@ -1,6 +1,6 @@
 # E17-R05 — A Practice Generator két `UnimplementedError` seamje
 
-- **Státusz:** PREPARED (előre megírva 2026-09-05, kód olvasva: `main @ b17e08ef`) — **`hold`: A kör két hiányzó seamet IMPLEMENTÁL (nem bekötés)**
+- **Státusz:** PREPARED (előre megírva 2026-09-05, kód olvasva: `main @ b17e08ef`) — **`pending`** (a `hold` 2026-09-05-én feloldva, l. §0.0)
 - **Típus:** Chapter 17 (Teljes bekötés), Kör 5
 - **Kör-azonosító:** `E17-R05`
 - **Branch:** `<motor>/e17-r05-practice-generator-seams`
@@ -10,9 +10,11 @@
 
 **Visszakeresett előzmény:** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "a practice generator két `unimplementederror` seamje"` — a kör pre-flightjának KÖTELEZŐ lefuttatnia és a találatokat a §2-be beépítenie; a brief előre megírt állapotában a §2 a `main @ b17e08ef` mérésein áll.
 
-## 0.0 MIÉRT `hold`
+## 0.0 A `hold` FELOLDVA (2026-09-05)
 
-A kör két hiányzó seamet IMPLEMENTÁL (nem bekötés). **Mi oldja fel:** az `E17-R01`..`E17-R04` kompozíciós sáv lezárása, hogy a seam-implementáció mért bekötési mintára épüljön.
+A kör két hiányzó seamet IMPLEMENTÁL (nem bekötés).
+
+Az eredeti `hold` az `E17-R01`..`R04` sáv lezárásához kötötte. **2026-09-05-én feloldva:** a seam-implementáció a `practice_generator` SAJÁT rétegében él, a bekötési körök `lib/` halmazát nem érinti.
 
 ```ai-router
 schema_version = 1

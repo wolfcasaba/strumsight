@@ -96,3 +96,6 @@ device_build.*.json
 # trips test/tooling/legacy_identifier_guard_test.dart and `git add -A` would
 # sweep it into a commit; it is machine state, never repo content.
 .superpowers/
+
+# Ágens-worktree-ek (beágyazott git-repók): a `git add -A` sosem szedheti fel őket.
+.claude/worktrees/

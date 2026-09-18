@@ -64,7 +64,18 @@ enum SongSourceType {
 
   /// Guitar Pro file (`.gp*`) — only available when the platform / licence
   /// feasibility gate (SDD §11.7, E03-R13) is satisfied.
-  guitarPro('guitarPro');
+  guitarPro('guitarPro'),
+
+  /// Derived on device from a recorded / downloaded AUDIO file (MP3, M4A,
+  /// MP4, AAC, OGG, FLAC, WAV) by the clip analyzer — never authored and
+  /// never parsed from notation (K3).
+  ///
+  /// A document with this origin is a DRAFT: the chord labels come from a
+  /// statistical detector whose measured in-set accuracy is ~57 % on
+  /// full-band music and 76–92 % on solo guitar, so the editor refuses to
+  /// present it as a finished song. The code is stable on the wire; the
+  /// enum position is not.
+  audioAnalysis('audioAnalysis');
 
   const SongSourceType(this.code);
 

@@ -1,5 +1,32 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔀 INTEGRÁCIÓ 2026-09-18: a Song Trainer-vonal a mainbe — `integration/audio-import`
+
+A `claude/workflow-production-readiness-r1866i` (122 commit, 2026-09-17: járható
+Song Trainer, K1 kísérősáv-csatolás, K2 Android dekóder-csatorna, K3 hangfájl →
+piszkozat-dal, navigáció + kamera-haptika) **`--no-ff` merge-dzsel** a mainbe,
+amely a 2026-09-18-i hibavadász-kör 10 javítását hozza. 14 ütközés, mind
+SZEMANTIKUSAN feloldva — egyik oldal sem lett vakon átvéve.
+
+| Ütközés | Döntés |
+|---|---|
+| `.gitignore` | unió (`.superpowers/` + `.claude/worktrees/`) |
+| `HANDOFF.md` | MINDKÉT felső szakasz megmarad, fordított időrendben |
+| `app_router.dart` | a branch `SongTrainerSessionRoute` / `SongTrainerResultArgs` buildere + a main `_songTrainerPayloadRedirect` őre, a branch típusaira igazítva |
+| `tutor_home_screen.dart` | main `push` + a branch három mellék-CTA-ja |
+| `practice_area_hub_screen.dart` | a branch teljes cél-szerinti katalógusa, ajánló-kártyája, kurzus-kártyája és tervező-belépői + a main chip-sora (kategóriánkénti id, tiltott Scales chip tooltippel) mint ugró-sáv; `_PracticeCategory` → `_ChipCategory`, hogy a branch `PracticeAreaHubCategory`-ja mellett megférjen |
+| `today_hub_screen.dart` | main lokalizált `progressGoalOption` + a branch `push`-ai és zászló mögé tett Vision-kártyája |
+| `file_picker_adapter.dart` | main mért méret-őre (bemondott hossz + streamelt futó összeg → tipizált `sourceBytesExceeded`) ÉS a branch hang-választó útja; a hang-út SAJÁT `audioLimits` (32 MiB) profilt kap, a kotta-út marad 1 MiB |
+| `song_editor_screen.dart` | a branch K1 csatolás-folyama marad, a picker tipizált elutasítása `ImportRegistryException`-ként a streamelő ágon nevesítve |
+| `app_en.arb` / `app_hu.arb` | GENERÁLTAK: a szegmensek uniójából újragenerálva (`gen_l10n_segments.dart --write` + `gen-l10n`), **paritás 2374 = 2374**, egyik oldal kulcsa sem veszett el |
+| `library_test.dart` | a Profile fül címkéje `'Profile'` (main `profileHubTitle`) |
+| 3 golden PNG | `e13_r17_practice_area_hub_compact` a mainé (a chipek ott változtak), a két `e13_r25_song_trainer_stage_*` a branché — mindhármat a CI veszi újra |
+
+**Ismert nyitott tétel:** a `practice_area_hub_categories_test.dart` „nincs több
+cél-chip" cellája a branch régi állítása; a chipek a main javításával már
+kategóriánkénti id-vel navigálnak, ezért a cella az invariánst (soha nincs csupasz
+`/practice/setup`) méri tovább, nem a chipek hiányát.
+
 ## 🐞 HIBAVADÁSZAT + JAVÍTÁS — `cb6ab570` → `73394bdb` (kör „hibavadászat + javítás", branch `claude/strum-strings-live`), 2026-09-18
 
 A kör egyetlen mondata: **Fable tech lead vezetésével, Workflow-n indított
@@ -240,6 +267,274 @@ módban a cue élesedik, ott várható a legnagyobb különbség; (2) saját cí
 felvételek (E18 következtetése: ez az egyetlen döntő tanítóadat); (3) a Song
 Trainer nem hív `setExpectedChord`-ot → ott a cue még nem él; (4) a két
 tooling-teszt Windows-portja külön kör.
+
+## ✅ K3 HANGFÁJL → PISZKOZAT-DAL 2026-09-17 (ág: `claude/workflow-production-readiness-r1866i`)
+
+A K1 (kísérősáv-csatolás) és K2 (Android dekóder-csatorna) után a lánc összeáll: a Dal-könyvtár Import lapján kiválasztott MP3 / M4A / MP4 / AAC / OGG / FLAC / WAV fájlt az app az ESZKÖZÖN dekódolja és elemzi, és **piszkozat dalként a SZERKESZTŐBEN** landol — soha nem gyakorlásban. Őszinte pontosság: az akkordfelismerés teljes zenekari felvételen ~57% in-set, szólógitáron 76–92% — ezért mondja ki minden felület, hogy PISZKOZAT.
+
+| Cella | Mit mér és mi a bizonyíték |
+|---|---|
+| **A1** leképező | `AudioSongDraftMapper` (`lib/features/song_trainer/data/importers/audio_song_draft_mapper.dart`): az akkordok a becsült bpm ütemrácsára kvantálódnak (int, 40–240 közé szorítva; hiányzó tempó → 100 + `audioDraft.tempo.fallback`), az egymást követő azonos akkordok összevonódnak, és a futó `cursor` miatt a G–C–D SORRENDJE akkor is megmarad, ha két szakasz ugyanarra az ütemre kerekedik. 4/4, konstans tempó, EGY szekció a fájlnévből. Három elutasítás nevesített: nem-pozitív hossz (`audioDraft.invalidDuration`), üres akkord-idővonal (`audioDraft.noChords` — SOHA nem 0 eseményes „kész" dal), és a `SongValidator` egyetlen fatális leletet sem ad a kimenetre. 9 cella. |
+| **A2** eredet + címkézés | Új `SongSourceType.audioAnalysis('audioAnalysis')`. A codec `songSourceTypeFromCode`-on át olvas, ezért a `check_song_schema.dart` 6 fájlos SHA-256 pillanatképe VÁLTOZATLAN (a kapu zölden mérte) — a round-trip cella a kódot a dróton méri. A szerkesztő piszkozat-sávja a dokumentum SAJÁT provenienciájából jön, nem az útvonalból, tehát mélylink és újranyitás ugyanazt mondja; a könyvtár „Eredet" szűrője és sor-jelvénye „Hangfájl" / „Audio file". ARB en+hu 8 kulcs, aggregátumok a generátorral újragenerálva, **paritás 2371 = 2371**. |
+| **A3** adatvédelem | MÉRT rés: az `AnalyzeController._analyze` Lab mód + hozzájárulás esetén FELTÖLTÖTTE a nyers PCM-et — a mikrofon-útra írva, ahol a felvétel a saját játék; a K3 viszont importált zenét küld ugyanoda. A kapu a BELÉPÉSI PONT: `_analyze` kötelező `allowDiagnostics` paramétert kap, az `analyzeImported` `false`-t ad (a Lab-ág meg sem fut), az új `computeImportedClipAnalysis` pedig olyan belépő, amin nincs elfelejthető zászló. `test/privacy/imported_audio_never_uploaded_test.dart`: viselkedés (minden kapcsoló BE → nulla feltöltés) + kontroll (a kém RÖGZÍT, ha meghívják) + forrás-őr. |
+| **A4** folyamat | `AudioSongImportController`: `pickAudioFile()` → saját **32 MiB**-os limitprofil (bemondott méret ÉS streamelés közbeni futó összeg; a kotta-út 1 MiB-os `maxSourceBytes`-a érintetlen) → `AudioScratchDecoder` (bájtok → ideiglenes fájl → K2 dekóder → a másolat `finally`-ben törlődik) → elemzés izolátumban → leképező → EREDETI tömörített bájtok a tartalom-hash tárba → `BackingAudioTrack` + `SongAssetReference` → `repository.create` → `SongImportSucceededEffect` (eddig megfigyelő NÉLKÜL) → szerkesztő. Határozatlan haladásjelző (sem a dekóder, sem az elemző nem jelent százalékot), a Mégse és a képernyő elhagyása is megszakít: a futó munkát a művelet-token eldobja, izolátum nem marad. Semmi néma: a dekóder stabil kódja, a leképező hibája és a tár elutasítása is terminális, nevesített állapot. 6 + 4 cella. |
+| **A5** property | `test/property/audio_song_draft_property_test.dart` (`PROPERTY_SEED`): 300 véletlen néma/zajos/rövid `AnalyzeResult` (NaN és végtelen tempó, sorrend nélküli és tartományon kívüli idők, üres címkék) → mindig ÉRVÉNYES dokumentum VAGY nevesített hiba; soha kivétel, soha 0 eseményes siker; a küszöb %-alapú. |
+| **A6** e2e | `song_trainer_walkthrough_test.dart` +1 cella az ÉLES routeren: FAB → import → „Hangfájl (piszkozat)" → szerkesztő a `song-editor-draft-banner`-rel (és NINCS trainer-képernyő) → vissza a könyvtárba, ahol az új sor eredete „Audio file". |
+
+**Mellékes, mért javítás:** a könyvtár csak `initState`-ben töltött, ezért az alatta maradó útvonalon létrejött dal láthatatlan volt — az import-lap bezárása után most újratölt.
+
+**CI-körök (mi volt piros, mi a javítás).** (1) **35228799830** — `dart format`: a 2395 fájlból EGYETLEN tért el; a cellák beágyazott hívásfái (`_map(_analysis(bpm: …, chords: const <TimelineChord>[…]))`) tördelését a tall style másképp oldja meg, mint a kézi alak → minden bemenet lokális `const` listába került, a tartalom változatlan. (2) **35229248692** — analyze `6 issues` (nullable-ként olvasott `??`, felesleges import, `SongSummary.documentId`, kötelező `FeatureFlags` mezők). (3) **35229758741** — `10932 passed, 3 failed`; a napló 5000 sorra csonkult, ezért a `record-goldens.yml` `paths` bemenetével szűkítettem (**35232379512** → `592 passed, 1 failed`), így a bukás pontosan látszott: az e2e cella `TimeoutException after 0:10:00`. **Ok:** a fában már kimondott tanulság (`song_editor_backing_attach_test.dart` fejléce) — valódi `dart:io` munka SOHA nem fejeződik be a `testWidgets` fake-async zónájában, a controller viszont fájlt írt, mert a platform-dekóder PATH-ot vár. Javítás nem a teszt hajlítása, hanem a határ helyretétele: a „bájtok → path" lépés az ÚJ `AudioScratchDecoder`-be költözött (4 saját, valódi temp-könyvtáras cellával), a controllerben NULLA `dart:io` maradt. A maradék 2 bukás a KÉT szándékos import-képernyő golden volt (`e13_r24_song_import_compact` + `_scale2`) — újrafelvéve a `record-goldens.yml`-lel (**35234455301**, pontosan 2 PNG, más nem).
+
+**Zöld futások (HEAD `b2977275`):** full-gate **35235316258** (mindkét job: format · analyze · architecture · secret · l10n-paritás · asset · teljes suite · randomizált property · song-séma · fixture-proveniencia · coverage) · build-apk **35240941109** (`strumsight-1.0.0-1-b297727-development.apk`) · apk-smoke **35246268481** (**26/26**, hideg indítás 2607 ms, TOTAL PSS 89 934 kB, `logcat-clean`). **APK** (kicsomagolt, közvetlen link, `audio-import-2026-09-17` release): https://github.com/wolfcasaba/strumsight/releases/download/audio-import-2026-09-17b/strumsight-1.0.0-1-b297727-development.apk — a jelen HANDOFF-commit csak doksi.
+
+**Amit ez NEM bizonyít:** **valódi MP3 dekódolás + elemzés egyetlen futáson sem történt** — a host-oldali cellák a dekódert és az elemzőt is fake mögé teszik, a füst-teszt pedig nem importál hangfájlt. A ~57% / 76–92% pontosság korábbi mérés, nem ezé a köré. **A végső elfogadás a tulajdonos valós APK-tesztje saját zenei fájllal.**
+
+**Tudatosan kimaradt (OUT):** valódi beat-tracking, tempóváltás, szekció-felismerés, iOS-dekóder. **Nyitva:** a KOTTA-import sikere továbbra sem visz sehova (a `SongImportSucceededEffect`-et csak a hang-út figyeli, H8); az `audioAnalysis` dokumentumokra nincs külön export-cella; a szerkesztőből a piszkozat „elfogadása" (a piszkozat-jelölés levétele) nincs bekötve.
+
+## ✅ K1 HANGFÁJL-KÍSÉRŐSÁV + K2 ANDROID DEKÓDER-CSATORNA 2026-09-17 (ág: `claude/workflow-production-readiness-r1866i`)
+
+Két külön ágens kész diffje integrálva cherry-pickkel, **ütközés nélkül**: K1 `0e299b2c` (`tmp/k1-backing-audio`), K2 `44328758` + `445b0a32` (`tmp/k2-audio-decoder`). Az ARB-aggregátumok (ADR 0307 §4 szerint GENERÁLTAK) automatikus egyesítése bájtra megegyezik a generátor kimenetével (a `gen_l10n_segments.dart` python-újraimplementációjával ellenőrizve, előbb a HEAD-en `--check`-kel validálva) — **en↔hu paritás 2363 = 2363**. ADR-ütközés nem volt: a `0535` szabad szám.
+
+| Cella | Mit mér és mi a bizonyíték |
+|---|---|
+| **K1** hangfájl kísérősávként | A szerkesztő csatolás-gombja eddig a `pickSongFile()`-t hívta (json/musicxml/xml/mxl/mid/midi) — **egyetlen hangfájl sem volt kiválasztható**. Új `FilePickerAdapter.pickAudioFile()` külön `XTypeGroup`-pal: hét kiterjesztés (mp3 · m4a · mp4 · aac · ogg · flac · wav) ÉS a MIME-típusaik, mert az Android SAF a feloldott MIME-re szűr, és egy csak-hangot vivő MPEG-4 tárolóra gyakran `video/mp4`-et mond. A `fromXFile` mostantól VALÓDI médiatípust tárol a `mimeType`-ban (eddig a puszta kiterjesztést, amit egy dekóder sem tud fogyasztani); `m4a` és `mp4` egyaránt `audio/mp4`. A `supportedBackingAudioFormats` EGY helyen van deklarálva, és a valódi lejátszó-képességek ÉS a fake tükör is ezt használja — egy megengedőbb fake zöldre vinne egy csatolást, amit az eszköz visszautasít. A csatolás `BytesBuilder`-rel olvas, **32 MiB** felett elutasít (előbb a bemondott méret, majd futó összeg streamelés közben — a hazudott méretet is elkapja), és minden elutasítást SnackBar nevez meg. Cellák: `backing_format_support_test.dart` (4 + 7×2 formátumsor), `song_editor_backing_attach_test.dart` (5, köztük valódi temp-könyvtáras SHA-256 tárolás), `file_picker_adapter_test.dart` (5), 3 új ARB-kulcs en+hu. A launcher-cella a kör által ADOTT `backingAssetOf`-ot hívja (a K1 worktree-jében még nem létezett; a helyi másolat lecserélve — erősebb, nem gyengébb). |
+| **K2** Android dekóder-csatorna | Eddig **csak WAV** volt dekódolható (a `wav_decoder.dart` a saját doc-kommentjében mondja ki). Új `strumsight/audio_decoder` csatorna: `AudioDecoderChannel.kt` (`MediaExtractor` + `MediaCodec` `HandlerThread`-en), amely **kizárólag az ELSŐ `audio/`-val kezdődő sávot** választja — egy MP4 képsávja soha nem olvasódik —, minden forráscsatornát egy floatra átlagol, opcionálisan újramintavételez, a `maxSeconds`-t korai leállással tiszteli, és little-endian float32 bájtokkal válaszol (4 bájt/frame). `MainActivity.configureFlutterEngine` regisztrálja, `cleanUpFlutterEngine` bontja. Dart oldalon `PlatformAudioDecoder` a megosztott domain codec-rétegben — **nincs `package:flutter` importja**, a `MethodChannel` az `AudioDecoderPlatformBridge` mögött van; a kapuk a natív hívás ELŐTT futnak (platform → fájl létezik → ≤ 64 MiB → `probe()` → ≤ 10 perc). Nem-Android és nem regisztrált natív oldal egyaránt `audio.unsupported_platform`, nem dekódolási hiba. Öt új `FailureCode` (`audio.file_not_found` · `no_audio_track` · `unsupported_container` · `decoder_failed` · `unsupported_platform`; a `too_long` a MEGLÉVŐ `audio.clip_too_long`-ra képződik). Cellák: `platform_audio_decoder_test.dart` (17, a csatornát a bináris messengeren mockolva, tehát a VALÓDI `MethodChannel` + `StandardMethodCodec` úton) + `tools/tests/test_k2_audio_decoder_track_filter.py` forrás-őr a sávszűrőre. Doksi: **ADR 0535** + `docs/rag/chunks/023-audio-file-decoding.md`. |
+
+**CI-körök (mi volt piros, mi a javítás).** (1) **35214844455** és (2) **35215281616** — `dart format`: EGYETLEN fájl, a `platform_audio_decoder_test.dart` (a K2 ágensnek sem volt Dart SDK-ja). A kapu csak a fájl NEVÉT mondja meg, a kanonikus alakot nem, ezért egy eldobható szondával kérdeztem meg a CI-t: a `record-goldens.yml` célzott futása (**35215547957**, PNG nem változott) kiíratta a `dart format --output=show` kimenetét a naplóba — a `...` szórt elemet tartalmazó map-literált a tall style akkor is soronként bontja, ha egy sorba beférne. A szonda ugyanabban a commitban törölve. (3) **35215685104** — analyze: három `prefer_initializing_formals` (a kapu `fatal-infos`); a privát mezős inicializáló formális nevesített paraméterként is működik (precedens: `MicCapturePitchFrameSource`), a nyilvános paraméternevek változatlanok. (4) **35215998460** — `10910 passed, 4 failed`; a napló az utolsó 5000 sorra csonkult, ezért a `record-goldens.yml` `paths` bemenetével szűkítettem (**35217746705** → `52 passed, 4 failed`, majd **35218160107** zöld). Mind a négy ugyanaz: `ensureVisible(song-editor-attach-backing)` → `Bad state: No element` — a 800×600-as alapfelületen a szerkesztő `ListView`-ja soha nem rendezi el az utolsó gyerekét, tehát a gomb nincs is az elem-fában; a cellák a nézetablakon buktak, nem a bekötésen. Orvosság: 1200×2400-as felület (ugyanaz, mint az E16 sétánál) — a mért tulajdonságok változatlanok.
+
+**Zöld futások (HEAD `31c41b4a`):** full-gate **35218469900** (mindkét job) · build-apk **35220926520** (`strumsight-1.0.0-1-31c41b4-development.apk`, 39,9 MB) · apk-smoke **35223876461** (**26/26**, hideg indítás 2502 ms, TOTAL PSS 86 803 kB, `logcat-clean`). A build-apk az ELSŐ valódi bizonyíték a K2 Kotlinjára (a full-gate nem fordít Kotlint), a füst-teszt pedig arra, hogy a csatorna-regisztráció nem öli meg az indítást.
+
+**Amit ez NEM bizonyít:** **valódi dekódolás egyetlen futáson sem történt** — a host-oldali cellák mind a csatornát mockolják, a füst-teszt pedig nem importál hangfájlt. Ezt csak eszközön (vagy a K3 emulátoros futásán) lehet mérni. A K1 csatolása host-oldalon végigmért, de a valódi hangfájl lejátszása szintén eszköz-kérdés; iOS-en nincs dekóder-implementáció (ADR 0535 §6).
+
+## ✅ A DAL-TRAINER JÁRHATÓ 2026-09-17 (ág: `claude/workflow-production-readiness-r1866i`)
+
+**Kiindulás:** [`docs/reviews/song-trainer-v2-review-2026-09-17.md`](docs/reviews/song-trainer-v2-review-2026-09-17.md) — „a motor kész, a prezentációs bekötés hiányzik": a `/songs` fül üres könyvtárat, egy szerkesztőt és egy zsákutcás setup-képernyőt adott; a `lib/` fában NULLA `push(songTrainerSession)` volt.
+
+| Cella | Mit mér és mi a bizonyíték |
+|---|---|
+| **A1** seed-katalógus | Három SAJÁT SZERZÉSŰ gyakorló dal (`Három akkord (G–C–D)` · `Blues shuffle A-ban (12 ütem)` · `Keringő G-ben`) `SongDocument` JSON-ként: `assets/songs/` + `README.md`, `pubspec.yaml`-deklaráció, proveniencia a dokumentumok `metadata.copyright`/`notes` mezőjében IS. A `tool/ci/check_song_fixture_licenses.dart` mostantól az `assets/songs` fát is végigjárja (SHA-256 manifest) — csendes szerkesztés vagy bedobott jogvédett dal pirosra viszi a kaput. Telepítés a MEGLÉVŐ `SongRepository`-n át, a `songRepositoryBootProvider` nyitási pontján, pontosan egyszer: a `SongSeedMarkerStore` (a `SongMigrationVersionStore` mintája) a kapu, nem a repó tartalma — törölt seed SOHA nem jön vissza magától. Üres állapot: „Gyakorló dalok visszaállítása" + „Ugrás a Tanulás útra" + mondat a Gyakorló hub le/fel gyakorlatairól (ARB en+hu, aggregátumok ADR 0307 §4 szerint újragenerálva, paritás **2360 = 2360**). Cellák: `song_seed_installer_test.dart` (7), `song_repository_wiring_test.dart` (+2). |
+| **A2** route-séta | Könyvtár-sor Play → setup → **Start** → session-route. Új `loadSongTrainerSession` (dokumentum + fordítás + sávadat + loop-határ, `AppResult`-tal, nem dobással), a setup route átadja az `onComplete`-et, és az új `SongTrainerSessionRoute` birtokolja a controllert. A Stage végre hívja a `prepare()`+`start()`-ot, pontosan egyszer. Nincs route-literál, a session top-level route maradt (E13-R08 csapda). |
+| **A3** valódi sávok + vezérlők | A session-route a betöltött dokumentum akkord-/strum-/hang-eseményeit és szekcióit adja át; pause/resume/seek a controllerre hat. A futó `Slider(onChanged: null)` helyén ŐSZINTE tempó-kijelzés (a transport csak `ready`/`paused` fázisban fogad tempóváltást — ezt a `song_transport_test.dart` rögzíti); szünetben a strum-sáv a playheadet követi, nem a dal elejét. Az eredményképernyő két gombja él: gyakorlás újra (a lezárt transportot `RestartSongTransport` viszi vissza `ready`-re) és vissza a könyvtárba. |
+| **A4** mozgó playhead | Új `SongTransportTickSource` (16 ms, a Practice `PracticeTickSource` mintája): tempó-skálázva publikál, szünetnél/hibánál/dispose-nál leáll, friss backing-minta esetén hallgat (a backing sáv továbbra is nyer). A `PrepareSongTransport.asset` nullázható → NÉMA transport, így a controller MINDEN dalra előkészíti a transportot. Cellák: `song_transport_tick_test.dart` (8, köztük `FakeAsync`). |
+| **A5** mikrofon megtagadva | A `permissionRequired` külön, nevesített állapot (`micPermissionBody` + `micPermissionAction` + engedély-gomb), nem a végtelen skeleton. |
+| **A6** legacy migráció | A `songMigrationOutcomeProvider` egyszer fut a kompozíciós gyökérben; `needsResume` NEVESÍTVE a naplóba (nem néma try/catch). Cella: `production_composition_test.dart` — legacy envelope → compose → a dal a V2 repóban. |
+| **A7** tesztek | Új `test/e2e/song_trainer_walkthrough_test.dart` (4 cella az ÉLES routeren: seedelt könyvtár → Play → setup → Start → futó session a dal SAJÁT eseményeivel → szünet; megtagadott mikrofon; az eredmény két CTA-ja). A ~60 meglévő trainer-teszt zöld; 6 golden szándékosan újrarögzítve (`record-goldens` **35209450849**), collateral nélkül. |
+
+**TULAJDONOSI VISSZAJELZÉS (eszköz-képernyőkép, ugyanez a kör):** a nyolcelemű forrás-legördülő üres könyvtár fölött „miért van ennyi könyvtár, és mind üres"-nek olvasódott. Javítva: a szűrő csak két különböző eredet esetén (vagy aktív szűréskor) renderelődik, a címke „Forrás" → „Eredet" (en: Origin), és a Guitar Pro opció kimarad, amíg nincs közvetlen `.gp*` importer. Új cella a `song_library_screen_test.dart`-ban.
+
+**CI-körök (mi volt piros, mi a javítás).** (1) **35204319927** — `dart format`: a `SongSeedMarker.empty()` nyíl-törzsét a formázó a nyíl UTÁN töri. (2) **35204743164** — analyze: `FileSongRepository.openAtDirectory` `Future`-t ad, a seed-telepítőnek viszont a KÉSZ repó kell (`await`). (3) **35205055802** — `10862 passed, 9 failed`; a napló az utolsó 5000 sorra csonkult, ezért a `record-goldens.yml` `paths` bemenetével szűkítettem (35206997611 · 35207783427 · 35208353040 · 35208872540), így a 9 pontosan felbomlott: **6 szándékos golden** + 2× e2e (`ensureVisible` „Bad state: No element" — a 800×600-as alapfelületen a setup `ListView`-ja soha nem rendezi el az utolsó gyerekét, tehát a `trainer-setup-start` nincs is az elem-fában; a séta felülete ezért 1200×2400) + 1× `setlist_run_test.dart` A7 (az előfeltétel `idle` volt; a Stage mostantól INDÍT, tehát `running` a helyes kiindulás — a cella mért tulajdonsága változatlan és erősebb).
+
+**Zöld futások:** full-gate **35209872284** (`full-gate` job: format · analyze · architecture · secret · l10n-paritás · asset · teljes suite · randomizált property · song-séma · fixture-proveniencia). build-apk **35211491854** (`strumsight-1.0.0-1-4d5e55f-development.apk`) · apk-smoke **35213625368** (ugyanez az APK, valódi emulátor). **APK** (kicsomagolt, közvetlen link, `song-trainer-2026-09-17` release): https://github.com/wolfcasaba/strumsight/releases/download/song-trainer-2026-09-17/strumsight-1.0.0-1-4d5e55f-development.apk — a jelen HANDOFF-commit csak doksi. **A végső elfogadás a tulajdonos valós-gitáros APK-tesztje**, a szintetikus zöld nem „kész".
+
+**Tudatosan nyitva (a review szerint is külön kör):** editor-ergonómia (H17), V2 setlist-képernyők (H16), fájl-alapú resume (H15), scrub-slider (H14), az import néma sikere (H8), a `_LibraryError` üzenet nélküli hibája (H11). **Mellékelt lelet:** a `test/features/songs/import/import_flow_test.dart` A2 cellája EGY szűkített diagnosztikai futáson (35208872540) elbukott („workspace non-empty" → `[]`), a teljes suite-ban (35209872284) és a többi futáson zöld — sorrend-függő ingadozás, nem ennek a körnek a diffje érinti.
+
+## ✅ NAVIGÁCIÓ + KAMERA-HAPTIKA + APK-FÜST-TESZT 2026-09-16 (ág: `claude/workflow-production-readiness-r1866i`)
+
+**Tulajdonosi eszközjelentés (APK: build-apk 35071659469):** „menüpont megnyitása után nincs vissza-nyíl és nem lehet visszacsúsztatni", illetve „a kamera rezgése nem működik".
+
+**NAVIGÁCIÓ — mért ok és javítás.** Minden hub-belépő `context.go`-val nyílt, ami KICSERÉLI a router-vermet: a megnyitott képernyő alatt nem maradt lap, `Navigator.canPop` hamis volt (nincs automatikus `AppBar` vissza-nyíl, és az `SsStageScaffold` a sajátját is `canPop` mögé rendeli), az Android vissza-gesztusnak pedig nem volt mit popolnia, ezért kilépett az appból. Javítás: minden nem-destináció belépő `go` → `push` (20 hívási hely: Ma-hub, Gyakorlás-hub, Profil-hub, tutor, beállítások, streak, elemzés-áttekintő, legacy gyakorlás-hub); a shell-fül szemantika változatlan, a destináció-gyökerek (`/today`, `/practice`, `/songs`, `/coach`, `/profile`) maradnak `go`. Két kísérő javítás: a `/profile/settings` útvonal a kompozíciós gyökérben kap `Scaffold`+`AppBar`-t (a `SettingsScreen` szándékosan shell-test, négy golden rögzíti a fáját), és a `PracticeSetupScreen._readArgs` a saját `GoRouterState`-jét olvassa a `routeInformationProvider.value` helyett (azt a Router csak post-frame frissíti, így push után az első buildnél elveszett volna a `?id=`). Manifest: `android:enableOnBackInvokedCallback="true"` (a fában nincs `WillPopScope`, minden vissza-kapu `PopScope`). Új cellák a `test/app/navigation/hub_back_navigation_test.dart`-ban: **N1** forrás-szintű őr MINDEN `lib/features/**/screens/**` fájlra (csak destinációra szabad `go`-zni; az útvonal-katalógust az `app_route.dart`-ból parszolja) — ez fogta volna meg a hibát; **N2** nyolc hub-belépő koppintva: van vissza-affordancia, `canPop()` igaz, `pageBack()` visszavisz a hubra; **N3** a hub-forrásokból + az ÉLŐ router regisztrációjából derivált detail-útvonalak popolhatók. Audit: [`docs/reviews/navigation-audit-2026-09-16.md`](docs/reviews/navigation-audit-2026-09-16.md).
+
+**KAMERA-HAPTIKA — MÉRVE, ELŐKÉSZÍTVE, DE NEM SZÁLLÍTVA.** Tulajdonosi döntés a mai chatben: „Hagyjuk a kamerát most" — a javítás ezért nincs ezen az ágon (a `lib/features/vision/**` a `833aeb59` állapotán maradt; a kész commit: helyi `tmp/h-camera-haptics`, `d1457464`). A két mért tény attól még áll: (1) a Vision úton NULLA haptic hívás volt (`grep -rniE 'haptic|vibrat' lib/features/vision lib/core/camera` → 0 találat), tehát az SDD Ch6 §24.3 `coachCue — vizuális + opcionális haptic` módnak csak a vizuális fele készült el; (2) a `visionEnabled` MINDEN környezetben hard-kódolt `false` (`lib/app/config/feature_flags.dart:67` konstruktor-alapérték, `:256` a `forEnvironment`-ben; nincs hozzá dart-define, a `true` csak a lab-overlay ágon áll elő, `:365`), így a kamera-képernyők egyetlen szállított APK-ban SINCSENEK benne — a zászló átbillentése rollout-döntés (`computer_vision` képesség, `ga_scope: false`), nem kódhiba. **Mellékelt lelet (nyitva, nem javítva):** a `RewardSummarySheet.feedback` mezőt a widget tárolja, de a `build`-ben soha nem olvassa, így a Beállítások „Rezgés-visszajelzés" kapcsolója ma semmit nem vezérel.
+
+**APK-FÜST-TESZT — a hiányzó réteg a host-oldali `flutter test` fölött.** `tools/apk-smoke/run.sh` + `png_stats.py` (stdlib-only PNG-dekóder) a build-apk APK-ját valódi x86_64 emulátoron telepíti, indítja, navigálja és crash-mentességre vizsgálja; a workflow-t a tulajdonos telepítette main-re és az ágra. Első éles futás (**35088870428**, API 34, a már zöld 35071659469 APK-ján): **25/26**, az egyetlen bukás a próba sajátja volt — a `mResumedActivity` sort `head -1`-gyel olvastuk, az pedig a launcheré, nem a miénk. Javítva (csomagnév-szűrés minden soron + ablakkezelő-fókusz tartalék). Második futás (**35090312651**): **26/26 ZÖLD** — `install` + RECORD_AUDIO/CAMERA `pm grant`, `launch-resumed`, nem üres indítókép, öt alsó-navigációs sáv és három BACK után is élő folyamat, `logcat-clean`, cold start **1851 ms**, TOTAL PSS **89 352 kB**.
+
+**CI-körök (mi volt piros, mi a javítás):** (1) full-gate **35088807762** → `10847 tests passed, 2 failed`; a napló az utolsó 5000 sorra csonkult, ezért a `record-goldens.yml` `paths` bemenetével szűkítettem (35091248402 ZÖLD a `test/app/navigation`-re, 35091748935, végül **35092429776** → `263 tests passed, 2 failed`, itt már látszott). A bukás: `release_flow_text_scale_test.dart` en+hu `textScale 2.0` — `RenderFlex overflowed by 43 pixels`, `practice_setup_screen.dart:434`. MÉRT ok: NEM új túlcsordulás, hanem a 2026-09-01 óta tűrt `setup-scoring-profile-overflow` lelet, amelyet a `knownOverflows._matches` a PONTOS forrássorral azonosít — a navigációs javítás doc-kommentjei 16 sorral lejjebb tolták a `Row`-t. Javítás: a HORGONY `:418` → `:434` (teszt + `known-exceptions.yaml` + `release-audit.md`); a tűrt lelet tartalma (id, tulajdonos, lejárat, 43 px, en+hu) változatlan, és a lista továbbra is csak szűkülhet. A `lib/**` szándékosan érintetlen: P2 adósság, `review_by: 2026-12-01`. (2) A cherry-pick három ütközése (`practice_area_hub`, `streak`, `today_hub`) szerkezeti volt — a HEAD verzióját tartottam meg és a `go`→`push` szándékot alkalmaztam újra rá; közben a HEAD-en HÁROM olyan `context.go` is volt, ami a `tmp` ágon még nem létezett (`profile_hub` community-belépő, `practice_hub` „mai terv", `live_screen` kurzus-átadás) — az első kettő `push` lett, a harmadik dokumentált kivétel (befejezett Stage elhagyása; a kivétel-térkép fájlonként több bejegyzést is elfogad, a „nem-elavult" őrcellával együtt).
+
+**Zöld futások:** full-gate **35093204317** (HEAD `94113684`) · build-apk **35096565097** · apk-smoke **35090312651** (a régi APK-n, próbafutás) és **35100627644** (az ÚJ APK-n: **26/26**, cold start 2951 ms, TOTAL PSS 86 053 kB). **APK** (kicsomagolt, közvetlen link, `nav-fix-2026-09-16` release): https://github.com/wolfcasaba/strumsight/releases/download/nav-fix-2026-09-16/strumsight-1.0.0-1-9411368-development.apk — a `publish-apk-release.yml` a 35096565097 futás artefaktumát tette közzé; a jelen HANDOFF-commit csak doksi.
+
+**Tudatosan nyitva (külön kör):** a `PracticeSetupScreen` → `/practice/session` és a `practice_effect_listener` → `/practice/result` továbbra is `go` (Stage-flow-szemantika, saját `PopScope`-megerősítés, ADR 0276/0079); a `LiveScreen`-nek nincs látható vissza-nyila (Stage — nyíl hozzáadása a fejlécet és goldeneket érintené); a `RewardSummarySheet.feedback` / „Rezgés-visszajelzés" holt kapcsoló; a kamera-haptika a tulajdonos döntéséig.
+
+## ✅ INTEGRÁCIÓS KÖR 2026-09-16 — PR #594/#593/#601 a main-re készen, production-readiness hiánylista (ág: `claude/workflow-production-readiness-r1866i`)
+
+Az ág alapja a már zöld `2315848` (learner-loop, motion, x86 golden-újrafelvétel; full-gate **35060343804**). Erre került:
+| sha | mi |
+|---|---|
+| `51ad38e` | `.gitignore`: `.claude/worktrees/` — az ágens-worktree-ek beágyazott git-repók |
+| `b6836c4` | checklist + blocker újramérés (cherry-pick `d0b2628`): **0/30 → 6/30**, minden pipa mellett bizonyíték-mutató |
+| `810cf1a` | **merge PR #594** (`ops/community-data-layer`, 33 commit, ~150 fájl) |
+| `b4db604` | **merge PR #593** (`ops/e17-parallel`) — E17-R02/R03/R04/R05/R07 `hold` → `pending` |
+| `fd69f6e` | **merge PR #601** (oracle-box toolchain) — CLAUDE.md +8 sor, ütközés nélkül |
+| `a903894` | completion-mátrix E17-sora újraszinkronizálva a queue-hoz (ADR 0494) |
+| `f6eb95d` `af10359` `b7bb53c` `6a8a606` | a merge négy mért következménye (lent) |
+
+**PR #594 — 7 ütközés.** Az alap (`9632a96`) elavult; szabály: ahol az alap avult, a **main viselkedése** marad, a PR javításai bekerülnek. `onboarding_screen.dart` → main (a PR még a review előtti BLOCKER-1/MAJOR-1 kódot hozta). `practice/public.dart` → additív. `practice_area_hub_screen.dart` → main szerkezete + a PR `practiceGeneratorEnabled`-kapuzott tervező-szekciója; a PR ActionChip-es kategórialistája NEM jött vissza; külön javítva a `_QuickTool`-ba **auto-merge-elt kettős `super.key`**. `profile_hub_screen.dart` → main kapuzása marad, a PR community-belépője a kapun BELÜLRE. `lib/l10n/base/app_{en,hu}.arb` → mindkét oldal kulcsai; az aggregátumok (ADR 0307 §4: GENERÁLTAK) újragenerálva — a generátor python-újraimplementációja **bájtra azonos** kimenetet ad mindkét szülőn (`b6836c4`, `abb486d`), **en↔hu paritás 2352 = 2352**.
+
+**PR #593:** sor-unió, és az EGYIK oldalon `done` kör `done` marad → E17-R01 a mi oldalunkról (`0534 done`). A derivált mátrix ettől elcsúszott (`pending=0/hold=13` → mérve `5/8`); a **DERIVÁLT doksit** igazítottam (`sync-completion-matrix.py --write`), nem a tesztet (L648).
+
+**A merge négy mért következménye (mind az elavult alap tünete, egyik sem teszt-gyengítés):**
+1. `f6eb95d` — négy `duplicate_import` (mindkét ág felvette ugyanazt az importot, az auto-merge mindkettőt megtartotta).
+2. `af10359` — `e13_r17_practice_area_hub_compact.png` x86-on újrafelvéve (`record-goldens.yml`, ADR 0426): a merge-elt hub MINDKÉT oldal változását hordozza. **Más golden nem tért el.**
+3. `b7bb53c` — a First-Win állomás EGYSZERRE volt „bejárt" és „kimaradóként dokumentált": a main E17-R01/ADR 0534 óta bejárja, és ki is vette a `full-app-verification.md` §3.2 táblájából, a PR elavult oldala viszont még hozta a sort. A DERIVÁLT doksi javítva (85 → 84 sor).
+4. `6a8a606` — a PR a DÁTUMOZOTT `chapter-15-completion-report.md`-t az ÉLŐ mátrixra írta át (72→93 képernyő, 1152→1488 cella, 1163→1499 teszt). A main ÉPPEN EZT a hibaosztályt szüntette meg (E17-R01 önjavítás, ADR 0112): a számok a jelentés saját alapján mért, rögzített pillanatképből (`test/fixtures/ui/e15_r13_completion_report_baseline.json`) jönnek. A jelentés törzse visszakapta a 72/1152/1163-at, a PR információja idézetblokkban megmaradt.
+
+**Napló-korlát és a megkerülése (L-jelölt tanulság):** a `get_job_logs` az utolsó **5000 sorra** csonkít, a blob-storage letöltés pedig proxy-403 — a full-gate ~13 300 soros naplójából a bukott cellák NEM látszottak. Megoldás: a `record-goldens.yml` `paths` bemenetével a fát **szűkített adagokban** futtattam (35067372183 · 35068007771 ZÖLD · 35068485038 ZÖLD · 35069026223), így minden napló belefért a csonkolásba, és a 3 bukás pontosan azonosítható lett. A golden-mappákon futott adag egyetlen PNG-t sem írt át.
+
+**Mérés:** `brief-lint --level base` (EZT futtatja a CI, `router-ci.yml:69`) → nincs lelet; `--level strict` 28 briefen ad S15-öt („a `main @ b17e08ef` alap elavult") — pre-flight teendő, nem kapu-lelet. `pytest tools/tests` → **968 passed, 4 skipped, 767 subtest**; az egyetlen bukó cella (`test_round_resume_independence`) **a `gh` CLI hiánya** miatt bukik, az érintetlen `2315848` alapvonalon ugyanúgy → környezeti korlát, nem regresszió.
+
+**Zöld futások:** full-gate **35069470318** (mindkét job) · build-apk **35071659469** — artefaktum `strumsight-1.0.0-1-6a8a606-development.apk` (id `10437054029`, 39,6 MB). Mindkettő a `6a8a606` kódállapoton; a jelen HANDOFF-commit csak doksi. **Hiánylista:** [`docs/release/production-readiness-gap-2026-09-16.md`](docs/release/production-readiness-gap-2026-09-16.md) (P0/P1/P2).
+
+### 🚧 NYITVA / EMBERI LÉPÉS
+1. **4 aláírási secret** (`ANDROID_KEYSTORE_BASE64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`) + egy zöld `release-apk.yml` futás (P0-1 / R-SIGN-01).
+2. **`release-candidate-approval` environment** kötelező jóváhagyókkal (ADR 0488).
+3. **RC-workflow + build-szám workflow-módosítás ELŐKÉSZÍTVE, DE NEM ALKALMAZVA**: `tmp/b2-version-and-rc`, commit `23021f2`. A `.github/workflows/**` szerkesztését az ADR 0112/0138 mérce-őr (`.claude/hooks/protect_factory_files.py`) emberi engedélyhez köti; ez a session nem kapott ilyet, és a feloldó `.claude/gate-edit-authorized` szándékosan gitignore-olt, hogy **egyetlen autonóm session se oldhassa fel saját magát**. Embernek kell alkalmaznia (P1-1 / R-VER-01, P1-6 / K-RC-01).
+4. **Valódi gitáros eszköz-teszt** — a végső acceptance predikátum; jegyzőkönyv: [`docs/manual-testing/learner-loop-device-run.md`](docs/manual-testing/learner-loop-device-run.md) (P0-2).
+5. **Privacy support-cím** — a `privacy-support@strumsight.app` ma placeholder (P1-2 / R-PRIV-01).
+6. **Store-listing képernyőképek** + Play Console feltöltés (P1-4 / R-STORE-01).
+7. **Megnevezett incident owner** + dashboard-hivatkozás (P1-5 / R-MONITOR-01).
+8. **Staging migrációs próbafuttatás** — a 21 backend-migráció dokumentáltan (P1-3 / R-STAGE-01).
+
+## ✅ KÉSZ — 4. kör: egy haladás-modell; 5. kör: a Dalkönyvtár fül a Song Trainer V2 (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
+
+**4. kör — egy haladás-modell** (az 1. kör 6. lelete és az E16-R05 L4):
+| Elem | Mit ad | Fájl |
+|---|---|---|
+| `practiceStatsProvider` | a session/másodperc/pengetés rollup a V1+V2 összesített feedből (`PracticeStats.fromAggregated`), így a V2 gyakorlás a Ma-hubon, Profilon, streak- és haladás-képernyőn is számít | `lib/features/progress/providers/practice_stats_provider.dart` (ÚJ), `progress/public.dart`; fogyasztók: `today_hub_screen`, `profile_hub_screen`, `streak_screen`, `progress_screen` |
+| `StreakCreditingPracticeSessionRecorder` | sikeres history-mentés után a KANONIKUS `PracticeSessionEligibility` predikátummal (≥20 s aktív VAGY ≥4 megoldott cél) jóváírja a streaket (idempotens naponta); cancelled/failed/interrupted soha. A V1 naplót SZÁNDÉKOSAN nem tükrözi: az összesített feed már uniózza a V2 history-t, egy V1 tükörbejegyzés duplázná a napi célt | `lib/features/practice/application/practice_streak_recorder.dart` (ÚJ); bekötés `practice_session_providers.dart` (history → streak → reward) |
+| Tesztek | rollup V1 2 + V2 2 = 4 session; streak: eligible → 1, kétszer → 1, rövid → 0, cancelled → 0, bukó mentés → Failure és 0; tiszta predikátum-cellák | `test/features/progress/practice_stats_provider_test.dart`, `test/features/practice/practice_streak_recorder_test.dart` (ÚJ) |
+
+**5. kör — a Dalkönyvtár fül a Song Trainer V2:**
+| Elem | Mit ad | Fájl |
+|---|---|---|
+| `/songs` az adaptív shellben | `songTrainerV2Enabled` esetén a `SongLibraryScreen` (8 képernyős tréner belépője), különben változatlanul a legacy `SongListScreen` | `app_router.dart` (branch) |
+| `/songs/own` (ÚJ route) | a legacy „Dalaim" builder-lista, a V2 könyvtár app-bar ikonjáról (`song-library-own-songs`) egy tapra; a nem-adaptív shellben is regisztrálva | `app_route.dart`, `app_router.dart`, `song_library_screen.dart` |
+| Teszt | flag BE → könyvtár + ikon → builder; flag KI → legacy lista | `test/app/navigation/songs_tab_v2_test.dart` (ÚJ) |
+
+**CI-bizonyíték (a kör mérce-artefaktuma):**
+- Első teljes kapu (7b1cff1): 5 piros — `songs_tab_v2_test` (a router
+  harness nem adta a `songRepositoryProvider`-t; javítva 5e0f2e1), a két
+  `e13_r23_song_library` golden (szándékos: új app-bar ikon; x86
+  újrafelvétel `record-goldens.yml` run 34977570898 → 1eed124), és a
+  `full_app_walkthrough` + `placeholder_wiring` e2e páros: a bejárás a
+  §5.2 **L4** leletet kódolta („a Profile sessions csempe V2-vak"), amit
+  épp a 4. kör oldott fel — a teszt most a V1 + 1 V2 session egyesített
+  rollupot méri (f7bcb90); `docs/release/full-app-verification.md` L4 (4.
+  kör) és L5 (2. kör: `ref.invalidate` a `NavigateToResult`-nál) feloldva.
+- A 5000 soros log-farkon túli hibákat a `record-goldens.yml` PNG-mentes
+  könyvtárakra célzott, rövid logú futásaival lokalizáltuk (run 34980424437,
+  34980433500 zöld; 34981137366 piros → e2e); nem commitolt semmit.
+- Zöld teljes kapu f7bcb90-en: `full-gate.yml` run 34981957665;
+  `build-apk.yml` run 34982557486 (APK artefaktum).
+
+**6. kör előkészítése — Chapter 14 felismerési sáv:** a sáv (R20: strum
+modell tanítás csoportosított holdouton) **nem indítható** adat nélkül — a
+repóban nincs verziózott valós corpus (`ml/corpus`: 4 fájl, mind szkript), és
+0 dokumentált valós gitáros menet van. Ezért két bemenet készült:
+- `docs/manual-testing/learner-loop-device-run.md` — az ÚJ APK
+  tesztjegyzőkönyve (1–7. szakasz: az 1–5. kör mérése; 8. szakasz: a
+  felismerés számai, amelyek az R20 célértékét és hibaosztályát adják).
+- `docs/rounds/e14-r20-strum-model-grouped-holdout-training.md` — az R20
+  brief §0.0 STOP-feltételekkel (jegyzőkönyv, ≥3 játékos × 2 gitár × 2
+  helyiség csoportosított corpus, rögzített holdout-séma); a queue-ba
+  szándékosan nem került, amíg az adat nincs meg.
+
+
+## ✅ KÉSZ — 3. kör: valódi XP-főkönyv a Practice V2 session mögött (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
+
+Az 1. kör 3. lelete („+XP kártya, ami soha nem ad"): a
+`GamificationPracticeAdapter` sehol nem volt példányosítva, a result-képernyő
+főkönyv-seamje egy no-op volt. Most a MEGLÉVŐ lánc kap produkciós kompozíciót:
+
+| Elem | Mit ad | Fájl |
+|---|---|---|
+| Reward-pipeline providerek | `LocalActivityOutboxRepository` (kapacitás 64, 3 próba) a MEGOSZTOTT `gamificationRewardLedgerRepositoryProvider` fölött, `ActivityEventIngestor`, `DefaultRewardEligibilityPolicy(standard)`, `DefaultRewardPolicy(standard)` — egy főkönyv, egy outbox, egy policy-pár, a `public.dart`-on exportálva | `lib/features/gamification/providers/gamification_reward_pipeline_providers.dart` (ÚJ) |
+| `practiceGamificationAdapterProvider` | az adapter `newOnly` módban (a V2 sessionnek nincs legacy statisztika-sinkje: a V1 napló/streak a Learn és Song Trainer `PracticeSessionRecording`-ja, amit a V2 session sosem hívott — nincs mit duplán írni); a policy-history a főkönyvből (`practiceRewardHistorySnapshotFromLedger`) | `lib/features/practice/application/practice_reward_providers.dart` (ÚJ) |
+| `RewardingPracticeSessionRecorder` | a history-mentés UTÁN (és csak sikeres mentés után) jel → adapter → outbox → `drain()`, így a result-képernyő már valódi bejegyzést olvas; jutalmazási hiba SOHA nem bukja a sessiont (log + a mentés eredménye megy vissza) | `lib/features/practice/application/practice_reward_recorder.dart` (ÚJ); bekötés: `practice_session_providers.dart` (`practiceSessionControllerProvider`) |
+| Jel-leképezés (tiszta) | finishReason → outcome (completed/userFinished/timedOut → completed; cancelled/interrupted → cancelled; failed → failed); quality = a legjobb próbálkozás overall-ja, ha mért; trust `scored` / `deviceObserved` | ugyanott, `practiceGamificationSignalFor` |
+| Result-képernyő seam | `rewardLedgerRepositoryProvider` → a valódi `gamificationRewardLedgerRepositoryProvider` (a `_NoopRewardLedgerRepository` törölve) | `practice_result_providers.dart` |
+| Tesztek | valós in-memory lánc: scored 2,5 perces session → 1 bejegyzés, XP > 0, a seam visszaolvassa; kétszeri rögzítés → 1; két session egy napon → history 2; 30 mp → semmi; cancelled → semmi; bukó mentés → Failure és semmi; jel-leképezés cellák | `test/features/practice/practice_reward_recorder_test.dart` (ÚJ) |
+
+**Zöld kapu:** `build-apk.yml`
+[run 34968350914](https://github.com/wolfcasaba/strumsight/actions/runs/34968350914)
+az `a2b08a6`-on — a `flutter-gates` composite MINDEN lépése `success` (format,
+analyze, architektúra, secret-scan, l10n-paritás, asset, teljes tesztsuite,
+randomizált property gate), a song-schema és song-fixture kapu is; a release
+APK ugyanebből a futásból (development env). Az előző, 2. körös APK: run
+34964160809.
+
+**Őszinte kapuk maradnak:** a standard eligibility 1 perc alatt nem ad XP-t,
+mért minőség nélkül nem ad minőség-XP-t. **Nyitva (következő):** a V2 session
+ma sem írja a V1 naplót / streaket (a Ma-hub és a Profil a V1-et olvassa) — ez
+a haladás-modell egyesítésének köre.
+
+
+## ✅ KÉSZ — 2. kör: „Következő lépés ajánlás" (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
+
+Az 1. kör auditjának 5. leletére („nincs mi legyen most a hurok végén": az
+ajánlás mindig a katalógus első eleme, az eredmény csak „Gyakorolj újra").
+Egyetlen tiszta szabályrendszer, két fogyasztóval:
+
+| Elem | Mit ad | Fájl |
+|---|---|---|
+| `recommendNextPractice(catalog, history, latest?)` | determinisztikus, I/O-mentes: nincs előzmény → legkönnyebb (`firstSession`); az utolsó session lefedettsége < 70 % → ugyanaz újra (`repeatToConsolidate`); különben az első még nem játszott, könnyebbtől (`advance`); ha minden játszva → a leggyengébb legutóbbi (`revisitWeakest`) | `lib/features/practice/domain/service/next_practice_recommender.dart`, model: `domain/model/next_practice_recommendation.dart` |
+| `nextPracticeRecommendationProvider` | katalógus + `practiceHistoryV2ListProvider` (töltés/hiba alatt üres előzmény = legkönnyebb, sosem `null`, csak üres katalógusnál) | `application/practice_recommendation_providers.dart`, `public.dart` export |
+| Gyakorló hub „Neked ajánlott" | a definíció NEVE + az OK egy mondatban + CTA az ajánlott id-vel (nem `catalog.first`) | `practice_area_hub_screen.dart` |
+| Eredményképernyő „Következő" | elsődleges gomb: „Következő: {cím}" + ok; „Gyakorolj újra" másodlagos; ha az ajánlás ugyanaz a definíció, egyetlen elsődleges „Gyakorolj újra" az okkal. A most befejezett session `latest`-ként számít, mielőtt a lista újratölt | `practice_result_screen.dart` (`_NextStepAction`) |
+| L5 (E16-R05) zárva | session-vég után `practiceHistoryV2ListProvider` invalidálva, így a hub és a dashboard restart nélkül látja | `practice_effect_listener.dart` |
+| Szövegek | 4 ok-mondat + `practiceResultNextRecommendedCta` a `base/` forrásban, en+hu | `lib/l10n/base/app_{en,hu}.arb` |
+| Tesztek | 10 tiszta cella (küszöb-határ inkluzív, `latest` dedup, katalógusból hiányzó definíció), hub 2 cella (gyenge előzmény → ugyanaz, név+ok+id; nincs előzmény → első), eredmény 2 cella (haladás → „Következő: Second pattern" + Setup a másik id-vel; gyenge → egy gomb, ugyanaz az id) | `test/features/practice/domain/next_practice_recommender_test.dart`, `test/features/practice_hub/practice_area_hub_categories_test.dart`, `test/features/practice/presentation/practice_result_next_step_test.dart` |
+
+**Zöld kapu:** `full-gate.yml`
+[run 34961974108](https://github.com/wolfcasaba/strumsight/actions/runs/34961974108)
+a `2f4f803`-on — a `full-gate` job MINDEN lépése `success` (format, analyze,
+architektúra, secret-scan, l10n-paritás, asset, teljes tesztsuite, randomizált
+property gate, song-schema és song-fixture kapu). A goldenek a tulajdonos által
+engedélyezett `record-goldens.yml`-lel (a `main`-ről, run 34958608357 és
+34961673742) a kapu x86 architektúráján lettek felvéve: 1. kör 7 PNG, 2. kör 3
+PNG — a PNG-diff review-ja emberi lépés. Két lappangó hiba is előkerült a CI
+mérésével és javítva lett: a Live `dispose`-beli provider-írás (1. kör), és az
+eredményképernyő `Next` sorának build-fázisú history-inicializálása a 200 %-os
+akadálymentességi cellában (2. kör, post-frame betöltésre cserélve).
+
+**APK:** `build-apk.yml` a `2f4f803`-on dispatchelve (development env: adaptív
+shell, Practice V2, Song Trainer V2 BE) — ez a valós gitáros teszt artefaktuma.
+
+
+## ✅ KÉSZ — 1. kör: tanulói hurok-javítás (ág: `claude/sdd-plans-quality-clarity-5ydqyy`, 2026-09-15)
+
+A felhasználó kérése: az SDD-tervek átnézése után „a tanulónak tényleg élmény
+legyen" — az audit szerint a KÓD minősége nem a gond, hanem a szállított
+kompozíció zsákutcái és ígéretei. Ez az ág a mért zsákutcákat zárja, ÚJ
+funkció nélkül (mind kompozíció):
+
+| # | Mért lelet | Javítás | Fájl |
+|---|---|---|---|
+| 1 | A First-Win Stage a mikrofon első CSENDES frame-jére (`LiveFrame.confidence == 0`) azonnal „nem hallottuk tisztán"-t mutatott, a játék ELŐTT | csak `latestStrum != null` frame számít próbálkozásnak; A11 csend-cellák | `lib/features/onboarding/first_win_engine.dart`, `test/features/onboarding/first_win_production_engine_test.dart` |
+| 2 | A Gyakorló hub 5 „Böngészés cél szerint" chipje `?id=` nélkül nyitotta a Setupot → „Gyakorlat nem elérhető" hibaképernyő | a katalógus célcsoportokra bontva (a definíció módja/skillTags-e szerint), minden csempe `?id=`-vel; üres csoport nem renderelődik; + „Vezetett tanfolyam" kártya (`/practice/learn`) és Song Trainer gyors-eszköz (flag mögött) | `lib/features/practice_hub/practice_area_hub_categories.dart` (ÚJ), `.../practice_area_hub_screen.dart`, `test/features/practice_hub/practice_area_hub_categories_test.dart` (ÚJ) |
+| 3 | A gyakorlás-eredmény „+XP" kártyája MINDIG „még nincs rögzített jutalom" volt (`_NoopRewardLedgerRepository`, a `GamificationPracticeAdapter` sehol nincs példányosítva) | a kártya csak valódi főkönyvi bejegyzésnél renderelődik; a VALÓDI bekötés külön kör (E08-R29 integritás-hold után) | `lib/features/practice/presentation/screens/practice_result_screen.dart`, `test/features/practice/reward_idempotency_test.dart` |
+| 4 | Flag-KI kártyák a fő felületeken („Vizuális gyakorlás" a Ma-hubon, „Közösség" a Profilon), tartalmuk csak „nem elérhető" | a kártya/szekció flag-KI állapotban nem renderelődik | `today_hub_screen.dart`, `profile_hub_screen.dart` + tesztjeik |
+| 5 | Élő „Befejezés" → Ma, összegzés nélkül | pengetéses session után `LiveSummaryDialog` (pengetés, akkordszám, idő, egy következő lépés; ≥8 pengetésnél „Tanfolyam megnyitása"); 0 pengetésnél változatlan azonnali kilépés | `lib/features/live/widgets/live_summary_dialog.dart` (ÚJ), `live_screen.dart`, `test/features/live/live_summary_test.dart` (ÚJ) |
+| 6 | Profil fül címkéje `tutorProfileTitle` („Tutor profil"); „Bizonyossági küszöb" csúszka a Beállítások első képernyőjén | `profileHubTitle`; a csúszka összecsukott „Haladó beállítások" `ExpansionTile` alá | `lib/app/home_shell.dart`, `settings_screen.dart` |
+| — | 15 új ARB-kulcs a `base/` FORRÁS szegmensben, aggregátum generálva (ADR 0307 §4, a generátor Python-tükrével — bájtra azonos a Dart-kimenettel a módosítás előtti fán mérve) | | `lib/l10n/base/app_{en,hu}.arb`, `lib/l10n/app_{en,hu}.arb` |
+
+**CI-bizonyíték (remote konténer, nincs Flutter SDK —
+`docs/execution/remote-container-environment.md`):** a `full-gate.yml`
+[run 34955651162](https://github.com/wolfcasaba/strumsight/actions/runs/34955651162)
+a `415621e`-n: **format, analyze, architektúra, secret-scan, l10n-paritás, asset
+kapu ZÖLD**; a test-kapu `10227 passed, 7 failed` — a 7 piros pontosan a
+szándékosan változott pixel-golden (alább), más piros nincs. A formázó
+kimenetét és a bukó tesztek naplóját egy ideiglenes, azóta törölt próbateszt
+írta a CI-naplóba (a napló-API az utolsó 5000 sorra csonkol), onnan lett
+visszavezetve. Közben egy LAPPANGÓ hiba is előkerült és javítva lett: a Live
+képernyő `dispose`-a a `practiceLogProvider`-be írt (Riverpod tiltja a
+provider-írást widget-életciklusban) — a session-napló írása mikrotaszkra
+halasztva (`live_screen.dart`).
+
+**Nyitott piros — emberi lépés:** 7 golden PNG újrafelvétele a kapu
+architektúráján (ADR 0426): `e13_r17_today_hub_compact`,
+`e13_r17_practice_area_hub_compact{,_scale2}`,
+`e13_r17_profile_hub_compact{,_scale2}`, `e13_r22_practice_result_compact`,
+`e13_r35_settings_compact`. Parancs a felhasználó boxán, ezen az ágon:
+`tools/golden-x86.sh record test/ui/goldens/e13_r17_screens_golden_test.dart
+test/ui/goldens/e13_r22_screens_golden_test.dart
+test/ui/goldens/e13_r35_screens_golden_test.dart`. Egy CI-oldali
+`golden-record.yml` workflow-t a `protect_factory_files` hook helyesen
+blokkolt (`.github/workflows/*` a mérce része, ADR 0112/0138) — emberi
+engedély (`.claude/gate-edit-authorized`) nélkül nem került be.
+
+**Nyitva marad (külön kör):** valódi XP-főkönyv bekötés; a „Dalkönyvtár" fül
+V2-re váltása; egy haladás-modell (progress V1/V2/gamification); a Ch14 R20–R42
+felismerési sáv; valós gitáros APK-teszt jegyzőkönyve.
+
 
 ## ✅ SZÉRIA-LÁNG + SHARE-REVEAL — `f99cc9e` → javítások `bb8f251` + `a8a287b`, goldenek `9d2eb4b` (Chapter 18 R06/R07 szelet), kapu zöld (2026-09-15)
 
@@ -687,6 +982,78 @@ implementáld újra: upstream-szinkron → a teljes kapu az így kapott merge SH
 (a Router CI ekkor már a gyorsított suite-tal fut) → zöld kapus squash-merge.
 Teljes diagnózis: `.pipeline/halt-detail-E14-R13.md`.
 
+## ✅ JAVÍTÓ SÁV (ops/community-data-layer, PR #594) — „minden eddigi fejlesztés fusson az APK-ban": két kompozíciós hibaosztály zárva, teszt-APK kiadva — CI `build-apk.yml` run 34022459707 **zöld** a `4489307` HEAD-en (2026-09-06)
+
+**Teszt-APK:** [Release `test-2026-09-06-4489307`](https://github.com/wolfcasaba/strumsight/releases/tag/test-2026-09-06-4489307)
+(fejlesztői build; SHA-256 eleje `555e326c3b3ceaf2`). **A Lab-APK KIESETT**
+(felhasználói döntés 2026-09-06): a teszt-APK a sima `build-apk.yml` artefaktuma,
+és a `development` környezet KÓDBÓL hordozza a teljes tesztkonfigurációt
+(`FeatureFlags.forShippedBuild` + `AppConfig.apiBaseUrlFor`, commit `1eb751f`):
+fiók BE, élő backend `https://casaba.app/strumsight`, community(+writes/clubs/
+leaderboard) BE, preview-all BE (AI Tutor helyi, Vision, Analysis V2, …),
+média KI. Explicit define mindig nyer; kill switch `STRUMSIGHT_COMMUNITY=false`.
+`lab`/`production` bájtra változatlan (tesztcellák pinnelik).
+
+**A mért hibaosztály (terv: `docs/ui/repair-plan-2026-09-06.md`):** a `main.dart`
+8 providert kötött be, a fában **17** dobott override nélkül. A Library fül
+(`UnifiedLibraryScreen`) a fejlesztői buildben is `StateError`-t kapott
+(`analysisRepositoryProvider`, `setlistRepositoryProvider`); a community feed
+a `feedCacheProvider`-en dőlt volna el. Mind bekötve, őrteszt mindre
+(`test/app/production_composition_test.dart`, `production_repository_wiring_test.dart`).
+
+| Csomag | Commit | Mit zárt |
+|---|---|---|
+| WP-A bootstrap | `0987ab2` | analysis V2 repo/cache/migráció, setlist + dal-haladás tároló a kompozíciós gyökérben |
+| WP-B/B2 community adatréteg | `9758ad7`, `ac6caed` | `HttpCommunityPostRepository` (10), `HttpCommunityClubRepository` (9), feed-cache/kv/logger, klub-részlet seamek; **PATCH primitív az ApiClientben** (a komment-szerkesztés eddig kérést sem küldött) |
+| WP-C navigáció | `2d2aac8` | a community kapu HUB, 13 képernyő elérhető; bejövő-hivatkozás mérce a reachability eszközben |
+| WP-D belépési pontok | `aaf68a5` | analysis V2 felvétel, tervező (Today/Setup), tutor, vision geometria; klub-kihívás őszinte állapot; adatleltár |
+| WP-E flag-ek | `26100d9` | `STRUMSIGHT_PREVIEW_ALL` overlay nem-production buildre |
+| review-javítás | `8506557` | bootstrap hibatűrés + sérült tároló karantén (fekete képernyő helyett hibaképernyő), migrátor app-scope-ban, tervező-belépés az ADAPTÍV hubon, sub-flag route-kapuk, `_screen_v2` a populációban, data-safety + tester-consent a 12 új kimenő mezővel |
+| WP-G config | `1eb751f` | a development env teljes tesztkonfigurációja (fent) |
+| goldenek | `9afc551` | 10 szándékos UI-változás x86-on újra felvéve (`tools/golden-x86.sh record`) |
+
+Mérce: `dart run tool/check_screen_reachability.dart` → 97 képernyő, 94 elérhető,
+3 elérhetetlen; útvonal-konstans bejövő hivatkozás nélkül **39 → 17**.
+
+**Nyitott, FOLYAMATBAN (5 párhuzamos ügynök, 2026-09-06):** WP-H1 dalcsomag-
+munkamenet futtató + Setlist V2 + dal-eredmény effekt; WP-H2 tutor
+gyakorlásterv-előnézet folyamat; WP-H3 tervező előnézet/változás-áttekintés;
+WP-H4 kihívás GET-végpontok + klub-kihívás fül; WP-H5 community média-feltöltés
++ fenyegetés-modell. Utána: router-hunkok egyesítése, második CI-build, új Release.
+
+**Csapdák, amiket ez a sáv mért:** (1) három ARB-kulcs csak a GENERÁLT
+aggregátumban élt (regenerálás törölte) — a forrás a `lib/l10n/base|features`;
+(2) a `check_screen_reachability` a REGISZTRÁCIÓT mérte, nem az elérhetőséget;
+(3) a goldenek CSAK x86-on vehetők fel (ADR 0426), a box aarch64;
+(4) a CI titok-szkenner a teszt-fixture kulcsokra is fut (`# strumsight:allow-secret`).
+
+
+## ✅ JAVÍTÓ SÁV (2026-09-06) — „minden eddigi fejlesztés fusson az APK-ban": két kompozíciós hibaosztály zárva, teszt-APK CI-zölden — ág `ops/community-data-layer`, PR [#594](https://github.com/wolfcasaba/strumsight/pull/594), HEAD `4489307`
+
+Terv és mérés: [`docs/ui/repair-plan-2026-09-06.md`](docs/ui/repair-plan-2026-09-06.md)
+(alap: `docs/ui/remaining-work.md`). **A felhasználó döntése:** a Lab-APK
+NEM kell többé; a teszt-APK a `build-apk.yml` fejlesztői buildje.
+
+| Csomag | Mit zárt | Commit |
+|---|---|---|
+| WP-A | `lib/main.dart` csak 8 providert kötött be; az analysis V2 + setlist/haladás **boot-providereit semmi nem hívta** → a Library fül `StateError`-t kapott. `lib/app/production_overrides.dart` + őr (`test/app/production_composition_test.dart`) | `0987ab2` |
+| WP-B/B2 | 9 dobó community seam bekötve: `HttpCommunityPostRepository` (10 met.), `HttpCommunityClubRepository` (9 met.), feed-cache, kv-store, logger, klub-részlet; **`ApiClient.patchJson`** (PATCH nem létezett → a komment-szerkesztés nem küldött kérést) | `9758ad7`, `ac6caed` |
+| WP-C | A community kapu HUB lett; 13 képernyő a felületről elérhető; reachability eszközben BEJÖVŐ-hivatkozás cella (39 → 17 hivatkozatlan útvonal); 3 ARB-kulcs, ami csak a GENERÁLT aggregátumban élt, a forrás-szegmensbe került | `2d2aac8` |
+| WP-D | Belépési pontok: analysis V2 capture, tervező (heti/adatvédelem, adaptív hub), tutor (profil/adatvédelem/adat), vision geometria; klub-kihívás őszinte „nem elérhető" állapot; adatleltár + Play data-safety + tesztelői hozzájárulás 12 új mezővel | `aaf68a5`, `8506557` |
+| WP-E/G | `STRUMSIGHT_PREVIEW_ALL` (23 hardkódolt-false UI-flag nem-production alatt); **`FeatureFlags.forShippedBuild` + `AppConfig.apiBaseUrlFor`: a `development` env kódból hordozza a teljes tesztkonfigot** (fiók BE, `https://casaba.app/strumsight`, community BE, media KI); explicit define mindig nyer; `lab`/`production` bájtra változatlan | `26100d9`, `1eb751f` |
+| review | Ördög-ügyvéd review 10 lelete javítva: bootstrap hibatűrés (`ProductionComposition`, korrupt tároló karanténja), migrátor app-scope-ban (eldobott Ref), sub-flag route-kapuk, `go`→`push` | `8506557` |
+| goldens | 10 szándékosan változott PNG x86-on újra felvéve (`tools/golden-x86.sh record`) | `9afc551` |
+
+**Kapu:** `build-apk.yml` run `34022459707` a `4489307` HEAD-en **success** —
+10656 teszt zöld, 21 skip; format/analyze/architecture/secrets/l10n mind zöld.
+APK: a run artefaktuma és a `e17-full-wiring-4489307` prerelease.
+
+**Ami tudottan nyitva maradt (mérve):** klub-poszt írás kliensről (belső
+`club_id`), `profilePosts` végpont, hang-import folyamat, `songTrainerResult`
+effect-listener, tervező preview/change-review `extra` nélkül, a 3 elérhetetlen
+képernyő (`setlist_session`, `practice_plan_preview`, `SetlistListScreenV2`),
+community media (R-SEC-01/R-PRIV-01). A **végső mérce a valós-gitár APK-teszt**
+— a merge a felhasználó visszajelzése után.
 
 ## ✅ E14-R16 KÉSZ — Onset-detektor A/B: a mérés MEGVAN, és a harness a SAJÁT konfundját is méri — PR [#592](https://github.com/wolfcasaba/strumsight/pull/592), squash `735fc4a7` (2026-09-05)
 

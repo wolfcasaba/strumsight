@@ -36,7 +36,7 @@ exceptions:
     expiry: unscheduled
     review_by: "2026-12-01"
     severity: P2
-    file: lib/features/practice/presentation/screens/practice_setup_screen.dart:418
+    file: lib/features/practice/presentation/screens/practice_setup_screen.dart:434
     widget: _ScoringProfileReadout
     measured_on: "2026-09-01"
     measured_overflow_px: 43

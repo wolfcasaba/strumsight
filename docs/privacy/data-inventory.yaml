@@ -217,6 +217,137 @@ routes:
     rides: "account_api"
     fields: []
 
+  - id: account_api_community_feed_repository
+    source: "HttpCommunityFeedRepository"
+    file: "lib/features/community/data/repositories/feed_repository_impl.dart:86"
+    wired: true
+    gate: "rides account_api via communityFeedApiClientProvider, which re-exports accountApiClientProvider verbatim (feed_repository_impl.dart:40-42)"
+    consent_switch: "rides account_api — see that route's consent_switch"
+    rides: "account_api"
+    fields: []
+
+  - id: account_api_community_notification_repository
+    source: "HttpCommunityNotificationRepository"
+    file: "lib/features/community/data/repositories/notification_repository_impl.dart:91"
+    wired: true
+    gate: "rides account_api via communityNotificationApiClientProvider, which re-exports accountApiClientProvider verbatim (notification_repository_impl.dart:27-29)"
+    consent_switch: "rides account_api — see that route's consent_switch"
+    rides: "account_api"
+    fields: []
+
+  # 2026-09-06 — a poszt- és a klub-repository bekötésével KÉT új
+  # ApiClient-fogyasztó egress-útvonal keletkezett (WP-B). Mindkettő az
+  # `account_api`-t lovagolja: a saját provideré szó szerint tovább-exportálja
+  # az `accountApiClientProvider`-t. A `fields` itt — a többi rides-útvonaltól
+  # eltérően — KI VAN TÖLTVE, mert ez a két repository az egyetlen hely a
+  # fában, ahol felhasználó által ÍRT szabad szöveg (poszt-törzs,
+  # komment-törzs, klub-név/leírás) hagyja el az eszközt.
+  - id: account_api_community_post_repository
+    source: "HttpCommunityPostRepository"
+    file: "lib/features/community/data/repositories/post_repository_impl.dart:189"
+    wired: true
+    gate: "rides account_api via communityPostApiClientProvider, which re-exports accountApiClientProvider verbatim (post_repository_impl.dart:93-95); a null client selects DisabledCommunityPostRepository, which sends nothing (post_repository_impl.dart:102-107)"
+    consent_switch: "rides account_api — see that route's consent_switch"
+    rides: "account_api"
+    fields:
+      - name: "post_body (a poszt szabad szövege — createPost/updatePost `body`)"
+        purpose: "közösségi poszt létrehozása és szerkesztése — POST /community/posts, PATCH /community/posts/{id}"
+        legal_basis: "consent"
+        retention: "backend, a poszt rekordjához kötve a lágy törlésig"
+        storage: "backend"
+        leaves_device: true
+      - name: "post_audience (a poszt láthatósága — `audience` wire-érték)"
+        purpose: "a szerver ebből dönti el, ki láthatja a posztot"
+        legal_basis: "consent"
+        retention: "backend, a poszt rekordjához kötve"
+        storage: "backend"
+        leaves_device: true
+      - name: "post_artifact (a poszthoz csatolt artefaktum JSON-payloadja — `artifact`)"
+        purpose: "a poszthoz kötött gyakorlás-/elemzés-artefaktum leírója"
+        legal_basis: "consent"
+        retention: "backend, a poszt rekordjához kötve"
+        storage: "backend"
+        leaves_device: true
+      - name: "comment_body (a komment szabad szövege + `parent_public_id` — createComment/updateComment)"
+        purpose: "kommentelés és komment-szerkesztés — POST /community/posts/{id}/comments, PATCH /community/comments/{id}"
+        legal_basis: "consent"
+        retention: "backend, a komment rekordjához kötve a lágy törlésig"
+        storage: "backend"
+        leaves_device: true
+      - name: "reaction_kind (a reakció típusa — PUT /community/posts/{id}/reaction `kind`)"
+        purpose: "reakció beállítása egy poszton"
+        legal_basis: "consent"
+        retention: "backend, a reakció rekordjához kötve"
+        storage: "backend"
+        leaves_device: true
+      - name: "idempotency_key / resource_version (írás-kísérlet azonosítója és optimista verzió)"
+        purpose: "kétszeres beküldés és elveszett-frissítés elleni védelem"
+        legal_basis: "legitimate interest — a művelet technikai helyessége"
+        retention: "backend, az írási művelethez kötve"
+        storage: "backend"
+        leaves_device: true
+
+  - id: account_api_community_club_repository
+    source: "HttpCommunityClubRepository"
+    file: "lib/features/community/data/repositories/club_repository_impl.dart:146"
+    wired: true
+    gate: "rides account_api via communityClubApiClientProvider, which re-exports accountApiClientProvider verbatim (club_repository_impl.dart:60-62); a null client selects DisabledCommunityClubRepository, which sends nothing (club_repository_impl.dart:66-71)"
+    consent_switch: "rides account_api — see that route's consent_switch"
+    rides: "account_api"
+    fields:
+      - name: "club_name (a klub neve — createClub `name`)"
+        purpose: "klub létrehozása — POST /community/clubs"
+        legal_basis: "consent"
+        retention: "backend, a klub rekordjához kötve"
+        storage: "backend"
+        leaves_device: true
+      - name: "club_description (a klub szabad szövegű leírása — createClub/updateClub `description`)"
+        purpose: "klub létrehozása és szerkesztése — POST /community/clubs, PATCH /community/clubs/{id}"
+        legal_basis: "consent"
+        retention: "backend, a klub rekordjához kötve"
+        storage: "backend"
+        leaves_device: true
+      - name: "club_visibility (a klub láthatósága — `visibility` wire-érték)"
+        purpose: "a szerver ebből dönti el, ki láthatja a klubot és ki csatlakozhat"
+        legal_basis: "consent"
+        retention: "backend, a klub rekordjához kötve"
+        storage: "backend"
+        leaves_device: true
+      - name: "target_public_id (meghívott, illetve új tulajdonos publikus profil-azonosítója — inviteMember `target_public_id`, transferOwnership `target_public_id`)"
+        purpose: "klubtagság meghívása és tulajdonos-átadás — POST /community/clubs/{id}/invites, POST /community/clubs/{id}/owner"
+        legal_basis: "consent"
+        retention: "backend, a tagsági/tulajdonosi rekordhoz kötve"
+        storage: "backend"
+        leaves_device: true
+      - name: "club_membership_action (csatlakozás/kilépés/tag-eltávolítás cél-azonosítói az útvonalban — /join, /leave, /members/{id})"
+        purpose: "klubtagsági műveletek végrehajtása"
+        legal_basis: "consent"
+        retention: "backend, a tagsági rekordhoz kötve"
+        storage: "backend"
+        leaves_device: true
+      - name: "idempotency_key (írás-kísérlet azonosítója)"
+        purpose: "kétszeres beküldés elleni védelem"
+        legal_basis: "legitimate interest — a művelet technikai helyessége"
+        retention: "backend, az írási művelethez kötve"
+        storage: "backend"
+        leaves_device: true
+
+  # Ugyanaz a poszt-repository, MÁSIK mérési mintázatból: a MINOR-1
+  # fájl-szintű Dio-tartalék (tool/check_data_inventory.dart) is elkapja a
+  # fájlt, mert az importálja a `package:dio/dio.dart`-ot. Az import EGYETLEN
+  # oka a `_isHiddenOrMissing` státusz-olvasása (`cause is! DioException`,
+  # post_repository_impl.dart:506) — a fájl NEM épít saját Dio-t, és nem
+  # nyit új kimenő csatornát. Külön sor kell mégis, mert a mérés két külön
+  # `source:` kulcsot ad, és a leltár nem hagyhat mérést fedezetlenül.
+  - id: account_api_community_post_repository_file_fallback
+    source: "file:lib/features/community/data/repositories/post_repository_impl.dart"
+    file: "lib/features/community/data/repositories/post_repository_impl.dart:73"
+    wired: true
+    gate: "same file, same gate as account_api_community_post_repository — the file-level Dio fallback measures the very same HttpCommunityPostRepository egress"
+    consent_switch: "rides account_api — see that route's consent_switch"
+    rides: "account_api_community_post_repository"
+    fields: []
+
   - id: diagnostics_upload_uploader
     source: "DiagnosticsUploader"
     file: "lib/features/diagnostics/data/diagnostics_uploader.dart:20"

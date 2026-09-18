@@ -115,6 +115,74 @@ void main() {
     expect(find.byType(SsButton), findsOneWidget);
   });
 
+  // Owner feedback (2026-09-17 device screenshot): the eight-entry source
+  // dropdown over an empty library read as "eight libraries, all empty".
+  // The control now earns its place — and Guitar Pro is not offered while
+  // there is no direct `.gp*` importer.
+  testWidgets('the origin filter is hidden until two origins exist', (
+    tester,
+  ) async {
+    Future<void> pumpLibrary(List<SongSummary> summaries) async {
+      // A full unmount between cases, so the screen's `initState` reloads
+      // against the new repository instead of reusing the old state.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            songRepositoryProvider.overrideWithValue(
+              _SummaryRepository(summaries),
+            ),
+          ],
+          child: MaterialApp(
+            theme: SsLightTheme.data(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const SongLibraryScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    const filter = Key('song-library-source-filter');
+
+    await pumpLibrary(const <SongSummary>[]);
+    expect(find.byKey(filter), findsNothing);
+    expect(find.byKey(const Key('song-library-sort')), findsOneWidget);
+
+    await pumpLibrary(<SongSummary>[
+      _summary(
+        id: 'json',
+        title: 'Zulu JSON',
+        sourceType: SongSourceType.strumSightJson,
+        updatedAt: DateTime.utc(2026, 8, 5),
+      ),
+    ]);
+    expect(find.byKey(filter), findsNothing);
+
+    await pumpLibrary(<SongSummary>[
+      _summary(
+        id: 'json',
+        title: 'Zulu JSON',
+        sourceType: SongSourceType.strumSightJson,
+        updatedAt: DateTime.utc(2026, 8, 5),
+      ),
+      _summary(
+        id: 'midi',
+        title: 'Alpha MIDI',
+        sourceType: SongSourceType.midi,
+        updatedAt: DateTime.utc(2026, 8, 4),
+      ),
+    ]);
+    expect(find.byKey(filter), findsOneWidget);
+    expect(find.text('Origin'), findsOneWidget);
+
+    await tester.tap(find.byKey(filter));
+    await tester.pumpAndSettle();
+    expect(find.text('MIDI'), findsWidgets);
+    expect(find.text('Guitar Pro'), findsNothing);
+  });
+
   testWidgets('source filter and sort controls change the visible summaries', (
     tester,
   ) async {

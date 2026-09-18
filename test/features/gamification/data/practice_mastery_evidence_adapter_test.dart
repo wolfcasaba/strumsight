@@ -3,7 +3,6 @@
 // assumed difficulty, and maps the measurable ones from real fields only.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/gamification/public.dart';
-import 'package:strumsight/features/practice/data/builtin_practice_catalog.dart';
 import 'package:strumsight/features/practice/public.dart';
 
 final _catalog = const BuiltinPracticeCatalog().all();

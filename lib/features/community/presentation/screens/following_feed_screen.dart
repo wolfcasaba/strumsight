@@ -34,9 +34,12 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:strumsight/core/design_system/public.dart';
 
+import '../../../../app/config/app_config.dart';
+import '../../../../app/routing/app_route.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/feed_controller.dart';
 import '../../domain/value_objects/cursor_page.dart';
@@ -69,6 +72,10 @@ class _FollowingFeedScreenState extends ConsumerState<FollowingFeedScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(feedControllerProvider);
     final localizations = AppLocalizations.of(context);
+    final writesEnabled = ref
+        .watch(appConfigProvider)
+        .flags
+        .communityWritesEnabled;
     return CommunityThemeScope(
       child: Scaffold(
         appBar: AppBar(
@@ -83,6 +90,19 @@ class _FollowingFeedScreenState extends ConsumerState<FollowingFeedScreen> {
             ),
           ],
         ),
+        // WP-C (2026-09-06) — a szerkesztő belépési pontja. A FAB az
+        // `communityWritesEnabled` alatt áll, ugyanúgy, ahogy a router
+        // is kapuzza a `/community/compose` útvonalat: kikapcsolt
+        // zászlónál a route nincs regisztrálva, tehát egy látható gomb
+        // 404-re vinne.
+        floatingActionButton: writesEnabled
+            ? FloatingActionButton.extended(
+                key: const Key('feed-compose-fab'),
+                onPressed: () => context.push(AppRoutes.communityCompose),
+                icon: const Icon(Icons.edit_note),
+                label: Text(localizations.communityHubCompose),
+              )
+            : null,
         body: _Body(
           state: state,
           onLoadMore: () =>
@@ -385,7 +405,20 @@ class _ContentState extends State<_Content> {
                     itemCount: items.length + 1,
                     itemBuilder: (context, index) {
                       if (index < items.length) {
-                        return FeedCard(post: items[index]);
+                        final post = items[index];
+                        return FeedCard(
+                          post: post,
+                          // WP-C — a kártya kommentek-akciója. A
+                          // `:postId` behelyettesítése ITT történik: a
+                          // kártya nem ismer útvonal-konstanst, így a
+                          // widget-tesztje router nélkül is fut.
+                          onOpenComments: () => context.push(
+                            AppRoutes.communityComments.replaceFirst(
+                              ':postId',
+                              post.id.value,
+                            ),
+                          ),
+                        );
                       }
                       return _Footer(
                         state: widget.state,

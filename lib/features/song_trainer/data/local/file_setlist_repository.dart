@@ -4,12 +4,15 @@ import 'dart:typed_data';
 
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
+import 'package:strumsight/core/logging/app_logger.dart';
+import 'package:strumsight/core/logging/logger_provider.dart';
 
 import '../../domain/models/song_id.dart';
 import '../../domain/models/song_setlist.dart';
 import '../../domain/models/trainer_range.dart';
 import '../../domain/repositories/setlist_repository.dart';
 import 'atomic_file_writer.dart';
+import 'corrupt_store_quarantine.dart';
 
 abstract final class SetlistRepositoryFailureCode {
   static const String read = 'setlistRepository.read';
@@ -23,8 +26,14 @@ final class FileSetlistRepository implements SetlistRepository {
   final File _file;
   final Map<String, SongSetlist> _setlists;
 
+  /// Opens (or creates) the store. A file that cannot be decoded is
+  /// QUARANTINED (renamed beside itself) and the store starts empty —
+  /// opening must never throw, because on the shipped path this call runs
+  /// before `runApp` (BLOCKER-1, 2026-09-06 review).
   static Future<FileSetlistRepository> openAtDirectory({
     required Directory directory,
+    AppLogger? logger,
+    DateTime Function() clock = DateTime.now,
   }) async {
     await directory.create(recursive: true);
     final file = File(
@@ -33,10 +42,22 @@ final class FileSetlistRepository implements SetlistRepository {
     if (!await file.exists()) {
       return FileSetlistRepository._(file, <String, SongSetlist>{});
     }
-    final decoded = _decodeSetlists(await file.readAsString());
-    return FileSetlistRepository._(file, <String, SongSetlist>{
-      for (final setlist in decoded) setlist.id: setlist,
-    });
+    try {
+      final decoded = _decodeSetlists(await file.readAsString());
+      return FileSetlistRepository._(file, <String, SongSetlist>{
+        for (final setlist in decoded) setlist.id: setlist,
+      });
+    } on Object catch (error, stackTrace) {
+      await quarantineCorruptStore(
+        file: file,
+        document: 'setlists',
+        error: error,
+        stackTrace: stackTrace,
+        logger: logger ?? createDefaultAppLogger(),
+        clock: clock,
+      );
+      return FileSetlistRepository._(file, <String, SongSetlist>{});
+    }
   }
 
   @override

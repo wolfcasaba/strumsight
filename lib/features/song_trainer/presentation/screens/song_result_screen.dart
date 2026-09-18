@@ -2,6 +2,12 @@
 //
 // Brief §6 acceptance: "Chord/direction/note verdict, accessible measure
 // heatmap, problem range retry és next section működik."
+//
+// E16-R01/A3: both CTAs were dead on the route (`onRetry` / the old
+// `onNextSection` arrived `null`), so the screen ended the flow with two
+// buttons that did nothing. They now carry the two actions the route can
+// actually honour — practise the same song again, or go back to the
+// library — and the labels say exactly that.
 
 import 'package:flutter/material.dart';
 
@@ -20,14 +26,19 @@ final class SongResultScreen extends StatelessWidget {
     this.progress,
     this.setlistResult,
     this.onRetry,
-    this.onNextSection,
+    this.onBackToLibrary,
   });
 
   final SongTrainerResult result;
   final SongProgressAggregate? progress;
   final SetlistResult? setlistResult;
+
+  /// Starts the SAME song again from the top. Wired by the session route
+  /// (E16-R01/A3); `null` in the direct-widget tests and goldens.
   final VoidCallback? onRetry;
-  final VoidCallback? onNextSection;
+
+  /// Leaves the trainer flow for the song library.
+  final VoidCallback? onBackToLibrary;
 
   @override
   Widget build(BuildContext context) {
@@ -54,14 +65,14 @@ final class SongResultScreen extends StatelessWidget {
             SsButton(
               key: const Key('song-result-retry'),
               onPressed: onRetry,
-              label: l10n.songTrainerRetryProblemRange,
+              label: l10n.songTrainerPracticeAgain,
             ),
             const SizedBox(height: SsSpacing.space2),
             SsButton(
-              key: const Key('song-result-next-section'),
-              onPressed: onNextSection,
+              key: const Key('song-result-back-to-library'),
+              onPressed: onBackToLibrary,
               variant: SsButtonVariant.secondary,
-              label: l10n.songTrainerNextSection,
+              label: l10n.songTrainerBackToLibrary,
             ),
           ],
         ),

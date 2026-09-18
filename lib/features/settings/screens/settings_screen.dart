@@ -64,7 +64,7 @@ class SettingsScreen extends ConsumerWidget {
                 title: Text(l10n.progressTitle),
                 subtitle: Text(l10n.progressTotalPractice),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.go(AppRoutes.progress),
+                onTap: () => context.push(AppRoutes.progress),
               ),
             ),
             const SizedBox(height: 28),
@@ -162,38 +162,58 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 28),
 
-            _SectionHeader(l10n.settingsConfidenceThreshold),
-            Row(
-              children: [
-                Expanded(
-                  child: Slider(
-                    value: threshold,
-                    onChanged: (v) =>
-                        ref.read(confidenceThresholdProvider.notifier).set(v),
-                  ),
+            // The detection threshold is a tuning knob, not a beginner
+            // setting: it lives under a collapsed "Advanced" section so the
+            // first visit reads as appearance / language / tuning only.
+            ExpansionTile(
+              key: const ValueKey('settings-advanced'),
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: EdgeInsets.zero,
+              title: _SectionHeader(l10n.settingsAdvanced),
+              subtitle: Text(
+                l10n.settingsAdvancedHint,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  color: palette.muted,
                 ),
-                SizedBox(
-                  width: 48,
-                  child: Text(
-                    '${(threshold * 100).round()}%',
-                    textAlign: TextAlign.end,
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w600,
-                      color: palette.ink,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+              children: [
+                _SectionHeader(l10n.settingsConfidenceThreshold),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Slider(
+                        value: threshold,
+                        onChanged: (v) => ref
+                            .read(confidenceThresholdProvider.notifier)
+                            .set(v),
+                      ),
                     ),
+                    SizedBox(
+                      width: 48,
+                      child: Text(
+                        '${(threshold * 100).round()}%',
+                        textAlign: TextAlign.end,
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w600,
+                          color: palette.ink,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  l10n.settingsConfidenceHint,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    color: palette.muted,
                   ),
                 ),
               ],
-            ),
-            Text(
-              l10n.settingsConfidenceHint,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 13,
-                color: palette.muted,
-              ),
             ),
             const SizedBox(height: 28),
 

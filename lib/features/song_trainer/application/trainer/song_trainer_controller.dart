@@ -106,7 +106,17 @@ final class SongTrainerController {
   int _attemptId = 0;
   int _loopIndex = 1;
   int? _finalizedOperationId;
-  bool _backingPrepared = false;
+
+  /// Whether the transport reached `ready` during [prepare], i.e. whether
+  /// there is a timeline to start at all.
+  ///
+  /// E16-R01/A4: this used to be `_backingPrepared` and was only ever true
+  /// when the song carried a backing audio asset — which no importer and no
+  /// editor can produce. The transport was therefore left in `idle` for every
+  /// real song, so the clock never ran and the playhead never moved. The
+  /// transport is now prepared unconditionally (silently when there is no
+  /// asset), and this flag means "the transport is startable".
+  bool _transportPrepared = false;
   bool _disposed = false;
 
   Stream<SongTrainerState> get states => _states.stream;
@@ -128,16 +138,14 @@ final class SongTrainerController {
     if (_disposed) return;
     final operation = ++_operationId;
     _finalizedOperationId = null;
-    _backingPrepared = false;
+    _transportPrepared = false;
     _emit(_state.copyWith(status: SongTrainerStatus.preparing));
     final selectedBackingAsset = backingAsset ?? this.backingAsset;
-    if (selectedBackingAsset != null) {
-      await transport.dispatch(
-        PrepareSongTransport(asset: selectedBackingAsset),
-      );
-      if (!_isCurrent(operation)) return;
-      _backingPrepared = transport.state.phase == SongTransportPhase.ready;
-    }
+    // A `null` asset prepares a SILENT transport: the state machine, the
+    // clock and (in production) the tick source, with no audio behind them.
+    await transport.dispatch(PrepareSongTransport(asset: selectedBackingAsset));
+    if (!_isCurrent(operation)) return;
+    _transportPrepared = transport.state.phase == SongTransportPhase.ready;
     final practice = _practiceSession;
     if (practice == null) {
       await _startPitchScoring();
@@ -198,6 +206,13 @@ final class SongTrainerController {
         (practice.state.status == PracticeSessionStatus.countIn ||
             practice.state.status == PracticeSessionStatus.running)) {
       await practice.dispatch(const PausePractice(cause: PauseCause.user));
+    }
+    // E16-R01/A3 — "practice again" from the result screen seeks a session
+    // that already FINISHED. A completed transport rejects both seek and
+    // start, so the attempt would have restarted with a frozen playhead;
+    // `RestartSongTransport` puts it back in `ready` first.
+    if (transport.state.phase == SongTransportPhase.completed) {
+      await transport.dispatch(const RestartSongTransport());
     }
     if (transport.state.phase == SongTransportPhase.playing) {
       await transport.dispatch(const PauseSongTransport());
@@ -321,7 +336,8 @@ final class SongTrainerController {
   }
 
   Future<void> _startPlaybackOnly() async {
-    if (_backingPrepared && transport.state.phase == SongTransportPhase.ready) {
+    if (_transportPrepared &&
+        transport.state.phase == SongTransportPhase.ready) {
       await transport.dispatch(const StartSongTransport());
     }
     _emit(_state.copyWith(status: SongTrainerStatus.running));
@@ -353,7 +369,9 @@ final class SongTrainerController {
   }
 
   Future<void> _startBackingForAttempt(int operation, int attempt) async {
-    if (!_isCurrent(operation) || attempt != _attemptId || !_backingPrepared) {
+    if (!_isCurrent(operation) ||
+        attempt != _attemptId ||
+        !_transportPrepared) {
       return;
     }
     if (transport.state.phase == SongTransportPhase.ready) {

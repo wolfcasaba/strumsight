@@ -93,7 +93,7 @@ final class ScreenVerdict {
   /// The first known source reference for this screen — used as the
   /// evidence citation when a human-readable table needs exactly one
   /// location per row. Falls back to the class declaration site when the
-  /// screen has no measured reference at all, so every one of the 96
+  /// screen has no measured reference at all, so every one of the 97
   /// verdicts still carries a source location (ADR 0471 D1).
   SourceRef get primaryReference {
     if (declarativeReferences.isNotEmpty) {
@@ -212,8 +212,12 @@ final class ScreenReachability {
     'lib/app/routing/route_guards.dart',
   ];
 
+  /// A screen class declaration. The `(?:V\d+)?` tail is measured, not
+  /// cosmetic: `SetlistListScreenV2` was invisible to every channel of
+  /// this tool because `Screen\b` cannot match a name that continues
+  /// with `V2` — its references counted as zero everywhere.
   static final RegExp _classDeclaration = RegExp(
-    r'class\s+([A-Za-z0-9_]*Screen)\b',
+    r'class\s+([A-Za-z0-9_]*Screen(?:V\d+)?)\b',
   );
 
   /// A single-line `if (...)` condition that mentions a flag identifier.
@@ -227,8 +231,15 @@ final class ScreenReachability {
   ScreenReachabilityResult render() {
     final screenPaths = UiInventory(repository).render().screenPaths;
 
+    // Comment lines are stripped (kept as blank lines so every line NUMBER
+    // stays truthful). MÉRT hiba (2026-09-06 review, MAJOR-4b): a router
+    // egy magyarázó kommentje NEVET ejtett (`PracticeHubScreen`), és a
+    // tool azt VALÓDI, kapu nélküli deklaratív hivatkozásnak számolta —
+    // a képernyő `isFlagGated` értéke ettől hamisan `false` lett. Egy
+    // komment nem regisztrál route-ot.
     final routingLines = {
-      for (final path in routingSources) path: _readLines(path),
+      for (final path in routingSources)
+        path: _withoutCommentLines(_readLines(path)),
     };
     final flagScopes = {
       for (final entry in routingLines.entries)
@@ -373,8 +384,10 @@ final class ScreenReachability {
   /// to find declarative/test mentions of any of the 96 screen classes in
   /// one pass; the caller intersects the captured names against the known
   /// class-name set, so a token that merely SHAPE-matches (ends in
-  /// `Screen`) but isn't one of the 96 real classes is a harmless no-op.
-  static final RegExp _referenceToken = RegExp(r'\b([A-Za-z0-9_]*Screen)\b');
+  /// `Screen`) but isn't one of the 97 real classes is a harmless no-op.
+  static final RegExp _referenceToken = RegExp(
+    r'\b([A-Za-z0-9_]*Screen(?:V\d+)?)\b',
+  );
 
   /// A construction site: `ClassName(` or `ClassName.namedCtor(`. Stricter
   /// than [_referenceToken] on purpose — ADR 0471 D2 requires the imperative
@@ -382,7 +395,7 @@ final class ScreenReachability {
   /// mentioned as a type (a generic parameter or a doc comment does not
   /// make a screen reachable).
   static final RegExp _constructToken = RegExp(
-    r'\b([A-Za-z0-9_]*Screen)(?:\.[A-Za-z_][A-Za-z0-9_]*)?\s*\(',
+    r'\b([A-Za-z0-9_]*Screen(?:V\d+)?)(?:\.[A-Za-z_][A-Za-z0-9_]*)?\s*\(',
   );
 
   /// For each line of a routing source, the list of flag conditions whose
@@ -422,6 +435,17 @@ final class ScreenReachability {
     }
     return scopes;
   }
+
+  /// Blanks every whole-line `//` comment, preserving the line count so a
+  /// [SourceRef]'s line number still points at the real source line.
+  ///
+  /// Deliberately line-based, matching the rest of this tool: a trailing
+  /// comment after real code stays (the code on that line is what counts),
+  /// and block comments (`/* ... */`) are not used in the routing sources.
+  static List<String> _withoutCommentLines(List<String> lines) => [
+    for (final line in lines)
+      if (line.trimLeft().startsWith('//')) '' else line,
+  ];
 
   List<String> _readLines(String relativePath) => File(
     '${repository.path}${Platform.pathSeparator}$relativePath',
@@ -465,6 +489,204 @@ final class _FlagGate {
   final String condition;
 }
 
+// ---------------------------------------------------------------------------
+// Incoming-reference measurement for the route constants (WP-C, 2026-09-06)
+// ---------------------------------------------------------------------------
+
+/// One `AppRoutes.<name>` constant together with every place OUTSIDE the
+/// routing declaration itself that names it.
+///
+/// **Why this is a separate channel from [ScreenVerdict].** A screen counts
+/// as "reachable" the moment the router NAMES its class — but a registered
+/// `GoRoute` nobody ever navigates to is a door with no handle. That is
+/// exactly the measured 2026-09-06 community defect: all thirteen community
+/// screens were `reachable: true` while the shipped UI reached none of them.
+/// This cell measures the other direction: does anything push/go to the
+/// route constant?
+final class RouteConstantVerdict {
+  const RouteConstantVerdict({
+    required this.name,
+    required this.path,
+    required this.declaredAt,
+    required this.incomingReferences,
+  });
+
+  /// The constant's identifier, e.g. `communityFeed`.
+  final String name;
+
+  /// Its literal value, e.g. `/community/feed`.
+  final String path;
+
+  final SourceRef declaredAt;
+
+  /// `AppRoutes.<name>` mentions under `lib/`, excluding the route-constant
+  /// declaration file and the router table itself.
+  final List<SourceRef> incomingReferences;
+
+  bool get hasIncomingReference => incomingReferences.isNotEmpty;
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'path': path,
+    'declaredAt': declaredAt.toJson(),
+    'hasIncomingReference': hasIncomingReference,
+    'incomingReferences': [for (final r in incomingReferences) r.toJson()],
+  };
+}
+
+/// The measured route-constant reference table.
+final class RouteReferenceResult {
+  RouteReferenceResult._(this.verdicts);
+
+  final List<RouteConstantVerdict> verdicts;
+
+  int get withIncomingCount =>
+      verdicts.where((v) => v.hasIncomingReference).length;
+
+  int get withoutIncomingCount => verdicts.length - withIncomingCount;
+
+  /// The summary line the CI log greps for.
+  String get summaryLine =>
+      'Route constants without incoming reference: $withoutIncomingCount';
+
+  Map<String, Object?> toJson() => {
+    'routeConstantCount': verdicts.length,
+    'withIncomingReferenceCount': withIncomingCount,
+    'withoutIncomingReferenceCount': withoutIncomingCount,
+    'routes': [for (final v in verdicts) v.toJson()],
+  };
+
+  String toMarkdownTable() {
+    final buffer = StringBuffer()
+      ..writeln('# Route-constant incoming references (measured)')
+      ..writeln()
+      ..writeln(
+        'Route constants: ${verdicts.length}. With an incoming reference: '
+        '$withIncomingCount. Without: $withoutIncomingCount.',
+      )
+      ..writeln()
+      ..writeln('| Route constant | Path | Incoming | Referenced from |')
+      ..writeln('| --- | --- | --- | --- |');
+    for (final v in verdicts) {
+      final referenced = v.hasIncomingReference
+          ? v.incomingReferences.map((r) => r.location).join('; ')
+          : '—';
+      buffer.writeln(
+        '| `AppRoutes.${v.name}` | `${v.path}` | '
+        '${v.hasIncomingReference ? 'yes' : 'NO'} | $referenced |',
+      );
+    }
+    buffer
+      ..writeln()
+      ..writeln(summaryLine);
+    return buffer.toString();
+  }
+}
+
+/// Measures, for every `static const String` in `lib/app/routing/
+/// app_route.dart`, whether anything else under `lib/` names it.
+///
+/// **Deliberately NON-failing (WP-C).** A missing incoming reference is not
+/// automatically a defect: several hubs reach their screens with
+/// `Navigator.push` and never touch the route constant. The table is a
+/// review input, printed next to the reachability verdicts — not a gate.
+final class RouteConstantReferences {
+  RouteConstantReferences(this.repository);
+
+  final Directory repository;
+
+  /// Where the constants are declared.
+  static const String routeConstantSource = 'lib/app/routing/app_route.dart';
+
+  /// The declaration file plus the router table: naming a constant in
+  /// either is what CREATES the route, never what REACHES it.
+  static const List<String> excludedSources = [
+    routeConstantSource,
+    'lib/app/routing/app_router.dart',
+  ];
+
+  static final RegExp _constantDeclaration = RegExp(
+    r'static\s+const\s+String\s+([A-Za-z0-9_]+)\s*=',
+  );
+
+  RouteReferenceResult render() {
+    final lines = _readLines(routeConstantSource);
+    final source = lines.join('\n');
+    final names = <String, SourceRef>{};
+    final values = <String, String>{};
+    for (var i = 0; i < lines.length; i++) {
+      final match = _constantDeclaration.firstMatch(lines[i]);
+      if (match == null) continue;
+      final name = match.group(1)!;
+      names[name] = SourceRef(routeConstantSource, i + 1);
+      values[name] = _literalAfter(source, lines, i) ?? '';
+    }
+
+    final incoming = {for (final name in names.keys) name: <SourceRef>[]};
+    for (final libPath in _allDartFiles('lib')) {
+      if (excludedSources.contains(libPath)) continue;
+      final fileLines = _readLines(libPath);
+      for (var i = 0; i < fileLines.length; i++) {
+        final line = fileLines[i];
+        if (!line.contains('AppRoutes.')) continue;
+        for (final match in _usageToken.allMatches(line)) {
+          final name = match.group(1)!;
+          incoming[name]?.add(SourceRef(libPath, i + 1));
+        }
+      }
+    }
+
+    final verdicts = [
+      for (final entry in names.entries)
+        RouteConstantVerdict(
+          name: entry.key,
+          path: values[entry.key] ?? '',
+          declaredAt: entry.value,
+          incomingReferences: List.unmodifiable(incoming[entry.key]!),
+        ),
+    ]..sort((a, b) => a.name.compareTo(b.name));
+    return RouteReferenceResult._(List.unmodifiable(verdicts));
+  }
+
+  static final RegExp _usageToken = RegExp(r'\bAppRoutes\.([A-Za-z0-9_]+)\b');
+
+  /// The single-quoted literal that follows the `=` of a constant. The
+  /// declaration may wrap onto the next line (`dart format` does this for
+  /// long paths), so the search continues past the declaration line.
+  String? _literalAfter(String source, List<String> lines, int index) {
+    for (var i = index; i < lines.length && i <= index + 2; i++) {
+      final match = RegExp("'([^']*)'").firstMatch(lines[i]);
+      if (match != null) return match.group(1);
+    }
+    return null;
+  }
+
+  List<String> _readLines(String relativePath) => File(
+    '${repository.path}${Platform.pathSeparator}$relativePath',
+  ).readAsLinesSync();
+
+  List<String> _allDartFiles(String subdirectory) {
+    final dir = Directory(
+      '${repository.path}${Platform.pathSeparator}$subdirectory',
+    );
+    if (!dir.existsSync()) return const [];
+    final root = repository.absolute.path;
+    final files =
+        dir
+            .listSync(recursive: true)
+            .whereType<File>()
+            .map(
+              (file) => file.absolute.path
+                  .substring(root.length + 1)
+                  .replaceAll('\\', '/'),
+            )
+            .where((path) => path.endsWith('.dart'))
+            .toList()
+          ..sort();
+    return files;
+  }
+}
+
 void main(List<String> arguments) {
   var format = 'table';
   var repoPath = Directory.current.path;
@@ -480,10 +702,20 @@ void main(List<String> arguments) {
     }
   }
 
-  final result = ScreenReachability(Directory(repoPath)).render();
+  final repository = Directory(repoPath);
+  final result = ScreenReachability(repository).render();
+  final routeReferences = RouteConstantReferences(repository).render();
   if (format == 'json') {
-    stdout.writeln(result.toJsonString());
+    stdout.writeln(
+      const JsonEncoder.withIndent('  ').convert({
+        ...result.toJson(),
+        'routeConstants': routeReferences.toJson(),
+      }),
+    );
   } else {
-    stdout.write(result.toMarkdownTable());
+    stdout
+      ..write(result.toMarkdownTable())
+      ..writeln()
+      ..write(routeReferences.toMarkdownTable());
   }
 }

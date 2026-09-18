@@ -89,6 +89,10 @@ void main() {
       await tester.ensureVisible(attachBacking);
       await tester.tap(attachBacking);
       await tester.pumpAndSettle();
+      // The attach confirmation SnackBar owns a dismissal timer; drain it
+      // so the tree is timer-free when the test ends.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
 
       final state = container
           .read(songEditorControllerProvider(SongId('editor')))
@@ -287,8 +291,13 @@ final class _BackingPicker implements FilePickerAdapter {
   @override
   Future<void> dispose() async {}
 
+  /// The editor's attach button uses [pickAudioFile]; a notation pick from
+  /// this screen would be a wiring regression, so it yields nothing.
   @override
-  Future<ImportSourceFile?> pickSongFile() async => ImportSourceFile(
+  Future<ImportSourceFile?> pickSongFile() async => null;
+
+  @override
+  Future<ImportSourceFile?> pickAudioFile() async => ImportSourceFile(
     displayName: 'backing.mp3',
     byteLength: 1,
     mimeType: 'audio/mpeg',

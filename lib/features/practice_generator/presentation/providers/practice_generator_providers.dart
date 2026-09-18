@@ -34,6 +34,11 @@ import '../../data/local/local_practice_plan_repository.dart';
 import '../../domain/model/adaptive_practice_plan.dart';
 import '../../domain/model/practice_block.dart' show ExerciseCandidateResolver;
 import '../../domain/model/weekly_availability.dart' show LocalDate;
+import '../../application/port/practice_catalog_reader.dart';
+import '../../data/catalog/builtin_catalog_reader.dart';
+import '../../data/generation/generation_plan_input_assembler.dart';
+import '../../domain/model/exercise_candidate.dart';
+import '../../domain/model/practice_catalog_snapshot.dart';
 import '../../domain/repository/practice_evidence_repository.dart';
 import '../../domain/service/plan_validator.dart' show PlanValidationContext;
 import '../controller/plan_preview_controller.dart';
@@ -75,21 +80,45 @@ final generationDraftRepositoryProvider = Provider<GenerationDraftRepository>(
   ),
 );
 
-/// Overridable production seam. Resolving a persisted prescription's
-/// `exerciseId` back into a full `ExerciseCandidate` needs the live
-/// exercise catalog; wiring that catalog is a later round's composition
-/// (round brief §0.0.B/R4 note). Production boot injects the concrete
-/// resolver; tests override it with a fixture (the same pattern as
-/// `ai_tutor/presentation/providers/tutor_providers.dart`'s
-/// `tutorOrchestratorProvider`).
+/// A gyakorlat-katalógus pillanatképe (2026-09-05).
+///
+/// Eddig NEM volt éles `PracticeCatalogReader` a fában — csak tesztekben —,
+/// ezért az alábbi feloldó dobott, és a tervező négy képernyője
+/// elérhetetlen maradt.
+final practiceCatalogReaderProvider = Provider<PracticeCatalogReader>(
+  (ref) => const BuiltinPracticeCatalogReader(),
+);
+
+final practiceCatalogSnapshotProvider = Provider<PracticeCatalogSnapshot>(
+  (ref) => ref.watch(practiceCatalogReaderProvider).read(),
+);
+
+/// Feloldja a megőrzött előírás `exerciseId`-ját a katalógus jelöltjére.
+///
+/// **Ismeretlen azonosítóra DOB, nem ad helyettesítőt.** Egy kitalált vagy
+/// „üres" jelölt azt jelentené, hogy a terv egy olyan gyakorlatot ír elő,
+/// ami nincs — a felhasználó egy nem létező feladatot kapna. A hiba itt
+/// hangos, mert egy elavult mentett terv valódi hiba, nem szépíthető
+/// állapot.
 final exerciseCandidateResolverProvider = Provider<ExerciseCandidateResolver>((
   ref,
 ) {
-  throw UnimplementedError(
-    'exerciseCandidateResolverProvider must be overridden — production '
-    'wires it from the exercise catalog at boot; tests inject a fixture '
-    'resolver.',
-  );
+  final snapshot = ref.watch(practiceCatalogSnapshotProvider);
+  final byId = <String, ExerciseCandidate>{
+    for (final candidate in snapshot.candidates)
+      candidate.exerciseId: candidate,
+  };
+  return (String exerciseId) {
+    final candidate = byId[exerciseId];
+    if (candidate == null) {
+      throw StateError(
+        'A(z) "$exerciseId" gyakorlat nincs a katalógusban '
+        '($builtinCatalogRevision). Egy mentett terv elavult előírásra '
+        'hivatkozik.',
+      );
+    }
+    return candidate;
+  };
 });
 
 final localPracticePlanRepositoryProvider =
@@ -140,19 +169,22 @@ final generationOrchestratorProvider =
       return orchestrator;
     });
 
-/// Overridable production seam, mirroring [exerciseCandidateResolverProvider]:
-/// turning a Setup-wizard draft into a `GenerationPlanInput` needs the
-/// candidate catalog + evidence-ranking pipeline (ADR 0482 §Kontextus), which
-/// is out of this round's scope (round brief STOP-protocol: "az ÚJ
-/// start_plan_generation.dart use case KIZÁRÓLAG a meglévő
-/// GenerationOrchestrator-t hívja, nem ír új generálási logikát").
+/// A Setup-kérésből generálási bemenetet állító seam (2026-09-05 óta bekötve).
+///
+/// Korábban dobott („wires it once the candidate catalog + evidence pipeline
+/// lands"), és emiatt a generálási ág — a tervező LÉNYEGE — élesben
+/// használhatatlan volt. Az összeállítás a
+/// `GenerationPlanInputAssembler`-ben él, és kizárólag MÁR MEGLÉVŐ
+/// szolgáltatásokat hív; a két dokumentált leképezését (domináns terhelési
+/// szint, `newMaterial` besorolás) az ottani docstring indokolja.
 final generationPlanInputBuilderProvider = Provider<GenerationPlanInputBuilder>(
   (ref) {
-    throw UnimplementedError(
-      'generationPlanInputBuilderProvider must be overridden — production '
-      'wires it once the candidate catalog + evidence pipeline lands; '
-      'tests inject a fixture builder.',
+    final assembler = GenerationPlanInputAssembler(
+      catalog: ref.watch(practiceCatalogSnapshotProvider),
+      today: ref.watch(practiceGeneratorTodayProvider),
+      generateId: ref.watch(practiceGeneratorIdGeneratorProvider),
     );
+    return assembler.call;
   },
 );
 

@@ -66,6 +66,10 @@
   "analyzeRecordingHint": "Playing — StrumSight is listening…",
   "analyzeAnalyzing": "Analysing…",
   "analyzeNewRecording": "New recording",
+  "analyzeOpenDetailedAnalysis": "Detailed analysis",
+  "@analyzeOpenDetailedAnalysis": {
+    "description": "Analyze home entry point that opens the on-device analysis capture flow (/analysis/capture). Shown only when audioAnalysisV2Enabled is on, the same gate the router registers those routes under."
+  },
   "analyzeNoChords": "No chords detected. Try again, a bit closer to the mic.",
   "analyzeSave": "Save",
   "analyzeSaved": "Saved to Library",
@@ -1226,7 +1230,7 @@
   "songLibraryImport": "Import",
   "songLibraryRetry": "Try again",
   "songLibrarySearch": "Search songs",
-  "songLibrarySourceFilter": "Source",
+  "songLibrarySourceFilter": "Origin",
   "songLibraryAllSources": "All sources",
   "songLibrarySourceLegacy": "Legacy library",
   "songLibrarySourceCreated": "Created in StrumSight",
@@ -1235,6 +1239,7 @@
   "songLibrarySourceMxl": "Compressed MusicXML",
   "songLibrarySourceMidi": "MIDI",
   "songLibrarySourceGuitarPro": "Guitar Pro",
+  "songLibrarySourceAudioAnalysis": "Audio file",
   "songLibrarySort": "Sort",
   "songLibrarySortRecent": "Most recent",
   "songLibrarySortTitle": "Title A–Z",
@@ -1344,6 +1349,19 @@
   "songEditorBacking": "Backing audio",
   "songEditorAttachBacking": "Attach backing audio",
   "songEditorDetachBacking": "Detach backing audio",
+  "songEditorBackingAttached": "Attached: {name} ({size})",
+  "@songEditorBackingAttached": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "songEditorBackingTooLarge": "That file is too large. A backing track may be at most 32 MB.",
+  "songEditorBackingUnsupported": "That audio format can't be used as a backing track.",
   "songEditorUnsavedTitle": "Unsaved changes",
   "songEditorUnsavedBody": "Save, discard, or keep editing this draft?",
   "songEditorStay": "Keep editing",
@@ -3308,5 +3326,124 @@
   "libraryV2SyncConflictMessage": "This item changed in two places. Choose which version to keep — the other is discarded.",
   "libraryV2SyncConflictLocalLabel": "On this device",
   "libraryV2SyncConflictRemoteLabel": "In the cloud",
-  "libraryV2SyncConflictKeepThis": "Keep this version"
+  "libraryV2SyncConflictKeepThis": "Keep this version",
+  "practiceAreaHubCourseTitle": "Guided course",
+  "practiceAreaHubCourseMessage": "Short lessons from your first chord to whole songs — each one tells you what it unlocks. Start here if you're new.",
+  "practiceAreaHubDifficultyBeginner": "Beginner",
+  "practiceAreaHubDifficultyIntermediate": "Intermediate",
+  "practiceAreaHubDifficultyAdvanced": "Advanced",
+  "settingsAdvanced": "Advanced",
+  "settingsAdvancedHint": "Detection tuning. The defaults work for most guitars — change these only if recognition keeps missing.",
+  "liveSummaryTitle": "Nice session!",
+  "liveSummaryStrums": "{count} strums",
+  "@liveSummaryStrums": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryChords": "{count} different chords",
+  "@liveSummaryChords": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryDuration": "{minutes} min {seconds} s",
+  "@liveSummaryDuration": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryTipShort": "Short and sweet. Next time keep going a little longer — the detector settles after a few strums.",
+  "liveSummaryTipCourse": "Ready for a goal? The guided course gives you the next chord to learn.",
+  "liveSummaryOpenCourse": "Open the course",
+  "liveSummaryDone": "Done",
+  "practiceNextReasonFirstSession": "Your first session: start with the easiest pattern.",
+  "practiceNextReasonRepeat": "Almost there. One more round of the same, so it locks in.",
+  "practiceNextReasonAdvance": "You cleared the last one. The next step up:",
+  "practiceNextReasonRevisit": "You've played everything once. This is where you were weakest last time.",
+  "practiceResultNextRecommendedCta": "Next: {title}",
+  "@practiceResultNextRecommendedCta": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisHomeImportUnavailable": "File import is not available yet — record instead.",
+  "@analysisHomeImportUnavailable": {
+    "description": "Analyze home: the file-import entry is not shippable yet. Restored into the base segment 2026-09-06 — the key existed ONLY in the generated aggregate, so every regeneration dropped it and app_router.dart stopped compiling."
+  },
+  "profileHubCommunityOpen": "Open Community",
+  "@profileHubCommunityOpen": {
+    "description": "Profile hub button opening the Community gate. Restored into the base segment 2026-09-06 (see analysisHomeImportUnavailable)."
+  },
+  "setlistSessionPartial": "Stopped partway — your score so far counts.",
+  "@setlistSessionPartial": {
+    "description": "Setlist session ended before the last song. Restored into the base segment 2026-09-06 (see analysisHomeImportUnavailable)."
+  },
+  "communityHubSectionTitle": "Community",
+  "@communityHubSectionTitle": {
+    "description": "Section heading above the Community hub's navigation entries (E17 / WP-C)."
+  },
+  "communityHubEditProfile": "Edit profile",
+  "@communityHubEditProfile": {
+    "description": "Opens the Community profile editor from the hub."
+  },
+  "communityHubFeed": "Feed",
+  "communityHubCompose": "New post",
+  "communityHubClubs": "Clubs",
+  "communityHubNotifications": "Notifications",
+  "communityHubSearch": "Search",
+  "communityHubBookmarks": "Bookmarks",
+  "communityHubChallenges": "Challenges",
+  "communityHubSafety": "Blocked & muted",
+  "@communityHubSafety": {
+    "description": "Opens the safety screen listing the people the user blocked or muted."
+  },
+  "communityHubFollowers": "Followers",
+  "communityHubFollowing": "Following",
+  "communityHubComments": "Comments",
+  "@communityHubComments": {
+    "description": "Feed-card / bookmark-row action that opens the post's comment thread."
+  },
+  "communityHubLeaderboard": "Leaderboard",
+
+  "songLibraryEmptyPracticeHint": "Up/down strumming drills live in the Practice hub — the library is for whole songs.",
+  "songLibraryRestoreSeeds": "Restore the practice songs",
+  "songLibraryRestoreSeedsDone": "{count} practice song(s) restored.",
+  "@songLibraryRestoreSeedsDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "songLibraryRestoreSeedsFailed": "The practice songs could not be restored ({code}).",
+  "@songLibraryRestoreSeedsFailed": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "songLibraryOpenLearn": "Open the Learn highway",
+  "songTrainerPracticeAgain": "Practice again",
+  "songTrainerBackToLibrary": "Back to the library",
+  "songTrainerPermissionTitle": "The microphone is off",
+  "songImportChooseAudioFile": "Audio file (draft)",
+  "songImportAudioHint": "An audio file becomes a DRAFT song: StrumSight detects the chords and strums on your device, and nothing is uploaded. Review it in the editor before you practise \u2014 chord detection is roughly 57% accurate on full-band music and 76-92% on solo guitar.",
+  "songImportAudioDecoding": "Reading the audio file\u2026",
+  "songImportAudioAnalyzing": "Detecting chords and strums\u2026",
+  "songImportAudioSaving": "Creating the draft song\u2026",
+  "songEditorDraftBannerTitle": "Draft \u2014 review it before you practise",
+  "songEditorDraftBannerBody": "This song was derived from an audio file on your device. The chords, the strums and the tempo are estimates, not a transcription: check them and fix what is wrong."
 }

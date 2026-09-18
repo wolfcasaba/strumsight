@@ -39,7 +39,7 @@ class TodayHubScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final snapshot = ref.watch(todayPlanSnapshotProvider);
     final streak = ref.watch(streakProvider);
-    final stats = PracticeStats(ref.watch(practiceLogProvider));
+    final stats = ref.watch(practiceStatsProvider);
     final goalMinutes = ref.watch(dailyGoalProvider);
     final nowDate = now ?? DateTime.now();
     final today = StreakLogic.epochDayOf(nowDate);
@@ -143,15 +143,22 @@ class TodayHubScreen extends ConsumerWidget {
       ),
       const SizedBox(height: 20),
       OutlinedButton(
-        onPressed: () => context.go(AppRoutes.profileProgress),
+        onPressed: () => context.push(AppRoutes.profileProgress),
         child: Text(l10n.todayHubViewProgressCta),
       ),
-      const SizedBox(height: 20),
-      _VisionCard(
-        l10n: l10n,
-        visionEnabled: flags.visionEnabled,
-        visionSetupEnabled: flags.visionSetupEnabled,
-      ),
+      // A card whose only content is "not available in this build" is
+      // an advertisement for a feature the learner cannot use — it is
+      // not rendered at all while the Vision capability is off. The
+      // disabled-reason copy stays on the card for the flag-on-but-
+      // setup-off case (A7).
+      if (flags.visionEnabled) ...[
+        const SizedBox(height: 20),
+        _VisionCard(
+          l10n: l10n,
+          visionEnabled: flags.visionEnabled,
+          visionSetupEnabled: flags.visionSetupEnabled,
+        ),
+      ],
     ];
 
     return Scaffold(

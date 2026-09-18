@@ -682,6 +682,10 @@
       }
     }
   },
+  "analysisHomeImportUnavailable": "A fájl-importálás még nem elérhető — vegyél fel helyette.",
+  "@analysisHomeImportUnavailable": {
+    "description": "Analyze home: the file-import entry is not shippable yet. Restored into the base segment 2026-09-06 — the key existed ONLY in the generated aggregate, so every regeneration dropped it and app_router.dart stopped compiling."
+  },
   "analysisHomeOpenAnalysisSemantics": "Elemzés megnyitása: {title}",
   "@analysisHomeOpenAnalysisSemantics": {
     "placeholders": {
@@ -1251,6 +1255,10 @@
   "analyzeMyRecording": "A felvételem",
   "analyzeNewRecording": "Új felvétel",
   "analyzeNoChords": "Nem érzékeltem akkordot. Próbáld újra, közelebb a mikrofonhoz.",
+  "analyzeOpenDetailedAnalysis": "Részletes elemzés",
+  "@analyzeOpenDetailedAnalysis": {
+    "description": "Analyze home entry point that opens the on-device analysis capture flow (/analysis/capture). Shown only when audioAnalysisV2Enabled is on, the same gate the router registers those routes under."
+  },
   "analyzeRecord": "Felvétel",
   "analyzeRecordingHint": "Játék közben — a StrumSight figyel…",
   "analyzeSave": "Mentés",
@@ -1491,6 +1499,10 @@
   "@communityClubChallengesDifficultyPrefix": {},
   "communityClubChallengesEmpty": "Nincs aktív kihívás.",
   "@communityClubChallengesEmpty": {},
+  "communityClubChallengesUnavailableBody": "Ez a build nem tudja listázni egy klub kihívásait — a szervernek még nincs hozzá végpontja. Ez NEM azt jelenti, hogy a klubnak nincs kihívása.",
+  "@communityClubChallengesUnavailableBody": {},
+  "communityClubChallengesUnavailableTitle": "A klub kihívásai még nem érhetők el",
+  "@communityClubChallengesUnavailableTitle": {},
   "communityClubDetailError": "A klub nem tölthető be.",
   "@communityClubDetailError": {},
   "communityClubDetailJoin": "Csatlakozás kérése",
@@ -1693,6 +1705,33 @@
   "communityGateProfileMissingCta": "Profil létrehozása",
   "communityGateProfileMissingTitle": "Hozd létre a Közösség-profilod",
   "@communityGateProfileMissingTitle": {},
+  "communityGateRetry": "Újra",
+  "communityHubBookmarks": "Könyvjelzők",
+  "communityHubChallenges": "Kihívások",
+  "communityHubClubs": "Klubok",
+  "communityHubComments": "Hozzászólások",
+  "@communityHubComments": {
+    "description": "Feed-card / bookmark-row action that opens the post's comment thread."
+  },
+  "communityHubCompose": "Új bejegyzés",
+  "communityHubEditProfile": "Profil szerkesztése",
+  "@communityHubEditProfile": {
+    "description": "Opens the Community profile editor from the hub."
+  },
+  "communityHubFeed": "Hírfolyam",
+  "communityHubFollowers": "Követők",
+  "communityHubFollowing": "Követettek",
+  "communityHubLeaderboard": "Ranglista",
+  "communityHubNotifications": "Értesítések",
+  "communityHubSafety": "Letiltva és némítva",
+  "@communityHubSafety": {
+    "description": "Opens the safety screen listing the people the user blocked or muted."
+  },
+  "communityHubSearch": "Keresés",
+  "communityHubSectionTitle": "Közösség",
+  "@communityHubSectionTitle": {
+    "description": "Section heading above the Community hub's navigation entries (E17 / WP-C)."
+  },
   "communityModerationRemovedPlaceholder": "Ezt a tartalmat eltávolították.",
   "@communityModerationRemovedPlaceholder": {},
   "communityNotificationChallengeCompletedTitle": "Kihívás teljesítve",
@@ -2426,6 +2465,38 @@
   "@liveStringsSemantics": {
     "description": "Semantic label for the Live hero's six-string band, which rings on every confirmed onset and takes the strum direction's colour once the verdict lands."
   },
+  "liveSummaryChords": "{count} különböző akkord",
+  "@liveSummaryChords": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryDone": "Kész",
+  "liveSummaryDuration": "{minutes} perc {seconds} mp",
+  "@liveSummaryDuration": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryOpenCourse": "Tanfolyam megnyitása",
+  "liveSummaryStrums": "{count} pengetés",
+  "@liveSummaryStrums": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryTipCourse": "Jöhet egy cél? A vezetett tanfolyam megadja a következő megtanulandó akkordot.",
+  "liveSummaryTipShort": "Rövid volt. Legközelebb játssz kicsit tovább — a felismerés pár pengetés után áll be.",
+  "liveSummaryTitle": "Szép munka!",
   "liveTuner": "Hangoló",
   "liveWaitingForChord": "Pengess egy akkordot…",
   "@liveWaitingForChord": {
@@ -2677,6 +2748,11 @@
   "practiceAreaHubCategoryScales": "Skálák",
   "practiceAreaHubCategoryTechnique": "Technika",
   "practiceAreaHubCategoryWarmup": "Bemelegítés",
+  "practiceAreaHubCourseMessage": "Rövid leckék az első akkordtól a teljes dalokig — mindegyik megmondja, mit old fel. Ha most kezded, itt indulj.",
+  "practiceAreaHubCourseTitle": "Vezetett tanfolyam",
+  "practiceAreaHubDifficultyAdvanced": "Haladó",
+  "practiceAreaHubDifficultyBeginner": "Kezdő",
+  "practiceAreaHubDifficultyIntermediate": "Középhaladó",
   "practiceAreaHubQuickToolsHeading": "Gyors eszközök",
   "practiceAreaHubRecommendedCta": "Ajánlott gyakorlás indítása",
   "practiceAreaHubRecommendedMessage": "Indíts egy, a jelenlegi szintedhez válogatott gyakorlást.",
@@ -2876,6 +2952,10 @@
   "practiceInsightNoSignal": "Nem érzékeltünk pengetést — a mikrofon legyen közel a gitárhoz.",
   "practiceInsightPositiveReinforcement": "Erős futam — minden elérhető dimenzió átlépte a küszöböt.",
   "practiceInsightTempoTooHigh": "A tempó a ritmus-pontosságot a küszöb alá nyomta.",
+  "practiceNextReasonAdvance": "Az előzőt megcsináltad. A következő lépcső:",
+  "practiceNextReasonFirstSession": "Az első gyakorlásod: a legkönnyebb mintával kezdünk.",
+  "practiceNextReasonRepeat": "Majdnem megvan. Még egy kör ugyanebből, hogy rögzüljön.",
+  "practiceNextReasonRevisit": "Mindent kipróbáltál már egyszer. Ebben voltál legutóbb a leggyengébb.",
   "practicePatternPreviewEmpty": "Nincs esemény ebben az ütemben",
   "practicePatternPreviewLabel": "Minta előnézet",
   "practicePlanCatchUpSheetBody": "Egy kimaradt nap a tanulás része. A terved alkalmazkodik — sosem büntet.",
@@ -3002,6 +3082,14 @@
   "practiceResultFinishUserFinished": "Te zártad a gyakorlatot",
   "practiceResultHistoryCta": "Előzmények",
   "practiceResultInsufficientData": "Nincs elég adat",
+  "practiceResultNextRecommendedCta": "Következő: {title}",
+  "@practiceResultNextRecommendedCta": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
   "practiceResultNextStepCta": "Gyakorolj újra",
   "practiceResultNotScored": "Nincs pontozva",
   "practiceResultOverall": "Összesített",
@@ -3183,6 +3271,10 @@
   "profileHubAchievementsSectionTitle": "Eredmények",
   "profileHubCommunityDisabledReason": "A közösségi funkciók ebben a buildben még nem érhetők el.",
   "profileHubCommunityEnabledMessage": "Kapcsolódj más játékosokhoz, és oszd meg a fejlődésed.",
+  "profileHubCommunityOpen": "Közösség megnyitása",
+  "@profileHubCommunityOpen": {
+    "description": "Profile hub button opening the Community gate. Restored into the base segment 2026-09-06 (see analysisHomeImportUnavailable)."
+  },
   "profileHubCommunitySectionTitle": "Közösség",
   "profileHubLocalOnlyMessage": "Fiók nélkül használod a StrumSightot — minden ezen az eszközön marad.",
   "profileHubLocalOnlyTitle": "Helyi profil",
@@ -3688,6 +3780,10 @@
   },
   "setlistSessionCompleted": "Teljesítve",
   "setlistSessionFailed": "Nem fejezhető be",
+  "setlistSessionPartial": "Félbehagyva — az addigi eredményed számít.",
+  "@setlistSessionPartial": {
+    "description": "Setlist session ended before the last song. Restored into the base segment 2026-09-06 (see analysisHomeImportUnavailable)."
+  },
   "setlistSessionPerformanceDescription": "Játszd le a dalokat sorrendben mikrofonos pontozás nélkül.",
   "setlistSessionPerformanceSemantics": "Csak lejátszásos dalcsomag-előadás. A mikrofonos pontozás ki van kapcsolva.",
   "setlistSessionPerformanceTitle": "Dalcsomag-előadás",
@@ -3780,6 +3876,8 @@
   "setlistsTitle": "Szettlisták",
   "settingsAbout": "Névjegy",
   "settingsAccount": "Fiók",
+  "settingsAdvanced": "Haladó beállítások",
+  "settingsAdvancedHint": "Felismerés-finomhangolás. Az alapértékek a legtöbb gitárhoz jók — csak akkor nyúlj hozzá, ha a felismerés rendre elvéti.",
   "settingsAppearance": "Megjelenés",
   "settingsCapo": "Kapodaszter",
   "settingsCapoFret": "{fret}. bund",
@@ -3843,10 +3941,25 @@
   "songEditorArtistField": "Előadó",
   "songEditorAttachBacking": "Alapzene csatolása",
   "songEditorBacking": "Alapzene",
+  "songEditorBackingAttached": "Csatolva: {name} ({size})",
+  "@songEditorBackingAttached": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "songEditorBackingTooLarge": "Ez a fájl túl nagy. Az alapzene legfeljebb 32 MB lehet.",
+  "songEditorBackingUnsupported": "Ez a hangformátum nem használható alapzeneként.",
   "songEditorChordField": "Akkord",
   "songEditorConflict": "A dal máshol megváltozott. A drafted megmaradt.",
   "songEditorDetachBacking": "Alapzene leválasztása",
   "songEditorDiscard": "Módosítások elvetése",
+  "songEditorDraftBannerBody": "Ez a dal egy hangfájlból származik. Az akkordok, a pengetések és a tempó becslések, nem átirat: ellenőrizd őket, és javítsd, ami hibás.",
+  "songEditorDraftBannerTitle": "Piszkozat — nézd át, mielőtt gyakorolsz",
   "songEditorEventMeasure": "Ütem",
   "songEditorInvalid": "Mentés előtt javítsd a validációs hibákat.",
   "songEditorLoadFailed": "A dal nem nyitható meg.",
@@ -3881,6 +3994,10 @@
   "songEditorUnsavedBody": "Mented, elveted vagy tovább szerkeszted a draftot?",
   "songEditorUnsavedTitle": "Nem mentett módosítások",
   "songFavorite": "Kedvenc",
+  "songImportAudioAnalyzing": "Akkordok és pengetések felismerése…",
+  "songImportAudioDecoding": "A hangfájl beolvasása…",
+  "songImportAudioHint": "A hangfájlból PISZKOZAT dal lesz: a StrumSight az eszközödön ismeri fel az akkordokat és a pengetéseket, feltöltés nincs. Nézd át a szerkesztőben, mielőtt gyakorolsz — az akkordfelismerés teljes zenekari felvételen körülbelül 57%, szólógitáron 76-92% pontosságú.",
+  "songImportAudioSaving": "Piszkozat dal létrehozása…",
   "songImportBlockingFailure": "Ez a fájl nem importálható: {code}",
   "@songImportBlockingFailure": {
     "placeholders": {
@@ -3898,6 +4015,7 @@
     }
   },
   "songImportCancel": "Mégse",
+  "songImportChooseAudioFile": "Hangfájl (piszkozat)",
   "songImportChooseFile": "Fájl kiválasztása",
   "songImportConfirm": "Dal importálása",
   "songImportFailed": "A fájlt nem sikerült importálni.",
@@ -3940,6 +4058,7 @@
   "songLibraryAllSources": "Minden forrás",
   "songLibraryCreate": "Dal létrehozása",
   "songLibraryEmpty": "Még nincsenek dalok. Importálj egy fájlt a könyvtár indításához.",
+  "songLibraryEmptyPracticeHint": "A le/fel pengetés gyakorlatok a Gyakorló hubon várnak — a könyvtár a teljes dalokért van.",
   "songLibraryExport": "Exportálás",
   "songLibraryExportPrepared": "Privát export elkészítve: {filename}",
   "@songLibraryExportPrepared": {
@@ -3951,15 +4070,34 @@
   },
   "songLibraryImport": "Importálás",
   "songLibraryLoading": "Dalkönyvtár betöltése…",
+  "songLibraryOpenLearn": "Ugrás a Tanulás útra",
   "songLibraryReadOnly": "Csak olvasható",
   "songLibraryReadOnlySnackBar": "Ez a dal csak olvasható. Megtekintő nézetben nyílt meg.",
+  "songLibraryRestoreSeeds": "Gyakorló dalok visszaállítása",
+  "songLibraryRestoreSeedsDone": "{count} gyakorló dal visszaállítva.",
+  "@songLibraryRestoreSeedsDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "songLibraryRestoreSeedsFailed": "A gyakorló dalokat nem sikerült visszaállítani ({code}).",
+  "@songLibraryRestoreSeedsFailed": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
   "songLibraryRetry": "Próbáld újra",
   "songLibrarySearch": "Dalok keresése",
   "songLibrarySort": "Rendezés",
   "songLibrarySortRecent": "Legutóbbi",
   "songLibrarySortTitle": "Cím A–Z",
+  "songLibrarySourceAudioAnalysis": "Hangfájl",
   "songLibrarySourceCreated": "StrumSightban készült",
-  "songLibrarySourceFilter": "Forrás",
+  "songLibrarySourceFilter": "Eredet",
   "songLibrarySourceGuitarPro": "Guitar Pro",
   "songLibrarySourceLegacy": "Régi dalkönyvtár",
   "songLibrarySourceMidi": "MIDI",
@@ -4036,6 +4174,7 @@
   "songTempo": "Tempó",
   "songTrainerABClear": "A–B törlése",
   "songTrainerABSet": "A–B hurok beállítása",
+  "songTrainerBackToLibrary": "Vissza a könyvtárba",
   "songTrainerFailed": "A session sikertelen: {code}",
   "@songTrainerFailed": {
     "placeholders": {
@@ -4073,7 +4212,9 @@
   },
   "songTrainerNextSection": "Következő szakasz",
   "songTrainerOverlayCountIn": "Bevezető",
+  "songTrainerPermissionTitle": "A mikrofon ki van kapcsolva",
   "songTrainerPlaybackOnlyComplete": "Lejátszás kész — csak hallgatás, nincs pontszám rögzítve.",
+  "songTrainerPracticeAgain": "Gyakorlás újra",
   "songTrainerProgressEmpty": "Ehhez a dalverzióhoz még nincs fejlődési adat.",
   "songTrainerProgressSummary": "{measures} gyakorlott ütem, legjobb pontszám: {percent}%.",
   "@songTrainerProgressSummary": {

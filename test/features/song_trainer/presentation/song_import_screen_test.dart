@@ -42,6 +42,9 @@ void main() {
     await tester.pump();
 
     expect(picker.pickCalls, 1);
+    // The sheet-import path stays on the notation picker; widening the
+    // editor's attach flow to audio must not leak into this one.
+    expect(picker.audioPickCalls, 0);
 
     // Unmounting first releases the effect subscription before controller
     // teardown runs.
@@ -88,6 +91,7 @@ void main() {
 
 final class _FakeFilePickerAdapter implements FilePickerAdapter {
   var pickCalls = 0;
+  var audioPickCalls = 0;
 
   @override
   Future<void> dispose() async {}
@@ -95,6 +99,13 @@ final class _FakeFilePickerAdapter implements FilePickerAdapter {
   @override
   Future<ImportSourceFile?> pickSongFile() async {
     pickCalls++;
+    return null;
+  }
+
+  /// The import sheet must never reach for the audio picker.
+  @override
+  Future<ImportSourceFile?> pickAudioFile() async {
+    audioPickCalls++;
     return null;
   }
 }

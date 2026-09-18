@@ -1103,8 +1103,17 @@ void main() {
       );
     });
 
+    // 2026-09-06 (WP-B): the post and club repositories were wired, and —
+    // unlike every other `rides:` route — they declare fields of their own,
+    // because they are the only place in the tree where user-AUTHORED free
+    // text (post body, comment body, club name/description) leaves the
+    // device. The pinned counts grow accordingly: 12 → 24 pairs. The
+    // breakdown stays per-route rather than collapsing into the total, so a
+    // field silently moving between routes is still caught.
     test('the measured route/field counts are exactly account_api (6), '
-        'diagnostics_upload (3), share_export (3) — 12 pairs total (round '
+        'diagnostics_upload (3), share_export (3), '
+        'account_api_community_post_repository (6), '
+        'account_api_community_club_repository (6) — 24 pairs total (round '
         'brief §0.0.A R2)', () {
       final expected = leavesDevicePairs(realInventory());
       expect(
@@ -1119,7 +1128,25 @@ void main() {
         expected.where((p) => p.startsWith('share_export\u0000')).length,
         3,
       );
-      expect(expected.length, 12);
+      expect(
+        expected
+            .where(
+              (p) =>
+                  p.startsWith('account_api_community_post_repository\u0000'),
+            )
+            .length,
+        6,
+      );
+      expect(
+        expected
+            .where(
+              (p) =>
+                  p.startsWith('account_api_community_club_repository\u0000'),
+            )
+            .length,
+        6,
+      );
+      expect(expected.length, 24);
     });
 
     test('a synthetic doc block missing one real row is caught (the '

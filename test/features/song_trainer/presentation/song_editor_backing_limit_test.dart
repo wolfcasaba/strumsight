@@ -1,12 +1,19 @@
-// Regression (C2-import-guards round 2): the picker enforces
-// `ImportLimits.maxSourceBytes` at the data boundary, and the song editor's
-// backing attach is the ONE consumer that reads the picked stream directly —
-// the import flow is rejected earlier, by `ImporterRegistry._checkSource`, on
-// `byteLength` alone. Before this round an oversize backing pick produced an
-// empty stream, so `_attachBacking` hit `if (bytes.isEmpty) return;` and did
-// nothing at all: no attach, no message, no log. The adapter now refuses with
-// the registry's own typed failure and the screen names it through the
-// existing ARB message.
+// Regression (C2-import-guards round 2, re-pointed at the K1 attach flow in
+// the 2026-09-18 integration): the picker enforces its source budget at the
+// data boundary, and the song editor's backing attach is the ONE consumer
+// that reads the picked stream directly — the import flow is rejected
+// earlier, by `ImporterRegistry._checkSource`, on `byteLength` alone. Before
+// this round an oversize backing pick produced an empty stream, so
+// `_attachBacking` hit `if (bytes.isEmpty) return;` and did nothing at all:
+// no attach, no message, no log.
+//
+// Two things are measured here that the fake-picker cells in
+// `song_editor_backing_attach_test.dart` cannot measure, because they hand
+// the screen a hand-built `ImportSourceFile`: the REAL
+// `PlatformFilePickerAdapter.fromXFile` conversion runs, so the `byteLength`
+// the editor guards on is the one the adapter MEASURED (never the length the
+// platform claimed), and the audio pick carries the audio budget
+// ([maxAudioImportSourceBytes]) rather than the 1 MiB notation budget.
 import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
@@ -33,8 +40,6 @@ import 'package:strumsight/features/song_trainer/presentation/screens/song_edito
 import 'package:strumsight/l10n/app_localizations.dart';
 
 void main() {
-  const limits = ImportLimits();
-
   testWidgets('an oversize backing pick reports instead of doing nothing', (
     tester,
   ) async {
@@ -42,15 +47,18 @@ void main() {
     final container = await _pumpEditor(
       tester,
       assetRepository,
-      _RealAdapterPicker(_OversizeXFile(limits.maxSourceBytes + 1)),
+      _RealAdapterPicker(_OversizeXFile(maxAudioImportSourceBytes + 1)),
       'editor-oversize',
     );
 
     await _tapAttach(tester);
 
-    expect(find.byKey(const Key('song-editor-backing-failed')), findsOneWidget);
     expect(
-      find.textContaining(ImportLimitFailureCode.sourceBytesExceeded),
+      find.byKey(const Key('song-editor-backing-message')),
+      findsOneWidget,
+    );
+    expect(
+      find.text(_localizations(tester).songEditorBackingTooLarge),
       findsOneWidget,
     );
     expect(assetRepository.putCalls, 0);
@@ -67,13 +75,16 @@ void main() {
     final container = await _pumpEditor(
       tester,
       assetRepository,
-      _RealAdapterPicker(XFile.fromData(Uint8List(64), path: 'backing.mid')),
+      _RealAdapterPicker(XFile.fromData(Uint8List(64), path: 'backing.mp3')),
       'editor-small',
     );
 
     await _tapAttach(tester);
 
-    expect(find.byKey(const Key('song-editor-backing-failed')), findsNothing);
+    expect(
+      find.text(_localizations(tester).songEditorBackingTooLarge),
+      findsNothing,
+    );
     expect(assetRepository.putCalls, 1);
     final state = container
         .read(songEditorControllerProvider(SongId('editor-small')))
@@ -145,13 +156,22 @@ final class _RealAdapterPicker implements FilePickerAdapter {
   Future<ImportSourceFile?> pickSongFile() =>
       PlatformFilePickerAdapter.fromXFile(file);
 
+  /// The editor's attach button picks AUDIO, so the conversion carries the
+  /// audio budget the production adapter uses — not the 1 MiB notation one.
+  @override
+  Future<ImportSourceFile?> pickAudioFile() =>
+      PlatformFilePickerAdapter.fromXFile(
+        file,
+        limits: PlatformFilePickerAdapter.audioLimits,
+      );
+
   @override
   Future<void> dispose() async {}
 }
 
 /// Reports an oversize length and fails the test if anything reads it.
 final class _OversizeXFile extends XFile {
-  _OversizeXFile(this.reportedLength) : super('backing.mid');
+  _OversizeXFile(this.reportedLength) : super('backing.mp3');
 
   final int reportedLength;
 
@@ -226,3 +246,8 @@ final class _RecordingAssetRepository implements SongAssetRepository {
   Future<AppResult<void>> permanentlyDelete(String sha256) async =>
       const AppResult<void>.success(null);
 }
+
+/// The localizations of the pumped editor, so the assertions name the same
+/// string the screen renders instead of a copy of it.
+AppLocalizations _localizations(WidgetTester tester) =>
+    AppLocalizations.of(tester.element(find.byType(SongEditorScreen)));

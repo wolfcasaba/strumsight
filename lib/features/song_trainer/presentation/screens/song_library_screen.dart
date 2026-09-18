@@ -8,6 +8,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../application/library/song_library_state.dart';
 import '../../application/library/song_query.dart';
 import '../../application/song_trainer_providers.dart';
+import '../../domain/models/song_id.dart';
 import '../../domain/models/song_source.dart';
 import '../widgets/song_source_badge.dart';
 import '../widgets/song_summary_tile.dart';
@@ -63,6 +64,89 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
     ref.read(_songLibraryQueryProvider.notifier).save(query);
   }
 
+  /// Empty-state CTA: puts the shipped practice songs back.
+  ///
+  /// The boot path NEVER does this — a seed the user deleted only returns on
+  /// this explicit tap (`SongSeedInstaller.restore`). The outcome is always
+  /// reported: a restored count, or the named failure code.
+  Future<void> _restoreSeedSongs() async {
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final outcome = await ref.read(songSeedRestoreProvider)();
+    if (!mounted) return;
+    await ref.read(songLibraryControllerProvider).load();
+    if (!mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          outcome.isClean
+              ? l10n.songLibraryRestoreSeedsDone(
+                  outcome.installedSeedIds.length,
+                )
+              : l10n.songLibraryRestoreSeedsFailed(
+                  outcome.failures.first.reason,
+                ),
+        ),
+      ),
+    );
+  }
+
+  /// Origin kinds the LOADED library actually contains.
+  Set<SongSourceType> _presentOrigins(SongLibraryState state) =>
+      <SongSourceType>{
+        for (final summary in state.summaries) summary.sourceType,
+      };
+
+  /// Whether the origin filter earns its place (owner feedback 2026-09-17:
+  /// "why so many libraries, all empty").
+  ///
+  /// A dropdown offering eight import formats over a library that holds one
+  /// kind — or none — reads as eight empty libraries. It renders only when
+  /// there is something to choose between, and stays put while a filter is
+  /// active so it cannot vanish under the user's own selection.
+  bool _showsOriginFilter(SongLibraryState state) =>
+      state.query.sourceType != null || _presentOrigins(state).length >= 2;
+
+  /// The offered origins. Guitar Pro is left out while there is no direct
+  /// `.gp*` importer — the conversion guidance elsewhere stays — unless the
+  /// library somehow already holds such a document.
+  List<SongSourceType> _originOptions(SongLibraryState state) {
+    final present = _presentOrigins(state);
+    return <SongSourceType>[
+      for (final sourceType in SongSourceType.values)
+        if (sourceType != SongSourceType.guitarPro ||
+            present.contains(sourceType) ||
+            state.query.sourceType == sourceType)
+          sourceType,
+    ];
+  }
+
+  /// Opens the trainer setup for [songId] — the row's Play affordance.
+  void _openTrainerSetup(SongId songId) {
+    context.push(
+      AppRoutes.songTrainerSetup.replaceFirst(
+        ':songId',
+        Uri.encodeComponent(songId.value),
+      ),
+    );
+  }
+
+  /// Empty-state secondary CTA: the guided Learn highway.
+  void _openLearnHighway() => context.push(AppRoutes.practiceLearn);
+
+  /// Opens the import sheet and RELOADS on the way back.
+  ///
+  /// The library only loaded in `initState`, so a song created while this
+  /// route stayed mounted underneath (the K3 audio import lands in the editor
+  /// on top of it) was invisible until the user left the tab and came back.
+  Future<void> _openImport() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => const SongImportScreen()),
+    );
+    if (!mounted) return;
+    await ref.read(songLibraryControllerProvider).load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -72,6 +156,14 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
       appBar: AppBar(
         title: Text(l10n.songLibraryTitle),
         actions: <Widget>[
+          // Learner-loop round 5: the legacy "My songs" builder list stays
+          // one tap away now that this library is the Songs destination.
+          IconButton(
+            key: const Key('song-library-own-songs'),
+            onPressed: () => context.push(AppRoutes.songsOwn),
+            icon: const Icon(Icons.edit_note),
+            tooltip: l10n.songsTitle,
+          ),
           IconButton(
             key: const Key('song-editor-create'),
             onPressed: () => context.push(AppRoutes.songTrainerNewEditor),
@@ -81,9 +173,7 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(builder: (_) => const SongImportScreen()),
-        ),
+        onPressed: _openImport,
         icon: const Icon(Icons.upload_file_outlined),
         label: Text(l10n.songLibraryImport),
       ),
@@ -118,38 +208,40 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
                     const SizedBox(height: SsSpacing.space3),
                     Row(
                       children: <Widget>[
-                        Expanded(
-                          child: DropdownButtonFormField<SongSourceType?>(
-                            key: const Key('song-library-source-filter'),
-                            initialValue: state.query.sourceType,
-                            isExpanded: true,
-                            decoration: InputDecoration(
-                              labelText: l10n.songLibrarySourceFilter,
-                            ),
-                            items: <DropdownMenuItem<SongSourceType?>>[
-                              DropdownMenuItem<SongSourceType?>(
-                                value: null,
-                                child: Text(l10n.songLibraryAllSources),
+                        if (_showsOriginFilter(state)) ...<Widget>[
+                          Expanded(
+                            child: DropdownButtonFormField<SongSourceType?>(
+                              key: const Key('song-library-source-filter'),
+                              initialValue: state.query.sourceType,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                labelText: l10n.songLibrarySourceFilter,
                               ),
-                              for (final sourceType in SongSourceType.values)
+                              items: <DropdownMenuItem<SongSourceType?>>[
                                 DropdownMenuItem<SongSourceType?>(
-                                  value: sourceType,
-                                  child: Text(
-                                    songSourceTypeLabel(l10n, sourceType),
-                                  ),
+                                  value: null,
+                                  child: Text(l10n.songLibraryAllSources),
                                 ),
-                            ],
-                            onChanged: (sourceType) => _applyQuery(
-                              SongLibraryQuery(
-                                searchText: state.query.searchText,
-                                sourceType: sourceType,
-                                favoritesOnly: state.query.favoritesOnly,
-                                sort: state.query.sort,
+                                for (final sourceType in _originOptions(state))
+                                  DropdownMenuItem<SongSourceType?>(
+                                    value: sourceType,
+                                    child: Text(
+                                      songSourceTypeLabel(l10n, sourceType),
+                                    ),
+                                  ),
+                              ],
+                              onChanged: (sourceType) => _applyQuery(
+                                SongLibraryQuery(
+                                  searchText: state.query.searchText,
+                                  sourceType: sourceType,
+                                  favoritesOnly: state.query.favoritesOnly,
+                                  sort: state.query.sort,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
+                          const SizedBox(width: 12),
+                        ],
                         Expanded(
                           child: DropdownButtonFormField<SongLibrarySort>(
                             key: const Key('song-library-sort'),
@@ -188,7 +280,10 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
               ),
               Expanded(
                 child: state.summaries.isEmpty
-                    ? const _LibraryEmpty()
+                    ? _LibraryEmpty(
+                        onRestoreSeeds: _restoreSeedSongs,
+                        onOpenLearn: _openLearnHighway,
+                      )
                     : ListView.builder(
                         itemCount: state.summaries.length,
                         itemBuilder: (context, index) {
@@ -227,6 +322,8 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
                             },
                             child: SongSummaryTile(
                               summary: summary,
+                              onPlay: () =>
+                                  _openTrainerSetup(summary.documentId),
                               isFavorite:
                                   summary.favorite ||
                                   state.favoriteIds.contains(
@@ -326,31 +423,61 @@ final class _LibraryError extends StatelessWidget {
   }
 }
 
-/// Built from design tokens directly rather than [SsEmptyState]: that
-/// component mandates an [SsEmptyState.onAction] (§5.2), and the legacy
-/// empty state took no action at all (measured: `git show
-/// origin/main:…song_library_screen.dart` — a bare `Center(Text(...))`).
-/// Wiring the existing FAB's import action into a new `onAction` here would
-/// be a behaviour change in an appearance-only round (E15-R04 review
-/// MAJOR-3 pattern) — this mirrors [PracticeHubScreen]'s
-/// `_EmptyCatalogLayout`, the same documented §5.2 exception.
+/// The empty library is no longer a dead end (E16-R01/A1).
+///
+/// The measured state before this round was a bare `Center(Text(...))` with
+/// ZERO actions: on a fresh install the Songs tab said "no songs yet" and
+/// offered nothing but the import FAB, so a beginner with no song file had
+/// nowhere to go. It now carries the two honest ways forward — put the
+/// shipped practice songs back, or leave for the Learn highway — plus a
+/// sentence naming where the up/down strumming drills actually live.
+///
+/// Built from design tokens directly rather than [SsEmptyState] because that
+/// component takes exactly one action (§5.2) and this state has two; it is
+/// a [ListView] so the two buttons and the hint still fit at 200% text scale.
 final class _LibraryEmpty extends StatelessWidget {
-  const _LibraryEmpty();
+  const _LibraryEmpty({
+    required this.onRestoreSeeds,
+    required this.onOpenLearn,
+  });
+
+  final VoidCallback onRestoreSeeds;
+  final VoidCallback onOpenLearn;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final typography = Theme.of(context).extension<SsTypography>()!;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(SsSpacing.space6),
-        child: Text(
+    return ListView(
+      key: const Key('song-library-empty'),
+      padding: const EdgeInsets.all(SsSpacing.space6),
+      children: <Widget>[
+        Text(
           l10n.songLibraryEmpty,
           style: typography.bodyMedium.copyWith(color: colors.textSecondary),
           textAlign: TextAlign.center,
         ),
-      ),
+        const SizedBox(height: SsSpacing.space3),
+        Text(
+          l10n.songLibraryEmptyPracticeHint,
+          style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: SsSpacing.space4),
+        SsButton(
+          key: const Key('song-library-restore-seeds'),
+          label: l10n.songLibraryRestoreSeeds,
+          onPressed: onRestoreSeeds,
+        ),
+        const SizedBox(height: SsSpacing.space2),
+        SsButton(
+          key: const Key('song-library-open-learn'),
+          label: l10n.songLibraryOpenLearn,
+          variant: SsButtonVariant.secondary,
+          onPressed: onOpenLearn,
+        ),
+      ],
     );
   }
 }

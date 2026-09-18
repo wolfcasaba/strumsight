@@ -49,6 +49,15 @@ Future<GoRouter> _pumpHub(
   List<Override> overrides = const [],
   Locale? locale,
 }) async {
+  // The hub is a lazily built ListView and the goal chips sit below the
+  // quick tools and the plan-builder row, so on the 800x600 default surface
+  // the chip subtree is never BUILT and every finder resolves to nothing.
+  // Same remedy the hub's other widget cells use: a tall surface, measured
+  // properties unchanged.
+  tester.view.physicalSize = const Size(800, 4000);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+
   final router = GoRouter(
     initialLocation: AppRoutes.practiceHub,
     routes: [

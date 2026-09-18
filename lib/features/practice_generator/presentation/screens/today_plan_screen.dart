@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../app/routing/app_route.dart';
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controller/today_plan_controller.dart';
@@ -53,7 +55,32 @@ class TodayPlanScreen extends StatelessWidget {
         : plan;
     final state = controller.resolve(planForState);
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.todayPlanTitle)),
+      appBar: AppBar(
+        title: Text(l10n.todayPlanTitle),
+        // A tervező két MELLÉK-képernyője (`/practice/generator/weekly`,
+        // `/practice/generator/privacy`) be volt kötve, de a szállított
+        // felületről semmi nem vezetett hozzájuk. Mindkettőt a router a
+        // saját providereiből építi fel — `extra` nélkül megnyithatók,
+        // ezért ez a képernyő el TUDJA érni őket. Az előnézet és a
+        // változás-áttekintés NEM kap itt belépési pontot: azok a
+        // folyamat lépései, és `extra` nélkül a mai tervre esnének vissza
+        // (l. a router redirect-őrét) — egy ilyen gomb visszadobná a
+        // felhasználót ugyanide, azaz halott vezérlő lenne.
+        actions: <Widget>[
+          IconButton(
+            key: const Key('today-plan-open-weekly'),
+            onPressed: () => context.push(AppRoutes.practiceGeneratorWeekly),
+            icon: const Icon(Icons.calendar_month_outlined),
+            tooltip: l10n.weeklyPlanTitle,
+          ),
+          IconButton(
+            key: const Key('today-plan-open-privacy'),
+            onPressed: () => context.push(AppRoutes.practiceGeneratorPrivacy),
+            icon: const Icon(Icons.privacy_tip_outlined),
+            tooltip: l10n.practicePrivacyTitle,
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(SsSpacing.space5),

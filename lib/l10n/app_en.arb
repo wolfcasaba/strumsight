@@ -689,6 +689,10 @@
       }
     }
   },
+  "analysisHomeImportUnavailable": "File import is not available yet — record instead.",
+  "@analysisHomeImportUnavailable": {
+    "description": "Analyze home: the file-import entry is not shippable yet. Restored into the base segment 2026-09-06 — the key existed ONLY in the generated aggregate, so every regeneration dropped it and app_router.dart stopped compiling."
+  },
   "analysisHomeOpenAnalysisSemantics": "Open analysis: {title}",
   "@analysisHomeOpenAnalysisSemantics": {
     "placeholders": {
@@ -1258,6 +1262,10 @@
   "analyzeMyRecording": "My recording",
   "analyzeNewRecording": "New recording",
   "analyzeNoChords": "No chords detected. Try again, a bit closer to the mic.",
+  "analyzeOpenDetailedAnalysis": "Detailed analysis",
+  "@analyzeOpenDetailedAnalysis": {
+    "description": "Analyze home entry point that opens the on-device analysis capture flow (/analysis/capture). Shown only when audioAnalysisV2Enabled is on, the same gate the router registers those routes under."
+  },
   "analyzeRecord": "Record",
   "analyzeRecordingHint": "Playing — StrumSight is listening…",
   "analyzeSave": "Save",
@@ -1519,6 +1527,10 @@
   "@communityClubChallengesDifficultyPrefix": {},
   "communityClubChallengesEmpty": "No active challenges.",
   "@communityClubChallengesEmpty": {},
+  "communityClubChallengesUnavailableBody": "This build cannot list a club's challenges — the server has no endpoint for it yet. This does not mean the club has none.",
+  "@communityClubChallengesUnavailableBody": {},
+  "communityClubChallengesUnavailableTitle": "Club challenges are not available yet",
+  "@communityClubChallengesUnavailableTitle": {},
   "communityClubDetailError": "The club couldn't load.",
   "@communityClubDetailError": {},
   "communityClubDetailJoin": "Request to join",
@@ -1721,6 +1733,33 @@
   "communityGateProfileMissingCta": "Create profile",
   "communityGateProfileMissingTitle": "Create your Community profile",
   "@communityGateProfileMissingTitle": {},
+  "communityGateRetry": "Retry",
+  "communityHubBookmarks": "Bookmarks",
+  "communityHubChallenges": "Challenges",
+  "communityHubClubs": "Clubs",
+  "communityHubComments": "Comments",
+  "@communityHubComments": {
+    "description": "Feed-card / bookmark-row action that opens the post's comment thread."
+  },
+  "communityHubCompose": "New post",
+  "communityHubEditProfile": "Edit profile",
+  "@communityHubEditProfile": {
+    "description": "Opens the Community profile editor from the hub."
+  },
+  "communityHubFeed": "Feed",
+  "communityHubFollowers": "Followers",
+  "communityHubFollowing": "Following",
+  "communityHubLeaderboard": "Leaderboard",
+  "communityHubNotifications": "Notifications",
+  "communityHubSafety": "Blocked & muted",
+  "@communityHubSafety": {
+    "description": "Opens the safety screen listing the people the user blocked or muted."
+  },
+  "communityHubSearch": "Search",
+  "communityHubSectionTitle": "Community",
+  "@communityHubSectionTitle": {
+    "description": "Section heading above the Community hub's navigation entries (E17 / WP-C)."
+  },
   "communityModerationRemovedPlaceholder": "This content was removed.",
   "@communityModerationRemovedPlaceholder": {},
   "communityNotificationChallengeCompletedTitle": "Challenge completed",
@@ -2465,6 +2504,38 @@
   "@liveStringsSemantics": {
     "description": "Semantic label for the Live hero's six-string band, which rings on every confirmed onset and takes the strum direction's colour once the verdict lands."
   },
+  "liveSummaryChords": "{count} different chords",
+  "@liveSummaryChords": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryDone": "Done",
+  "liveSummaryDuration": "{minutes} min {seconds} s",
+  "@liveSummaryDuration": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryOpenCourse": "Open the course",
+  "liveSummaryStrums": "{count} strums",
+  "@liveSummaryStrums": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "liveSummaryTipCourse": "Ready for a goal? The guided course gives you the next chord to learn.",
+  "liveSummaryTipShort": "Short and sweet. Next time keep going a little longer — the detector settles after a few strums.",
+  "liveSummaryTitle": "Nice session!",
   "liveTuner": "Tuner",
   "liveWaitingForChord": "Play a chord…",
   "@liveWaitingForChord": {
@@ -2716,6 +2787,11 @@
   "practiceAreaHubCategoryScales": "Scales",
   "practiceAreaHubCategoryTechnique": "Technique",
   "practiceAreaHubCategoryWarmup": "Warm-up",
+  "practiceAreaHubCourseMessage": "Short lessons from your first chord to whole songs — each one tells you what it unlocks. Start here if you're new.",
+  "practiceAreaHubCourseTitle": "Guided course",
+  "practiceAreaHubDifficultyAdvanced": "Advanced",
+  "practiceAreaHubDifficultyBeginner": "Beginner",
+  "practiceAreaHubDifficultyIntermediate": "Intermediate",
   "practiceAreaHubQuickToolsHeading": "Quick tools",
   "practiceAreaHubRecommendedCta": "Start recommended practice",
   "practiceAreaHubRecommendedMessage": "Jump into a practice session picked for where you are right now.",
@@ -2915,6 +2991,10 @@
   "practiceInsightNoSignal": "We couldn't detect any strums — make sure the microphone is close to your guitar.",
   "practiceInsightPositiveReinforcement": "Strong run — every available dimension cleared the bar.",
   "practiceInsightTempoTooHigh": "The tempo pushed your rhythm accuracy below the threshold.",
+  "practiceNextReasonAdvance": "You cleared the last one. The next step up:",
+  "practiceNextReasonFirstSession": "Your first session: start with the easiest pattern.",
+  "practiceNextReasonRepeat": "Almost there. One more round of the same, so it locks in.",
+  "practiceNextReasonRevisit": "You've played everything once. This is where you were weakest last time.",
   "practicePatternPreviewEmpty": "No events in this bar",
   "practicePatternPreviewLabel": "Pattern preview",
   "practicePlanCatchUpSheetBody": "Skipping a day is part of playing. Your plan adapts — it never adds extra work.",
@@ -3041,6 +3121,14 @@
   "practiceResultFinishUserFinished": "You finished the session",
   "practiceResultHistoryCta": "History",
   "practiceResultInsufficientData": "Not enough data",
+  "practiceResultNextRecommendedCta": "Next: {title}",
+  "@practiceResultNextRecommendedCta": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
   "practiceResultNextStepCta": "Practice again",
   "practiceResultNotScored": "Not scored",
   "practiceResultOverall": "Overall",
@@ -3222,6 +3310,10 @@
   "profileHubAchievementsSectionTitle": "Achievements",
   "profileHubCommunityDisabledReason": "Community features aren't available in this build yet.",
   "profileHubCommunityEnabledMessage": "Connect with other players and share your progress.",
+  "profileHubCommunityOpen": "Open Community",
+  "@profileHubCommunityOpen": {
+    "description": "Profile hub button opening the Community gate. Restored into the base segment 2026-09-06 (see analysisHomeImportUnavailable)."
+  },
   "profileHubCommunitySectionTitle": "Community",
   "profileHubLocalOnlyMessage": "You're using StrumSight without an account — everything stays on this device.",
   "profileHubLocalOnlyTitle": "Local profile",
@@ -3727,6 +3819,10 @@
   },
   "setlistSessionCompleted": "Completed",
   "setlistSessionFailed": "Could not finish",
+  "setlistSessionPartial": "Stopped partway — your score so far counts.",
+  "@setlistSessionPartial": {
+    "description": "Setlist session ended before the last song. Restored into the base segment 2026-09-06 (see analysisHomeImportUnavailable)."
+  },
   "setlistSessionPerformanceDescription": "Play each song in order without microphone scoring.",
   "setlistSessionPerformanceSemantics": "Playback-only setlist performance. Microphone scoring is off.",
   "setlistSessionPerformanceTitle": "Setlist performance",
@@ -3819,6 +3915,8 @@
   "setlistsTitle": "Setlists",
   "settingsAbout": "About",
   "settingsAccount": "Account",
+  "settingsAdvanced": "Advanced",
+  "settingsAdvancedHint": "Detection tuning. The defaults work for most guitars — change these only if recognition keeps missing.",
   "settingsAppearance": "Appearance",
   "settingsCapo": "Capo",
   "settingsCapoFret": "Fret {fret}",
@@ -3889,10 +3987,25 @@
   "songEditorArtistField": "Artist",
   "songEditorAttachBacking": "Attach backing audio",
   "songEditorBacking": "Backing audio",
+  "songEditorBackingAttached": "Attached: {name} ({size})",
+  "@songEditorBackingAttached": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "songEditorBackingTooLarge": "That file is too large. A backing track may be at most 32 MB.",
+  "songEditorBackingUnsupported": "That audio format can't be used as a backing track.",
   "songEditorChordField": "Chord",
   "songEditorConflict": "This song changed elsewhere. Your draft was kept.",
   "songEditorDetachBacking": "Detach backing audio",
   "songEditorDiscard": "Discard changes",
+  "songEditorDraftBannerBody": "This song was derived from an audio file on your device. The chords, the strums and the tempo are estimates, not a transcription: check them and fix what is wrong.",
+  "songEditorDraftBannerTitle": "Draft — review it before you practise",
   "songEditorEventMeasure": "Measure",
   "songEditorInvalid": "Fix validation issues before saving.",
   "songEditorLoadFailed": "This song could not be opened.",
@@ -3927,6 +4040,10 @@
   "songEditorUnsavedBody": "Save, discard, or keep editing this draft?",
   "songEditorUnsavedTitle": "Unsaved changes",
   "songFavorite": "Favorite",
+  "songImportAudioAnalyzing": "Detecting chords and strums…",
+  "songImportAudioDecoding": "Reading the audio file…",
+  "songImportAudioHint": "An audio file becomes a DRAFT song: StrumSight detects the chords and strums on your device, and nothing is uploaded. Review it in the editor before you practise — chord detection is roughly 57% accurate on full-band music and 76-92% on solo guitar.",
+  "songImportAudioSaving": "Creating the draft song…",
   "songImportBlockingFailure": "This file can't be imported: {code}",
   "@songImportBlockingFailure": {
     "placeholders": {
@@ -3944,6 +4061,7 @@
     }
   },
   "songImportCancel": "Cancel",
+  "songImportChooseAudioFile": "Audio file (draft)",
   "songImportChooseFile": "Choose a file",
   "songImportConfirm": "Import song",
   "songImportFailed": "The file could not be imported.",
@@ -3986,6 +4104,7 @@
   "songLibraryAllSources": "All sources",
   "songLibraryCreate": "Create song",
   "songLibraryEmpty": "No songs yet. Import a file to start your library.",
+  "songLibraryEmptyPracticeHint": "Up/down strumming drills live in the Practice hub — the library is for whole songs.",
   "songLibraryExport": "Export",
   "songLibraryExportPrepared": "Prepared private export: {filename}",
   "@songLibraryExportPrepared": {
@@ -3997,15 +4116,34 @@
   },
   "songLibraryImport": "Import",
   "songLibraryLoading": "Loading song library…",
+  "songLibraryOpenLearn": "Open the Learn highway",
   "songLibraryReadOnly": "Read-only",
   "songLibraryReadOnlySnackBar": "This song is read-only. Opened in view mode.",
+  "songLibraryRestoreSeeds": "Restore the practice songs",
+  "songLibraryRestoreSeedsDone": "{count} practice song(s) restored.",
+  "@songLibraryRestoreSeedsDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "songLibraryRestoreSeedsFailed": "The practice songs could not be restored ({code}).",
+  "@songLibraryRestoreSeedsFailed": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
   "songLibraryRetry": "Try again",
   "songLibrarySearch": "Search songs",
   "songLibrarySort": "Sort",
   "songLibrarySortRecent": "Most recent",
   "songLibrarySortTitle": "Title A–Z",
+  "songLibrarySourceAudioAnalysis": "Audio file",
   "songLibrarySourceCreated": "Created in StrumSight",
-  "songLibrarySourceFilter": "Source",
+  "songLibrarySourceFilter": "Origin",
   "songLibrarySourceGuitarPro": "Guitar Pro",
   "songLibrarySourceLegacy": "Legacy library",
   "songLibrarySourceMidi": "MIDI",
@@ -4082,6 +4220,7 @@
   "songTempo": "Tempo",
   "songTrainerABClear": "Clear A–B",
   "songTrainerABSet": "Set A–B loop",
+  "songTrainerBackToLibrary": "Back to the library",
   "songTrainerFailed": "Session failed: {code}",
   "@songTrainerFailed": {
     "placeholders": {
@@ -4119,7 +4258,9 @@
   },
   "songTrainerNextSection": "Next section",
   "songTrainerOverlayCountIn": "Count-in",
+  "songTrainerPermissionTitle": "The microphone is off",
   "songTrainerPlaybackOnlyComplete": "Playback complete — listening only, no score recorded.",
+  "songTrainerPracticeAgain": "Practice again",
   "songTrainerProgressEmpty": "No current-revision progress yet.",
   "songTrainerProgressSummary": "{measures} practiced measures, best score {percent}%.",
   "@songTrainerProgressSummary": {

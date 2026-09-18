@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../../app/config/app_config.dart';
+import '../../../app/routing/app_route.dart';
 import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../library/public.dart';
@@ -93,6 +96,16 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
     final state = ref.watch(analyzeControllerProvider);
     final controller = ref.read(analyzeControllerProvider.notifier);
     _syncTicker(state.phase);
+    // A V2 felvételi folyamat (`/analysis/capture`) BELÉPÉSI PONTJA. A három
+    // képernyője be van kötve, de a szállított felületről semmi nem vezetett
+    // hozzájuk — a felhasználó számára ez ugyanaz, mintha nem léteznének.
+    // A gomb PONTOSAN azzal a flaggel kapuzott, amivel a router regisztrálja
+    // az útvonalat (`app_router.dart`, `if (audioAnalysisV2Enabled)`), így
+    // sosem mutat regisztrálatlan címre.
+    final analysisV2Enabled = ref
+        .watch(appConfigProvider)
+        .flags
+        .audioAnalysisV2Enabled;
 
     return SafeArea(
       child: Padding(
@@ -113,6 +126,19 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
             ),
             const SizedBox(height: SsSpacing.space4),
             Expanded(child: _body(context, l10n, state, controller)),
+            if (analysisV2Enabled) ...[
+              const SizedBox(height: SsSpacing.space3),
+              SizedBox(
+                width: double.infinity,
+                child: SsButton(
+                  key: const Key('analyze-open-analysis-v2'),
+                  variant: SsButtonVariant.tertiary,
+                  icon: Icons.insights_outlined,
+                  label: l10n.analyzeOpenDetailedAnalysis,
+                  onPressed: () => context.push(AppRoutes.analysisCapture),
+                ),
+              ),
+            ],
             const SizedBox(height: SsSpacing.space3),
             _controls(context, l10n, state, controller),
           ],

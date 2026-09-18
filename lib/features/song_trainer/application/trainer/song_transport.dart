@@ -2,12 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import '../../../../core/foundation/app_result.dart';
 import '../../../../core/platform/app_lifecycle.dart';
 import '../../data/playback/backing_audio_player.dart';
 import '../../domain/services/song_time_map.dart';
 import 'song_transport_clock.dart';
 import 'song_transport_command.dart';
 import 'song_transport_state.dart';
+import 'song_transport_tick_source.dart';
 import 'transport_effect.dart';
 
 abstract final class SongTransportFailureCode {
@@ -32,15 +34,27 @@ final class SongTransport {
     required this.clock,
     this.lifecycleEvents,
     this.timeMap,
+    this.tickSource,
   }) {
     _playerSubscription = player.events.listen(_onPlayerEvent);
     lifecycleEvents?.addListener(_onLifecycleStateChanged);
   }
 
+  /// A backing sample newer than this keeps the playhead: while real audio is
+  /// reporting its own position, the tick source stays out of the way
+  /// (E16-R01/A4 — "the backing track still wins when present").
+  static const Duration backingSampleGrace = Duration(milliseconds: 250);
+
   final BackingAudioPlayer player;
   final SongTransportClock clock;
   final AppLifecycleEvents? lifecycleEvents;
   final SongTimeMap? timeMap;
+
+  /// Publishes `activePosition` while playing so the Stage advances even
+  /// without a backing track. `null` leaves the transport event-driven only
+  /// (the pre-E16-R01 behaviour every direct transport test measures).
+  final SongTransportTickSource? tickSource;
+
   final StreamController<SongTransportState> _states =
       StreamController<SongTransportState>.broadcast();
   final StreamController<TransportEffect> _effects =
@@ -49,6 +63,8 @@ final class SongTransport {
   SongTransportState _state = const SongTransportState();
   Duration _anchorPosition = Duration.zero;
   Duration _anchorElapsed = Duration.zero;
+  Duration? _lastBackingSampleElapsed;
+  bool _silent = false;
   Future<void> _commandTail = Future<void>.value();
   Future<void>? _disposeFuture;
   bool _disposed = false;
@@ -83,6 +99,7 @@ final class SongTransport {
     if (_disposed) return;
     _disposed = true;
     lifecycleEvents?.removeListener(_onLifecycleStateChanged);
+    tickSource?.stop();
     clock.stop();
     await _playerSubscription.cancel();
     await player.dispose();
@@ -127,8 +144,15 @@ final class SongTransport {
       clearFailure: true,
       clearInterruptionReason: true,
     );
-    _recordEffect(PrepareBackingAudioEffect(command.asset), effects);
-    final result = await player.prepare(command.asset);
+    final asset = command.asset;
+    _silent = asset == null;
+    _lastBackingSampleElapsed = null;
+    if (asset != null) {
+      _recordEffect(PrepareBackingAudioEffect(asset), effects);
+    }
+    final result = asset == null
+        ? const AppResult<void>.success(null)
+        : await player.prepare(asset);
     if (_disposed) {
       return SongTransportDispatchResult(phasePath: path, effects: effects);
     }
@@ -190,24 +214,40 @@ final class SongTransport {
       backingStatus: BackingPlaybackStatus.playing,
       clearInterruptionReason: true,
     );
-    _recordEffect(const StartBackingAudioEffect(), emitted);
-    final result = await player.play();
-    if (_disposed) return;
-    if (result.isFailure) {
-      _moveToError(path, emitted, result.failureOrNull!.code);
-      return;
-    }
-    if (_state.speed != 1) {
-      _recordEffect(SetBackingRateEffect(_state.speed), emitted);
-      final rateResult = await player.setRate(_state.speed);
-      if (rateResult.isFailure) {
-        _moveToError(path, emitted, rateResult.failureOrNull!.code);
+    if (!_silent) {
+      _recordEffect(const StartBackingAudioEffect(), emitted);
+      final result = await player.play();
+      if (_disposed) return;
+      if (result.isFailure) {
+        _moveToError(path, emitted, result.failureOrNull!.code);
         return;
+      }
+      if (_state.speed != 1) {
+        _recordEffect(SetBackingRateEffect(_state.speed), emitted);
+        final rateResult = await player.setRate(_state.speed);
+        if (rateResult.isFailure) {
+          _moveToError(path, emitted, rateResult.failureOrNull!.code);
+          return;
+        }
       }
     }
     _anchorPosition = _state.activePosition;
     _anchorElapsed = clock.elapsed;
     clock.start();
+    tickSource?.start(_onTick);
+  }
+
+  /// One playhead tick. Publishes the clock-derived position so the Stage
+  /// advances; a fresh backing sample suppresses it, because real audio is
+  /// the better clock whenever it is actually reporting.
+  void _onTick() {
+    if (_disposed || _state.phase != SongTransportPhase.playing) return;
+    final lastSample = _lastBackingSampleElapsed;
+    const grace = backingSampleGrace;
+    if (lastSample != null && clock.elapsed - lastSample < grace) {
+      return;
+    }
+    _setState(_state.copyWith(activePosition: _activePositionNow()));
   }
 
   Future<SongTransportDispatchResult> _pause() async {
@@ -222,14 +262,14 @@ final class SongTransport {
     final path = _newPath();
     final emitted = <TransportEffect>[];
     final position = _activePositionNow();
-    _recordEffect(const PauseBackingAudioEffect(), emitted);
-    final result = await player.pause();
+    final result = await _pauseBacking(emitted);
     if (_disposed) {
       return SongTransportDispatchResult(phasePath: path, effects: emitted);
     }
     if (result.isFailure) {
       _moveToError(path, emitted, result.failureOrNull!.code);
     } else {
+      tickSource?.stop();
       clock.stop();
       _anchorPosition = position;
       _anchorElapsed = clock.elapsed;
@@ -265,17 +305,21 @@ final class SongTransport {
     final emitted = <TransportEffect>[];
     _move(SongTransportPhase.seeking, path);
     if (wasPlaying) {
-      _recordEffect(const PauseBackingAudioEffect(), emitted);
-      final pauseResult = await player.pause();
+      final pauseResult = await _pauseBacking(emitted);
       if (pauseResult.isFailure) {
         _moveToError(path, emitted, pauseResult.failureOrNull!.code);
         return SongTransportDispatchResult(phasePath: path, effects: emitted);
       }
+      tickSource?.stop();
       clock.stop();
     }
     final backingPosition = backingPositionFor(command.position);
-    _recordEffect(SeekBackingAudioEffect(backingPosition), emitted);
-    final seekResult = await player.seek(backingPosition);
+    if (!_silent) {
+      _recordEffect(SeekBackingAudioEffect(backingPosition), emitted);
+    }
+    final seekResult = _silent
+        ? const AppResult<void>.success(null)
+        : await player.seek(backingPosition);
     if (seekResult.isFailure) {
       _moveToError(path, emitted, seekResult.failureOrNull!.code);
       return SongTransportDispatchResult(phasePath: path, effects: emitted);
@@ -304,7 +348,7 @@ final class SongTransport {
     }
     final path = _newPath();
     final emitted = <TransportEffect>[];
-    if (!player.capabilities.supportsRate(command.speed)) {
+    if (!_silent && !player.capabilities.supportsRate(command.speed)) {
       _recordEffect(
         const TransportFailureEffect(
           BackingAudioPlayerFailureCode.unsupportedRate,
@@ -322,8 +366,10 @@ final class SongTransport {
       _setState(_state.copyWith(speed: command.speed, clearFailure: true));
       return SongTransportDispatchResult(phasePath: path, effects: emitted);
     }
-    _recordEffect(SetBackingRateEffect(command.speed), emitted);
-    final result = await player.setRate(command.speed);
+    if (!_silent) _recordEffect(SetBackingRateEffect(command.speed), emitted);
+    final result = _silent
+        ? const AppResult<void>.success(null)
+        : await player.setRate(command.speed);
     if (result.isFailure) {
       _recordEffect(
         TransportFailureEffect(result.failureOrNull!.code),
@@ -343,9 +389,11 @@ final class SongTransport {
       return _failureResult(SongTransportFailureCode.invalidTransition);
     }
     final path = _newPath();
+    tickSource?.stop();
     clock.reset();
     _anchorPosition = Duration.zero;
     _anchorElapsed = Duration.zero;
+    _lastBackingSampleElapsed = null;
     _move(
       SongTransportPhase.ready,
       path,
@@ -363,11 +411,11 @@ final class SongTransport {
     final path = _newPath();
     final emitted = <TransportEffect>[];
     final position = _activePositionNow();
-    _recordEffect(const PauseBackingAudioEffect(), emitted);
-    final result = await player.pause();
+    final result = await _pauseBacking(emitted);
     if (result.isFailure) {
       _moveToError(path, emitted, result.failureOrNull!.code);
     } else {
+      tickSource?.stop();
       clock.stop();
       _anchorPosition = position;
       _anchorElapsed = clock.elapsed;
@@ -389,7 +437,8 @@ final class SongTransport {
       return SongTransportDispatchResult(phasePath: path, effects: emitted);
     }
     if (_state.phase == SongTransportPhase.error) {
-      await player.stop();
+      if (!_silent) await player.stop();
+      tickSource?.stop();
       clock.stop();
       _move(
         SongTransportPhase.idle,
@@ -406,8 +455,11 @@ final class SongTransport {
       return _failureResult(SongTransportFailureCode.invalidTransition);
     }
     _move(SongTransportPhase.stopping, path);
-    _recordEffect(const PauseBackingAudioEffect(), emitted);
-    final result = await player.stop();
+    if (!_silent) _recordEffect(const PauseBackingAudioEffect(), emitted);
+    final result = _silent
+        ? const AppResult<void>.success(null)
+        : await player.stop();
+    tickSource?.stop();
     clock.stop();
     _anchorPosition = Duration.zero;
     _anchorElapsed = clock.elapsed;
@@ -454,6 +506,7 @@ final class SongTransport {
     switch (event) {
       case BackingPositionEvent(:final position)
           when _state.phase == SongTransportPhase.playing:
+        _lastBackingSampleElapsed = clock.elapsed;
         final masterPosition = backingPositionFor(_activePositionNow());
         final report = BackingDriftPolicy.fromCapabilities(
           player.capabilities,
@@ -471,6 +524,7 @@ final class SongTransport {
       case BackingCompletedEvent()
           when _state.phase == SongTransportPhase.playing:
         final position = _activePositionNow();
+        tickSource?.stop();
         clock.stop();
         _anchorPosition = position;
         _anchorElapsed = clock.elapsed;
@@ -493,6 +547,14 @@ final class SongTransport {
     if (result.isFailure && !_disposed) {
       _moveToError(_newPath(), <TransportEffect>[], result.failureOrNull!.code);
     }
+  }
+
+  /// Pauses the backing player, or resolves successfully when the transport
+  /// is silent (no backing asset was prepared).
+  Future<AppResult<void>> _pauseBacking(List<TransportEffect> emitted) async {
+    if (_silent) return const AppResult<void>.success(null);
+    _recordEffect(const PauseBackingAudioEffect(), emitted);
+    return player.pause();
   }
 
   Duration _activePositionNow() {
@@ -541,6 +603,7 @@ final class SongTransport {
     List<TransportEffect> emitted,
     String code,
   ) {
+    tickSource?.stop();
     if (SongTransportTransitionTable.allows(
       from: _state.phase,
       to: SongTransportPhase.error,

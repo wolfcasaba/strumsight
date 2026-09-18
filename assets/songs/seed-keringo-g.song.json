@@ -1,0 +1,420 @@
+{
+  "schemaVersion": 1,
+  "id": "seed-keringo-g",
+  "revision": 0,
+  "metadata": {
+    "title": "Keringő G-ben",
+    "artist": "StrumSight",
+    "composer": "StrumSight",
+    "copyright": "Project-authored practice song written for StrumSight. No third-party musical content.",
+    "tags": [
+      "seed",
+      "keringo",
+      "harom-negyed"
+    ],
+    "notes": "Háromnegyedes gyakorló dal: ütemenként egy basszus és két felfelé pengetés. Saját szerzésű, jogtiszta anyag.",
+    "defaultCapo": 0
+  },
+  "source": {
+    "type": "createdInApp",
+    "originalFileName": "seed-keringo-g.song.json",
+    "sha256": "a6689a85b3cf6433101feb3d71c8c3ccc73e85c23d6a2cd2ee593911629a32e8",
+    "importedAt": "2026-09-17T00:00:00.000Z",
+    "importerVersion": "strumsight-seed@1",
+    "warningSummary": []
+  },
+  "assets": [],
+  "markers": [],
+  "sections": [
+    {
+      "id": "a-resz",
+      "name": "A rész",
+      "startMeasure": 0,
+      "endMeasureExclusive": 4,
+      "kind": "verse"
+    },
+    {
+      "id": "b-resz",
+      "name": "B rész",
+      "startMeasure": 4,
+      "endMeasureExclusive": 8,
+      "kind": "bridge"
+    }
+  ],
+  "measures": [
+    {
+      "index": 0,
+      "durationTicks": 1440,
+      "displayNumber": 1,
+      "pickup": false,
+      "repeatStart": false
+    },
+    {
+      "index": 1,
+      "durationTicks": 1440,
+      "displayNumber": 2,
+      "pickup": false,
+      "repeatStart": false
+    },
+    {
+      "index": 2,
+      "durationTicks": 1440,
+      "displayNumber": 3,
+      "pickup": false,
+      "repeatStart": false
+    },
+    {
+      "index": 3,
+      "durationTicks": 1440,
+      "displayNumber": 4,
+      "pickup": false,
+      "repeatStart": false
+    },
+    {
+      "index": 4,
+      "durationTicks": 1440,
+      "displayNumber": 5,
+      "pickup": false,
+      "repeatStart": false
+    },
+    {
+      "index": 5,
+      "durationTicks": 1440,
+      "displayNumber": 6,
+      "pickup": false,
+      "repeatStart": false
+    },
+    {
+      "index": 6,
+      "durationTicks": 1440,
+      "displayNumber": 7,
+      "pickup": false,
+      "repeatStart": false
+    },
+    {
+      "index": 7,
+      "durationTicks": 1440,
+      "displayNumber": 8,
+      "pickup": false,
+      "repeatStart": false
+    }
+  ],
+  "tempoMap": [
+    {
+      "atTicks": 0,
+      "bpm": 120
+    }
+  ],
+  "meterMap": [
+    {
+      "atMeasure": 0,
+      "numerator": 3,
+      "denominator": 4
+    }
+  ],
+  "keyMap": [
+    {
+      "atTicks": 0,
+      "tonic": 7,
+      "mode": "major"
+    }
+  ],
+  "tracks": [
+    {
+      "kind": "chord",
+      "id": "chords",
+      "name": "Akkordok",
+      "instrument": {
+        "name": "Acoustic guitar"
+      },
+      "enabled": true,
+      "events": [
+        {
+          "kind": "chord",
+          "id": "chord-01",
+          "startMicros": 0,
+          "durationMicros": 1500000,
+          "symbol": "G"
+        },
+        {
+          "kind": "chord",
+          "id": "chord-02",
+          "startMicros": 1500000,
+          "durationMicros": 1500000,
+          "symbol": "G"
+        },
+        {
+          "kind": "chord",
+          "id": "chord-03",
+          "startMicros": 3000000,
+          "durationMicros": 1500000,
+          "symbol": "C"
+        },
+        {
+          "kind": "chord",
+          "id": "chord-04",
+          "startMicros": 4500000,
+          "durationMicros": 1500000,
+          "symbol": "D"
+        },
+        {
+          "kind": "chord",
+          "id": "chord-05",
+          "startMicros": 6000000,
+          "durationMicros": 1500000,
+          "symbol": "G"
+        },
+        {
+          "kind": "chord",
+          "id": "chord-06",
+          "startMicros": 7500000,
+          "durationMicros": 1500000,
+          "symbol": "Em"
+        },
+        {
+          "kind": "chord",
+          "id": "chord-07",
+          "startMicros": 9000000,
+          "durationMicros": 1500000,
+          "symbol": "D"
+        },
+        {
+          "kind": "chord",
+          "id": "chord-08",
+          "startMicros": 10500000,
+          "durationMicros": 1500000,
+          "symbol": "G"
+        }
+      ]
+    },
+    {
+      "kind": "strum",
+      "id": "strum",
+      "name": "Pengetés",
+      "instrument": {
+        "name": "Acoustic guitar"
+      },
+      "enabled": true,
+      "events": [
+        {
+          "kind": "strum",
+          "id": "strum-01-1",
+          "atMicros": 0,
+          "direction": "down",
+          "accent": true,
+          "muted": false,
+          "targetChordId": "chord-01"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-01-2",
+          "atMicros": 500000,
+          "direction": "up",
+          "accent": false,
+          "muted": false,
+          "targetChordId": "chord-01"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-01-3",
+          "atMicros": 1000000,
+          "direction": "up",
+          "accent": false,
+          "muted": false,
+          "targetChordId": "chord-01"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-02-1",
+          "atMicros": 1500000,
+          "direction": "down",
+          "accent": true,
+          "muted": false,
+          "targetChordId": "chord-02"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-02-2",
+          "atMicros": 2000000,
+          "direction": "up",
+          "accent": false,
+          "muted": false,
+          "targetChordId": "chord-02"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-02-3",
+          "atMicros": 2500000,
+          "direction": "up",
+          "accent": false,
+          "muted": false,
+          "targetChordId": "chord-02"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-03-1",
+          "atMicros": 3000000,
+          "direction": "down",
+          "accent": true,
+          "muted": false,
+          "targetChordId": "chord-03"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-03-2",
+          "atMicros": 3500000,
+          "direction": "up",
+          "accent": false,
+          "muted": false,
+          "targetChordId": "chord-03"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-03-3",
+          "atMicros": 4000000,
+          "direction": "up",
+          "accent": false,
+          "muted": false,
+          "targetChordId": "chord-03"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-04-1",
+          "atMicros": 4500000,
+          "direction": "down",
+          "accent": true,
+          "muted": false,
+          "targetChordId": "chord-04"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-04-2",
+          "atMicros": 5000000,
+          "direction": "up",
+          "accent": false,
+          "muted": false,
+          "targetChordId": "chord-04"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-04-3",
+          "atMicros": 5500000,
+          "direction": "up",
+          "accent": false,
+          "muted": false,
+          "targetChordId": "chord-04"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-05-1",
+          "atMicros": 6000000,
+          "direction": "down",
+          "accent": true,
+          "muted": false,
+          "targetChordId": "chord-05"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-05-2",
+          "atMicros": 6500000,
+          "direction": "up",
+          "accent": false,
+          "muted": false,
+          "targetChordId": "chord-05"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-05-3",
+          "atMicros": 7000000,
+          "direction": "up",
+          "accent": false,
+          "muted": false,
+          "targetChordId": "chord-05"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-06-1",
+          "atMicros": 7500000,
+          "direction": "down",
+          "accent": true,
+          "muted": false,
+          "targetChordId": "chord-06"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-06-2",
+          "atMicros": 8000000,
+          "direction": "up",
+          "accent": false,
+          "muted": false,
+          "targetChordId": "chord-06"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-06-3",
+          "atMicros": 8500000,
+          "direction": "up",
+          "accent": false,
+          "muted": false,
+          "targetChordId": "chord-06"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-07-1",
+          "atMicros": 9000000,
+          "direction": "down",
+          "accent": true,
+          "muted": false,
+          "targetChordId": "chord-07"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-07-2",
+          "atMicros": 9500000,
+          "direction": "up",
+          "accent": false,
+          "muted": false,
+          "targetChordId": "chord-07"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-07-3",
+          "atMicros": 10000000,
+          "direction": "up",
+          "accent": false,
+          "muted": false,
+          "targetChordId": "chord-07"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-08-1",
+          "atMicros": 10500000,
+          "direction": "down",
+          "accent": true,
+          "muted": false,
+          "targetChordId": "chord-08"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-08-2",
+          "atMicros": 11000000,
+          "direction": "up",
+          "accent": false,
+          "muted": false,
+          "targetChordId": "chord-08"
+        },
+        {
+          "kind": "strum",
+          "id": "strum-08-3",
+          "atMicros": 11500000,
+          "direction": "up",
+          "accent": false,
+          "muted": false,
+          "targetChordId": "chord-08"
+        }
+      ]
+    }
+  ],
+  "createdAt": "2026-09-17T00:00:00.000Z",
+  "updatedAt": "2026-09-17T00:00:00.000Z"
+}

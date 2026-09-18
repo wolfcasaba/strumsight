@@ -92,6 +92,23 @@ flutter test test/ui/goldens/e15_r13_full_variant_matrix_test.dart
 **1163** (= 72 screens × 16 variants = 1152 cells + 5 A1-completeness
 cells + 6 A5-report-guard cells), reproduced this fixing round (§10.4).
 
+> **2026-09-05 (E17 Ch17 teljes bekötés):** 72 → **93 képernyő**. A
+> community tizenhármas, a hangelemzés felvételi hármasa, a
+> gyakorlástervező négyese és a First-Win állomás route-jainak bekötésével
+> ezek `reachable: true`-vá váltak, és az A1 teljességi invariáns (mért
+> elérhető halmaz ⊆ mátrix ∪ kizárás) helyesen követelte a
+> variáns-alapvonalukat. A mátrix HÁROM valódi, 2.0-s szöveg-méretnél
+> jelentkező túlcsordulást fogott meg — a kapu-képernyőn (8px), a
+> felvételi képernyőn (64px) és az értesítés-beállításokban (2310px) —,
+> mindhárom javítva ugyanebben a sávban. A jelentés SZÁMAI szándékosan a
+> saját alapjukon (`main @ 9ba54399`, 2026-09-03) mértek maradnak — 72
+> képernyő / 1152 cella / 1163 teszt —, mert a dátumozott jelentést egy
+> későbbi kör nem írhatja át: az A5 őr ezeket a rögzített pillanatkép
+> (`test/fixtures/ui/e15_r13_completion_report_baseline.json`) értékeihez
+> méri (E17-R01 önjavítás, ADR 0112). A ma ÉLŐ mátrix 93 képernyőt,
+> 1488 cellát és 1499 tesztet futtat; ennek teljességét nem ez a cella,
+> hanem az A1 teljességi invariáns őrzi.
+
 - **Completeness (A1):** a dedicated test group re-runs
   `ScreenReachability(Directory.current).render()` at test time and
   asserts the measured reachable-screen-path set is a subset of (the 72

@@ -149,8 +149,13 @@ void main() {
             ),
           ),
         );
-        await tester.pump();
-        expect(controller.state.status, SongTrainerStatus.idle);
+        await tester.pumpAndSettle();
+        // E16-R01/A2: mounting the Stage now STARTS the session — that is the
+        // round's whole point (the screen used to subscribe and never call
+        // `prepare()`/`start()`, so a reached route sat on the skeleton
+        // forever). A playback-only compilation therefore lands on `running`
+        // here; the pre-round `idle` was the symptom this suite outlived.
+        expect(controller.state.status, SongTrainerStatus.running);
 
         // Leave the Stage — as a route pop would.
         await tester.pumpWidget(const SizedBox.shrink());
@@ -158,20 +163,21 @@ void main() {
 
         // `SongTrainerController.dispose()` sets its internal `_disposed`
         // flag SYNCHRONOUSLY, before its first `await` — every subsequent
-        // guarded command becomes a no-op. `prepare()` would otherwise move
-        // the status to `preparing`/`ready`; the status staying `idle` proves
-        // the owning controller was actually notified on this exit path, not
-        // merely left for Riverpod's own (here deliberately absent, see the
-        // override above) teardown timing.
+        // guarded command becomes a no-op. On a LIVE controller `prepare()`
+        // moves the status to `preparing`; the status staying exactly where
+        // the unmount left it proves the owning controller was actually
+        // notified on this exit path, not merely left for Riverpod's own
+        // (here deliberately absent, see the override above) teardown timing.
         await controller.prepare();
         expect(
           controller.state.status,
-          SongTrainerStatus.idle,
+          SongTrainerStatus.running,
           reason:
               'The Stage must notify the owning controller\'s dispose/exit '
               'path on every exit — the override above deliberately skips '
               'Riverpod\'s own onDispose so only an explicit presentation-'
-              'side notification can make this pass (§0.0/B/B7).',
+              'side notification can make this pass (§0.0/B/B7). A LIVE '
+              'controller would have moved to `preparing` on this call.',
         );
       },
     );

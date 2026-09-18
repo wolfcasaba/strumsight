@@ -20,6 +20,16 @@ const _projectAuthored =
     'project-authored synthetic test fixture, no third-party musical content';
 const _projectAuthoredLicence = 'Project-authored synthetic test fixture.';
 
+/// The shipped seed songs under `assets/songs/` are NOT test fixtures — they
+/// are user-visible content the app installs into the Song Trainer library on
+/// first launch. They are covered by the same manifest so a silent edit of a
+/// shipped song (or a copyrighted song dropped into the directory) turns the
+/// gate red instead of reaching a user's device. See `assets/songs/README.md`.
+const _seedSongProvenance =
+    'project-authored practice song written for this repository, generic '
+    'teaching progression only, no melody, lyrics or recording';
+const _seedSongLicence = 'Project-authored practice song.';
+
 const _manifest = <_FixtureProvenance>[
   _FixtureProvenance(
     path: 'test/fixtures/song_trainer/guitar_pro/minimal_gp3.gp3',
@@ -205,14 +215,50 @@ const _manifest = <_FixtureProvenance>[
     licence: _projectAuthoredLicence,
     sha256: '6cfd985e9604454e0b94d7b30dcfbde74ff104076c7d66b53da4aff7fd3b68b5',
   ),
+  _FixtureProvenance(
+    path: 'assets/songs/seed-blues-shuffle-a.song.json',
+    provenance: _seedSongProvenance,
+    licence: _seedSongLicence,
+    sha256: '3c322ce41237fe6e1352cd864a8ea13d21a04831dd1eb1720d35e9feca7e10ae',
+  ),
+  _FixtureProvenance(
+    path: 'assets/songs/seed-harom-akkord-g-c-d.song.json',
+    provenance: _seedSongProvenance,
+    licence: _seedSongLicence,
+    sha256: 'f618d26b599bc7cef83d175cde8e41c772bd9f24d6b94e3d272a2f518e3ef1d7',
+  ),
+  _FixtureProvenance(
+    path: 'assets/songs/seed-keringo-g.song.json',
+    provenance: _seedSongProvenance,
+    licence: _seedSongLicence,
+    sha256: 'b3303b0e94de67522c6ae463b720f9219016280840bd8c81a872239421d373f0',
+  ),
+];
+
+/// Directories the gate walks, each relative to the repository root. Both are
+/// song content with a provenance obligation: the importer fixtures under
+/// `test/` and the seed songs shipped inside the APK under `assets/`.
+const _scannedRoots = <List<String>>[
+  <String>['test', 'fixtures', 'song_trainer'],
+  <String>['assets', 'songs'],
 ];
 
 Future<List<String>> _fixtureFiles(Directory root) async {
-  final fixtureRoot = Directory(
-    '${root.path}${Platform.pathSeparator}test${Platform.pathSeparator}fixtures${Platform.pathSeparator}song_trainer',
+  final entries = <String>[];
+  for (final segments in _scannedRoots) {
+    entries.addAll(await _filesUnder(root, segments));
+  }
+  entries.sort();
+  return entries;
+}
+
+Future<List<String>> _filesUnder(Directory root, List<String> segments) async {
+  final directory = Directory(
+    '${root.path}${Platform.pathSeparator}${segments.join(Platform.pathSeparator)}',
   );
   final entries = <String>[];
-  await for (final entity in fixtureRoot.list(
+  if (!directory.existsSync()) return entries;
+  await for (final entity in directory.list(
     recursive: true,
     followLinks: false,
   )) {
@@ -226,7 +272,6 @@ Future<List<String>> _fixtureFiles(Directory root) async {
       entries.add(absolute.substring(prefix.length).replaceAll('\\', '/'));
     }
   }
-  entries.sort();
   return entries;
 }
 

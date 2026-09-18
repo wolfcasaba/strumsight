@@ -49,19 +49,20 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
+from sqlalchemy import text as _sa_text
 from sqlalchemy.orm import Session
 
 from ...config import Settings
 from ...deps import CurrentUser
 from ..feed.following_feed import (
     DEFAULT_PAGE_SIZE,
-    FeedItemRow,
     list_following_feed,
 )
 from ..feed.following_feed import (
     FeedPage as FeedPageRepo,
 )
-from ..schemas.feed import FEED_PAGE_SIZE_MAX, FeedPage, FeedPageQuery, FeedPostItem
+from ..post_projection import project_page
+from ..schemas.feed import FEED_PAGE_SIZE_MAX, FeedPage, FeedPageQuery
 
 router = APIRouter(prefix="/community", tags=["community-feed"])
 
@@ -103,7 +104,6 @@ def _resolve_viewer_profile_pk(db: Session, user_id: int) -> int:
     ``_resolve_internal_profile_id`` patterns from
     ``routers/social_graph.py`` and ``routers/posts.py``.
     """
-    from sqlalchemy import text as _sa_text
 
     row = db.execute(
         _sa_text("SELECT id FROM community_profiles WHERE user_id = :uid"),
@@ -139,30 +139,6 @@ def _resolve_cursor_secret(settings: Settings) -> str:
             detail="feed cursor signing key is the development placeholder",
         )
     return secret
-
-
-def _row_to_item(row: FeedItemRow) -> FeedPostItem:
-    """Map a repository ``FeedItemRow`` to the wire-shape item.
-
-    Centralised so the §6.1 leak-guard (no internal id on the wire)
-    is structural — adding a field to the response still routes
-    through here. ``resource_version`` mirrors the Kör 11
-    ``PostOut`` (the ``updated_at`` token).
-    """
-    return FeedPostItem(
-        public_id=row.post_public_id,
-        author_public_id=row.author_public_id,
-        audience=row.audience,  # type: ignore[arg-type]
-        club_id=None,
-        body=row.body,
-        artifact_type=row.artifact_type,
-        artifact_schema_version=row.artifact_schema_version,
-        artifact_payload=row.artifact_payload,
-        moderation_state=row.moderation_state,  # type: ignore[arg-type]
-        created_at=row.created_at,
-        resource_version=row.updated_at,
-        deleted_at=row.deleted_at,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +223,10 @@ def get_following_feed(
             cursor_secret=cursor_secret,
         )
 
-        items = [_row_to_item(row) for row in repo_page.items]
+        # A projekció KÖZÖS a klub-feeddel és a kitűzött posztokkal
+        # (``post_projection.py``) — így a „törölt komment nem számít
+        # bele" szabály nem tud két felület között szétcsúszni.
+        items = project_page(db, list(repo_page.items), viewer_profile_id=viewer_pk)
         return FeedPage(items=items, next_cursor=repo_page.next_cursor)
     finally:
         try:

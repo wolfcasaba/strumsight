@@ -15,12 +15,16 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:path_provider/path_provider.dart';
+import 'package:strumsight/features/analyze/public.dart'
+    show computeImportedClipAnalysis;
 import 'package:strumsight/features/practice/public.dart';
 import 'package:strumsight/features/progress/public.dart' as progress;
 
+import '../../../core/audio/audio_decoder_providers.dart';
 import '../../../core/foundation/app_failure.dart';
 import '../../../core/foundation/app_result.dart';
 import '../../../core/logging/logger_provider.dart';
@@ -29,12 +33,14 @@ import '../../../core/storage/key_value_store.dart';
 import '../../../core/storage/storage_providers.dart';
 import '../data/playback/backing_audio_player.dart';
 import '../data/playback/local_backing_audio_player.dart';
+import 'import/audio_song_import_controller.dart';
 import 'import/song_import_controller.dart';
 import 'import/song_import_state.dart';
 import 'library/song_library_controller.dart';
 import 'library/song_library_state.dart';
 import 'editor/song_editor_controller.dart';
 import 'editor/song_editor_state.dart';
+import '../data/importers/audio_scratch_decoder.dart';
 import '../data/importers/file_picker_adapter.dart';
 import '../data/importers/importer_registry.dart';
 import '../data/importers/native_json_importer.dart';
@@ -49,6 +55,7 @@ import '../data/local/file_song_progress_repository.dart';
 import '../data/local/in_memory_song_repository.dart';
 import '../data/local/song_repository_recovery.dart';
 import '../data/migration/song_migration_version_store.dart';
+import '../data/seed/song_seed_marker_store.dart';
 import '../domain/repositories/song_asset_repository.dart';
 import '../domain/repositories/song_repository.dart';
 import '../domain/repositories/setlist_repository.dart';
@@ -56,9 +63,11 @@ import '../domain/repositories/song_progress_repository.dart';
 import '../domain/models/song_id.dart';
 import '../domain/models/song_asset_reference.dart';
 import 'migration/song_migration_state.dart';
+import 'seed/song_seed_installer.dart';
 import 'migration/song_storage_migrator.dart';
 import 'trainer/song_transport.dart';
 import 'trainer/song_transport_clock.dart';
+import 'trainer/song_transport_tick_source.dart';
 import 'trainer/song_practice_compiler.dart';
 import 'trainer/song_progress_committer.dart';
 import 'trainer/song_resume_repository.dart';
@@ -137,7 +146,86 @@ final songRepositoryBootProvider = FutureProvider<SongRepository>((ref) async {
   // Run a startup recovery scan in `no-action` mode so the boot
   // path records available residue without touching user content.
   await SongRepositoryRecovery.scan(root);
-  return FileSongRepository.openAtDirectory(directory: root, clock: clock);
+  final repository = await FileSongRepository.openAtDirectory(
+    directory: root,
+    clock: clock,
+  );
+  // The shipped practice songs land through the SAME repository, exactly
+  // once per device (`SongSeedMarkerStore`). They are ordinary documents
+  // afterwards: editable, exportable and — crucially — permanently
+  // deletable, because the marker, not the repository, is the guard.
+  final seedOutcome = await SongSeedInstaller(
+    repository: repository,
+    markerStore: SongSeedMarkerStore.open(songsRoot: root),
+    assetLoader: ref.watch(songSeedAssetLoaderProvider),
+    clock: clock,
+    catalog: ref.watch(songSeedCatalogProvider),
+  ).install();
+  if (!seedOutcome.isClean) {
+    // Not a silent no-op: a seed that could not be installed is named here
+    // and retried on the next launch (it never entered the marker).
+    final logger = ref.watch(appLoggerProvider);
+    for (final failure in seedOutcome.failures) {
+      logger.warning(
+        'songSeed.install.failed',
+        fields: <String, Object?>{
+          'seedId': failure.seedId,
+          'reason': failure.reason,
+        },
+      );
+    }
+  }
+  return repository;
+});
+
+/// Asset-bundle boundary for the shipped seed songs. Production reads the
+/// `pubspec.yaml`-declared JSON through `rootBundle`; tests inject a
+/// map-backed loader so no Flutter binding is required.
+final songSeedAssetLoaderProvider = Provider<SongSeedAssetLoader>(
+  (_) => rootBundle.loadString,
+);
+
+/// The seed catalogue the boot path installs. Overridden with an empty list
+/// by tests that measure the un-seeded repository.
+final songSeedCatalogProvider = Provider<List<SongSeedDefinition>>(
+  (_) => songSeedCatalog,
+);
+
+/// Re-installs the shipped catalogue on explicit user request.
+typedef SongSeedRestore = Future<SongSeedOutcome> Function();
+
+/// User-initiated restore behind the Library's empty-state CTA.
+///
+/// Resolved lazily, so a widget test that never taps the CTA never touches
+/// `path_provider`; and it never throws — a storage failure comes back as a
+/// NAMED [SongSeedOutcome] failure the screen renders, instead of an
+/// exception the screen would have to swallow.
+final songSeedRestoreProvider = Provider<SongSeedRestore>((ref) {
+  return () async {
+    try {
+      final resolve = ref.read(songTrainerProductionRootResolverProvider);
+      final root = await resolve();
+      await root.create(recursive: true);
+      return SongSeedInstaller(
+        repository: ref.read(songRepositoryProvider),
+        markerStore: SongSeedMarkerStore.open(songsRoot: root),
+        assetLoader: ref.read(songSeedAssetLoaderProvider),
+        clock: ref.read(songTrainerClockProvider),
+        catalog: ref.read(songSeedCatalogProvider),
+      ).restore();
+    } catch (_) {
+      return const SongSeedOutcome(
+        installedSeedIds: <String>[],
+        skippedSeedIds: <String>[],
+        failures: <SongSeedFailure>[
+          SongSeedFailure(
+            seedId: '<storage>',
+            reason: SongSeedFailureReason.storageUnavailable,
+          ),
+        ],
+      );
+    }
+  };
 });
 
 /// Override point for persistent Setlist V2 storage.
@@ -245,6 +333,68 @@ final songImportControllerProvider = Provider.autoDispose<SongImportController>(
   },
 );
 
+/// Per-operation scratch directory for the AUDIO import (K3).
+///
+/// The platform decoder needs a real path, and the picker deliberately hands
+/// out a byte stream instead of one, so the compressed bytes are written here
+/// for exactly the length of one operation. It is a sibling of the notation
+/// import workspace, NOT the same directory: the notation workspace enforces
+/// an 8 MiB budget that a recording would blow through instantly.
+final audioImportWorkspaceRootProvider = Provider<SongTrainerRootResolver>((
+  ref,
+) {
+  final resolveSongsRoot = ref.watch(songTrainerProductionRootResolverProvider);
+  return () async {
+    final songsRoot = await resolveSongsRoot();
+    return Directory('${songsRoot.path}/audio-import');
+  };
+});
+
+/// The decode seam of the audio import: the K2 platform decoder, reached
+/// through the adapter that owns the temporary on-disk copy it needs.
+///
+/// No `targetSampleRate` is requested — the decoder's own rate survives and
+/// the analyzer is told what it is (ADR 0535 §3: a quality resample is the
+/// DSP's job, not the reader's).
+final audioSongImportDecoderProvider = Provider<AudioPcmDecode>((ref) {
+  final decoder = ref.watch(platformAudioDecoderProvider);
+  final scratch = AudioScratchDecoder(
+    workspaceRoot: ref.watch(audioImportWorkspaceRootProvider),
+    decode: decoder.decodeToPcm,
+  );
+  return scratch.decodeBytes;
+});
+
+/// The analysis seam of the audio import.
+///
+/// Bound to `computeImportedClipAnalysis`, which pins Lab mode OFF, so an
+/// imported recording can never reach the diagnostics uploader (K3/A3).
+final audioSongImportAnalyzerProvider = Provider<AudioClipAnalyze>(
+  (_) => computeImportedClipAnalysis,
+);
+
+/// Application audio-import flow. Auto-disposed, so leaving the import route
+/// cancels the operation and disowns any decode/analysis still in flight.
+final audioSongImportControllerProvider =
+    Provider.autoDispose<AudioSongImportController>((ref) {
+      final controller = AudioSongImportController(
+        decode: ref.watch(audioSongImportDecoderProvider),
+        analyze: ref.watch(audioSongImportAnalyzerProvider),
+        // Resolved lazily on purpose: mounting the import screen must not be
+        // what forces the song tree open (see SongRepositoryResolver).
+        repository: () => ref.read(songRepositoryProvider),
+        assetRepository: () => ref.read(songAssetRepositoryProvider),
+      );
+      ref.onDispose(() => unawaited(controller.dispose()));
+      return controller;
+    });
+
+/// Reactive audio-import state for presentation consumers.
+final audioSongImportStateProvider =
+    StreamProvider.autoDispose<AudioSongImportState>(
+      (ref) => ref.watch(audioSongImportControllerProvider).states,
+    );
+
 /// Production picker boundary. Widgets receive this adapter through the
 /// provider instead of calling a platform plugin directly.
 final songFilePickerAdapterProvider = Provider.autoDispose<FilePickerAdapter>((
@@ -349,6 +499,15 @@ final songMigrationOutcomeProvider = FutureProvider<SongMigrationOutcome>((
   return migrator.run();
 });
 
+/// Playhead tick source for the production transport. Overridden by tests
+/// that need a hand-driven or absent ticker.
+final songTransportTickSourceProvider =
+    Provider.autoDispose<SongTransportTickSource>((ref) {
+      final source = TimerSongTransportTickSource();
+      ref.onDispose(source.stop);
+      return source;
+    });
+
 final backingAudioPlayerProvider = Provider.autoDispose<BackingAudioPlayer>((
   ref,
 ) {
@@ -364,6 +523,10 @@ final songTransportProvider = Provider.autoDispose<SongTransport>((ref) {
     player: ref.watch(backingAudioPlayerProvider),
     clock: StopwatchSongTransportClock(),
     lifecycleEvents: ref.watch(appLifecycleEventsProvider),
+    // E16-R01/A4 — without this the transport only published a position when
+    // the backing player emitted one, so a song with no audio track (every
+    // imported or hand-built song) rendered a frozen playhead.
+    tickSource: ref.watch(songTransportTickSourceProvider),
   );
   ref.onDispose(() => unawaited(transport.dispose()));
   return transport;
@@ -378,10 +541,19 @@ final class SongTrainerControllerInputs {
   const SongTrainerControllerInputs({
     required this.compilation,
     this.backingAsset,
+    this.maxLoops = 1,
+    this.targetSpeed,
   });
 
   final SongPracticeCompilation compilation;
   final SongAssetReference? backingAsset;
+
+  /// Configured loop repeats — surfaced as the Stage's "2/5" loop index.
+  final int maxLoops;
+
+  /// Configured tempo scale, used to decide whether the backing player can
+  /// actually honour the requested rate.
+  final double? targetSpeed;
 }
 
 /// Production Song Trainer orchestration wiring.
@@ -406,6 +578,8 @@ final songTrainerControllerProvider = Provider.autoDispose
         transport: ref.watch(songTransportProvider),
         compilation: compilation,
         backingAsset: inputs.backingAsset,
+        maxLoops: inputs.maxLoops,
+        targetSpeed: inputs.targetSpeed,
         practiceSession: practiceSession,
         progressCommitter: definition == null
             ? null

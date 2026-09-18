@@ -27,12 +27,18 @@ class ProfileHubScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final streak = ref.watch(streakProvider);
-    final stats = PracticeStats(ref.watch(practiceLogProvider));
+    final stats = ref.watch(practiceStatsProvider);
     final communityEnabled = ref
         .watch(appConfigProvider)
         .flags
         .communityEnabled;
     final accountEnabled = ref.watch(accountEnabledProvider);
+    // Az AI Tanár belépési pontja. A `/tutor/*` útvonalak az `aiTutorEnabled`
+    // kapu alatt regisztrálódnak (`app_router.dart`), ezért a gomb PONTOSAN
+    // ugyanazzal a flaggel kapuzott — kikapcsolt kapunál nem mutat
+    // regisztrálatlan címre. (A `/coach` héj-célpont csak az adaptív héj
+    // bekapcsolt állásán látszik; ez a gomb attól függetlenül elérhető.)
+    final aiTutorEnabled = ref.watch(appConfigProvider).flags.aiTutorEnabled;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.profileHubTitle)),
@@ -68,6 +74,14 @@ class ProfileHubScreen extends ConsumerWidget {
               onPressed: () => context.push(AppRoutes.gamificationHub),
               child: Text(l10n.profileHubAchievementsSectionTitle),
             ),
+            if (aiTutorEnabled) ...[
+              const SizedBox(height: 12),
+              OutlinedButton(
+                key: const ValueKey('profile-hub-tutor-entry'),
+                onPressed: () => context.push(AppRoutes.tutorHome),
+                child: Text(l10n.aiTutorHomeTitle),
+              ),
+            ],
             const SizedBox(height: 24),
             if (accountEnabled)
               _AccountSection(l10n: l10n)
@@ -79,23 +93,37 @@ class ProfileHubScreen extends ConsumerWidget {
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ],
-            const SizedBox(height: 24),
-            _SectionLabel(l10n.profileHubCommunitySectionTitle),
-            const SizedBox(height: 8),
-            Text(
-              communityEnabled
-                  ? l10n.profileHubCommunityEnabledMessage
-                  : l10n.profileHubCommunityDisabledReason,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            // A section whose only content is "not available in this build"
+            // promises something the learner cannot open — it is not
+            // rendered while the Community capability is off.
+            if (communityEnabled) ...[
+              const SizedBox(height: 24),
+              _SectionLabel(l10n.profileHubCommunitySectionTitle),
+              const SizedBox(height: 8),
+              Text(
+                l10n.profileHubCommunityEnabledMessage,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              // A közösség BELÉPÉSI PONTJA (2026-09-05). A 13 community
+              // képernyő route-jai léteztek, de a szállított felületről SEMMI
+              // nem vezetett hozzájuk — a felhasználó számára ez ugyanaz,
+              // mintha nem lennének. A gomb a kapu-képernyőre visz, ami a
+              // feature saját belépési szűrője.
+              const SizedBox(height: 12),
+              FilledButton(
+                key: const ValueKey('profile-hub-community-entry'),
+                onPressed: () => context.push(AppRoutes.community),
+                child: Text(l10n.profileHubCommunityOpen),
+              ),
+            ],
             const SizedBox(height: 24),
             OutlinedButton(
-              onPressed: () => context.go(AppRoutes.profileLibrary),
+              onPressed: () => context.push(AppRoutes.profileLibrary),
               child: Text(l10n.navLibrary),
             ),
             const SizedBox(height: 12),
             OutlinedButton(
-              onPressed: () => context.go(AppRoutes.profileSettings),
+              onPressed: () => context.push(AppRoutes.profileSettings),
               child: Text(l10n.settingsTitle),
             ),
           ],

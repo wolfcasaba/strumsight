@@ -33,7 +33,7 @@ class StreakScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final streak = ref.watch(streakProvider);
-    final stats = PracticeStats(ref.watch(practiceLogProvider));
+    final stats = ref.watch(practiceStatsProvider);
     final today = StreakLogic.epochDayOf(now ?? DateTime.now());
     final thisWeek = WeeklyRecap.fromEntries(stats.entries, today: today);
     final lastWeek = WeeklyRecap.fromEntries(stats.entries, today: today - 7);
@@ -49,7 +49,7 @@ class StreakScreen extends ConsumerWidget {
           IconButton(
             tooltip: l10n.progressOpen,
             icon: const Icon(Icons.insights_outlined),
-            onPressed: () => context.go(AppRoutes.progress),
+            onPressed: () => context.push(AppRoutes.progress),
           ),
         ],
       ),
@@ -146,7 +146,7 @@ class StreakScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     TextButton(
-                      onPressed: () => context.go(AppRoutes.live),
+                      onPressed: () => context.push(AppRoutes.live),
                       child: Text(l10n.challengeTryInLive),
                     ),
                   ],

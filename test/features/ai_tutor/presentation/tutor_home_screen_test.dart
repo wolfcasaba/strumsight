@@ -230,10 +230,96 @@ void main() {
         await tester.pump(const Duration(milliseconds: 50));
       }
       expect(find.byType(SsModelStatusCard), findsOneWidget);
-      expect(find.byType(SsButton), findsOneWidget);
+      // WP-D (2026-09-06): a Chat CTA mellé HÁROM további belépési pont
+      // került (profil / adatvédelem / adatok), mind ugyanaz az
+      // `SsButton` komponens — a cella ezért négyet vár, és a Chat CTA-t
+      // KULCS szerint is megnevezi, hogy a darabszám ne mossa el, melyik
+      // gombról szólt eredetileg.
+      expect(find.byType(SsButton), findsNWidgets(4));
+      expect(find.byKey(const Key('tutorHomeStartCta')), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
+
+  // -----------------------------------------------------------------
+  // WP-D (2026-09-06) — a tutor három MELLÉK-képernyőjének belépési
+  // pontja. MÉRT hiány: `/tutor/profile`, `/tutor/privacy` és
+  // `/tutor/data` regisztrálva volt, de a szállított felületről SEMMI
+  // nem vezetett rájuk — a Home egyetlen kimenő éle a Chat volt.
+  // -----------------------------------------------------------------
+  //
+  // MÉRT harness-rés (nem a belépési ponté): a `/tutor/data` cél-képernyője
+  // a `tutorMemoryRepositoryProvider`-t olvassa, aminek nincs alapértéke
+  // („must be overridden in tests; production wires it from the boot
+  // layer"). Ez a fájl NEM írja felül — a NAVIGÁCIÓT méri, nem a
+  // képernyő tartalmát —, ezért ott a cél-oldali provider-hibát
+  // KIMONDVA nyeljük el, nem `isNull`-t állítunk róla.
+  for (final entry
+      in const <({String key, String path, bool destinationNeedsBootLayer})>[
+        (
+          key: 'tutorHomeProfileCta',
+          path: AppRoutes.tutorProfile,
+          destinationNeedsBootLayer: false,
+        ),
+        (
+          key: 'tutorHomePrivacyCta',
+          path: AppRoutes.tutorPrivacy,
+          destinationNeedsBootLayer: false,
+        ),
+        (
+          key: 'tutorHomeDataCta',
+          path: AppRoutes.tutorData,
+          destinationNeedsBootLayer: true,
+        ),
+      ]) {
+    testWidgets('WP-D: the Tutor Home entry ${entry.key} navigates to '
+        '${entry.path}', (tester) async {
+      final container = await _pump(tester, aiTutorEnabled: true);
+      final router = container.read(routerProvider);
+      router.go(AppRoutes.tutorHome);
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      await tester.ensureVisible(find.byKey(Key(entry.key)));
+      await tester.tap(find.byKey(Key(entry.key)));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      // A mérce: a router TÉNYLEG a cél-útvonalon áll — nem az
+      // `onException` esett vissza a Live-ra.
+      //
+      // `state.uri`, NEM `currentConfiguration.uri` (2026-09-06 review,
+      // MINOR-7): a belépők `context.go` helyett `context.push`-t hívnak,
+      // hogy a Vissza a Home-ra térjen vissza a fa gyökere helyett. Push
+      // után a `currentConfiguration.uri` a stack ALJÁT (`/tutor/home`)
+      // adja vissza, a `state.uri` a tetejét — a felhasználó azt látja.
+      expect(router.state.uri.path, entry.path);
+      if (entry.destinationNeedsBootLayer) {
+        expect(
+          tester.takeException(),
+          isNotNull,
+          reason:
+              'a cél-képernyő a boot-réteg providerét olvassa; ha ez a '
+              'hiba megszűnik, a harness bővült — a cellát frissíteni kell',
+        );
+      } else {
+        expect(tester.takeException(), isNull);
+      }
+
+      // A `push` ÉRTELME: a Vissza a Home-ra tér vissza, nem a fa
+      // gyökerére. `go` mellett a stack egyelemű lenne, tehát nem lenne
+      // hova visszalépni.
+      expect(router.canPop(), isTrue);
+      router.pop();
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(router.state.uri.path, AppRoutes.tutorHome);
+      tester.takeException();
+    });
+  }
 
   // -----------------------------------------------------------------
   // E15-R09 §0.0.B/R14 — committed textScaler 2.0 coverage (en + hu),

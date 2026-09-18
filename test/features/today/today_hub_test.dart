@@ -197,8 +197,9 @@ void main() {
     });
   });
 
-  group('A7 — the disabled Vision card names the reason', () {
-    testWidgets('vision disabled: reason text, no action button', (
+  group('A7 — the Vision card is honest about the rollout flag', () {
+    testWidgets('vision disabled: no card at all — a card whose only content '
+        'is "not available" advertises what the learner cannot use', (
       tester,
     ) async {
       await tester.pumpWidget(_host(visionEnabled: false));
@@ -206,8 +207,9 @@ void main() {
 
       expect(
         find.textContaining("isn't available in this build"),
-        findsOneWidget,
+        findsNothing,
       );
+      expect(find.text('Vision practice'), findsNothing);
       expect(find.widgetWithText(TextButton, 'Vision practice'), findsNothing);
     });
 

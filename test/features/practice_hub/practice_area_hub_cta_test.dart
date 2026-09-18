@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:strumsight/app/config/app_config.dart';
+import 'package:strumsight/app/config/app_environment.dart';
+import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/practice/domain/model/beat_position.dart';
@@ -16,6 +19,8 @@ import 'package:strumsight/features/practice/public.dart'
     show practiceCatalogProvider;
 import 'package:strumsight/features/practice_hub/screens/practice_area_hub_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+
+import '../../support/preference_store.dart';
 
 /// A minimal, self-contained definition — mirrors the shape
 /// `practice_catalog_controller_test.dart` uses for its own override cell,
@@ -53,12 +58,20 @@ Future<GoRouter> _pumpHub(
         path: AppRoutes.practiceSetup,
         builder: (_, _) => const SizedBox.shrink(),
       ),
+      GoRoute(
+        path: AppRoutes.practiceGeneratorSetup,
+        builder: (_, _) => const SizedBox.shrink(),
+      ),
+      GoRoute(
+        path: AppRoutes.practiceGeneratorToday,
+        builder: (_, _) => const SizedBox.shrink(),
+      ),
     ],
   );
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: overrides,
+      overrides: [...preferenceOverrides(), ...overrides],
       child: MaterialApp.router(
         routerConfig: router,
         theme: AppTheme.dark(),
@@ -126,4 +139,73 @@ void main() {
       expect(find.text(l10n.practiceAreaHubRecommendedMessage), findsNothing);
     });
   });
+
+  // -----------------------------------------------------------------
+  // MAJOR-3 (2026-09-06 review) — a tervező belépési pontja az ADAPTÍV
+  // hubon.
+  //
+  // MÉRT hiba: a két belépő kártyát csak a LEGACY `PracticeHubScreen`
+  // kapta meg, azt viszont a router kizárólag `!adaptiveShellEnabled`
+  // mellett regisztrálja. A szállított (Lab) buildben a shell BE van
+  // kapcsolva, tehát a `/practice` EZT a képernyőt rendereli — belépő
+  // nélkül a tervező a felhasználó számára megint nem létezett.
+  // -----------------------------------------------------------------
+  group('a tervező belépési pontjai', () {
+    testWidgets('bekapcsolt practiceGeneratorEnabled: a terv-építő gomb a '
+        '/practice/generator/setup címre visz', (tester) async {
+      final router = await _pumpHub(
+        tester,
+        overrides: [_configOverride(practiceGeneratorEnabled: true)],
+      );
+
+      await tester.tap(find.byKey(_planBuilderKey));
+      await tester.pumpAndSettle();
+
+      expect(router.state.uri.toString(), AppRoutes.practiceGeneratorSetup);
+    });
+
+    testWidgets('bekapcsolt practiceGeneratorEnabled: a „ma" gomb a '
+        '/practice/generator/today címre visz', (tester) async {
+      final router = await _pumpHub(
+        tester,
+        overrides: [_configOverride(practiceGeneratorEnabled: true)],
+      );
+
+      await tester.tap(find.byKey(_todayPlanKey));
+      await tester.pumpAndSettle();
+
+      expect(router.state.uri.toString(), AppRoutes.practiceGeneratorToday);
+    });
+
+    testWidgets('kikapcsolt zászlónál EGYIK belépő sincs ott — a route sem '
+        'létezik ilyenkor', (tester) async {
+      await _pumpHub(
+        tester,
+        overrides: [_configOverride(practiceGeneratorEnabled: false)],
+      );
+
+      expect(find.byKey(_planBuilderKey), findsNothing);
+      expect(find.byKey(_todayPlanKey), findsNothing);
+    });
+  });
 }
+
+const _planBuilderKey = ValueKey('practice-area-hub-plan-builder');
+const _todayPlanKey = ValueKey('practice-area-hub-today-plan');
+
+Override _configOverride({required bool practiceGeneratorEnabled}) =>
+    appConfigProvider.overrideWithValue(
+      AppConfig(
+        environment: AppEnvironment.development,
+        apiBaseUrl: AppConfig.devApiBaseUrl,
+        flags: FeatureFlags(
+          accountEnabled: true,
+          diagnosticsEnabled: true,
+          labModeAvailable: true,
+          practiceGeneratorEnabled: practiceGeneratorEnabled,
+        ),
+        diagnosticsToken: AppConfig.devDiagnosticsToken,
+        buildMode: 'test',
+        appVersion: 'test',
+      ),
+    );

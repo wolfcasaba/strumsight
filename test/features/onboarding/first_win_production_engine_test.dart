@@ -130,6 +130,67 @@ void main() {
     );
   });
 
+  group('A11 — silence is "still listening", not a failed attempt', () {
+    test('a frame without a strum emits NO confidence reading', () async {
+      final engine = FakeStrumEngine();
+      final container = ProviderContainer(
+        overrides: [strumEngineProvider.overrideWithValue(engine)],
+      );
+      addTearDown(container.dispose);
+
+      final values = <double>[];
+      final sub = container.listen(onboardingFirstWinConfidenceProvider, (
+        _,
+        next,
+      ) {
+        final v = next.value;
+        if (v != null) values.add(v);
+      });
+      addTearDown(sub.close);
+
+      // The engine emits a frame on every hop; before the first strum the
+      // frame carries no `latestStrum` and its confidence reads 0.0.
+      engine.emit(LiveFrame.empty.copyWith(listening: true, inputLevel: 0.1));
+      engine.emit(LiveFrame.empty.copyWith(listening: true, inputLevel: 0.2));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        values,
+        isEmpty,
+        reason:
+            'a silent frame must not count as an attempt — otherwise the '
+            'Stage shows "we could not hear that" before the learner plays',
+      );
+
+      engine.emit(_frame(0.85));
+      await Future<void>.delayed(Duration.zero);
+      expect(values, [0.85]);
+    });
+
+    testWidgets('the Stage keeps its listening title across silent frames', (
+      tester,
+    ) async {
+      final engine = await _pumpStage(tester);
+      engine.emit(LiveFrame.empty.copyWith(listening: true));
+      engine.emit(LiveFrame.empty.copyWith(listening: true));
+      await tester.pump();
+
+      final l10n = AppLocalizations.of(
+        tester.element(find.byType(FirstWinStageScreen)),
+      );
+      expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('onboard-first-win-title')))
+            .data,
+        l10n.onboardFirstWinListening,
+      );
+      expect(
+        find.byKey(const ValueKey('onboard-first-win-retry')),
+        findsNothing,
+      );
+    });
+  });
+
   group('A5-A7 — the inclusive threshold at its exact boundary (override-based '
       "— brief §6.1's third falsification probe requires these independent "
       'of the default factory)', () {
