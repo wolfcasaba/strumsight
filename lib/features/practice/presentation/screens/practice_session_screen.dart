@@ -331,7 +331,32 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
     // the next pop will go through). For no-op exit taps (preparing,
     // failed, …) the screen stays put.
     if (_canPop || sentCommand) {
+      _leaveSession();
+    }
+  }
+
+  /// Leaves the session screen without ever popping the LAST router page.
+  ///
+  /// `practice_setup_screen.dart` reaches this screen with
+  /// `context.go(AppRoutes.practiceSession)`, and `practiceSession` is a
+  /// top-level `GoRoute` in `app_router.dart`: `go` REPLACES the stack, so
+  /// the session is the only page on it and an unconditional pop tears the
+  /// router down (an assertion in debug, a blank screen in release). With
+  /// nothing to pop, land on the Practice hub — the same destination the
+  /// setup screen's own unresolvable-request path uses.
+  ///
+  /// Asks `GoRouter.maybeOf` rather than `context.canPop()` because the
+  /// screen is also mounted under a plain `Navigator` (widget tests, and any
+  /// embedder that pushes it imperatively); there the pop contract must stay
+  /// exactly what it was.
+  void _leaveSession() {
+    final router = GoRouter.maybeOf(context);
+    if (router == null) {
       Navigator.of(context).pop();
+    } else if (router.canPop()) {
+      router.pop();
+    } else {
+      router.go(AppRoutes.practiceHub);
     }
   }
 }
