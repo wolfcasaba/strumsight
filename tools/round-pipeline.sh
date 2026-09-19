@@ -67,6 +67,7 @@ engine_registry=${PIPELINE_ENGINE_REGISTRY:-"$repo_root/docs/execution/engine-re
 prompt_template="$repo_root/docs/execution/pipeline-orchestrator-prompt.md"
 heal_template="$repo_root/docs/execution/pipeline-selfheal-prompt.md"
 codex_preamble="$repo_root/docs/execution/pipeline-codex-orchestrator-preamble.md"
+codex_closing_reminder="$repo_root/docs/execution/pipeline-codex-orchestrator-closing-reminder.md"
 lock_file="$state_dir/lock"
 halt_file="$state_dir/HALTED"
 status_file="$state_dir/round-status"   # csak a default; a kör kiválasztása után kör-kulcsolt lesz
@@ -1739,6 +1740,10 @@ case "${1:-}" in
     ;;
   --brief-lint)    # $2=kör $3=brief → a pre-flight lint-jelentés útvonala (ADR 0171 §4)
     write_brief_lint "${2:-}" "${3:-}"
+    exit 0
+    ;;
+  --codex-prompt-file)    # $2=kör-prompt.md → a Codex/Terra-nak összefűzött prompt útvonala (teszthorog: a záró emlékeztető VÉGRE-fűzését ellenőrzi, E08-R04 H-NOSIGNAL önjavítás)
+    codex_prompt_file "${2:-}"
     exit 0
     ;;
 esac

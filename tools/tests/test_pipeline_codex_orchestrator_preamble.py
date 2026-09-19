@@ -30,11 +30,16 @@ for Codex/Terra (SS1); it must name this resume-not-restart rule instead of
 implying a single foreground call always sees the command through.
 """
 
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PREAMBLE = ROOT / "docs" / "execution" / "pipeline-codex-orchestrator-preamble.md"
+CLOSING_REMINDER = (
+    ROOT / "docs" / "execution" / "pipeline-codex-orchestrator-closing-reminder.md"
+)
 
 
 class CodexOrchestratorPreambleYieldResumeTest(unittest.TestCase):
