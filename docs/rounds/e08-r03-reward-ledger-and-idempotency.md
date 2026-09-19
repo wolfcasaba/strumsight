@@ -296,4 +296,35 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Módosítások
+
+- `domain/rewards/reward_reason.dart`: zárt, stabil `RewardReason` kódtér.
+- `domain/rewards/reward_ledger_entry.dart`: immutable, validált, verziózott
+  ledger-bejegyzés JSON round-trippal; a hívó adja az ID-t és időbélyeget.
+- `data/reward_ledger_repository.dart`: append-only repository contract,
+  source-event index lekérdezés és stabil lapozási contract; nincs update/delete.
+- `data/local_reward_ledger_repository.dart`: közvetlen, cap nélküli
+  `JsonDocumentStore`-használat, raw ismeretlen rekordok megőrzése, opaque
+  cursor és példányszintű Future-tail szerializálás.
+- `public.dart`: a reward domain és repository contract exportjai.
+- `reward_ledger_repository_test.dart`: A1–A8 mátrix, kapuzott konkurens
+  írás, recovery, megőrzés és lapozási határok.
+
+### TDD és falszifikáció
+
+- RED: `flutter test test/features/gamification/data/reward_ledger_repository_test.dart`
+  a hiányzó reward ledger importokkal compilation failure-t adott.
+- Valódi-sértés: az `appendIfAbsent` Future-tail sorosítását ideiglenesen
+  közvetlen `_append` hívásra gyengítettem. A teljes gate format/analyze után
+  az A2 cella PIROS lett: a kapuzott tárolóban `Expected: <1>, Actual: <2>`
+  (`the second append must wait behind the first read-check-write`). A
+  szerializálás visszaállítva.
+
+### Ellenőrzések
+
+- `tools/round-gate.sh test/features/gamification/data/reward_ledger_repository_test.dart`
+  visszaállítás után: format, analyze, célzott 7 teszt, architecture, secrets
+  és l10n zöld (`outcome=pass`, `exit_code=0`).
+- Nem futtatva: CI dispatch, PR és merge — Claude/orchestrátor felelőssége.
+
 ## 11. Review — a Claude tölti ki
