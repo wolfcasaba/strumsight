@@ -1,14 +1,24 @@
 # E17-R03 — A Song Trainer setlist-session bekötése (V2-natív)
 
-- **Státusz:** REVISED (ADR 0112 önjavító kör, 2026-09-19; mért alap: `main @ 3ffde512`) — **`pending`**
+- **Státusz:** REVISED (ADR 0112 önjavító kör, 2026-09-19) + PRE-FLIGHT ÚJRAMÉRVE (2026-09-19, `main @ ba8233af`) — **`pending`**
 - **Típus:** Chapter 17 (Teljes bekötés), Kör 3
 - **Kör-azonosító:** `E17-R03`
 - **Branch:** `<motor>/e17-r03-setlist-session-wiring`
 - **Brief szerzője:** Claude (Opus 5) — a §0.1 revízió az ADR 0112 önjavító köréé
-- **Előre kiosztott ADR:** `ADR 0522` — a szám ELŐZETES; a foglaló a kör indulásakor adja a véglegeset (mérve: nyolc egymást követő körön át a queue ADR-oszlopa elavult volt).
+- **ADR:** [`ADR 0585`](../adr/0585-setlist-session-v2-native-entry-and-measured-outcome.md) — a foglaló (`tools/round-slots.py reserve-adr`) adta a kör indulásakor; a queue `0522` oszlopa ELŐZETES volt.
 - **Fejezet-terv:** [`docs/plans/chapter-17-full-wiring.md`](../plans/chapter-17-full-wiring.md)
 
-**Visszakeresett előzmény:** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "a song trainer setlist-session bekötése"` — a kör pre-flightjának KÖTELEZŐ lefuttatnia és a találatokat a §2-be beépítenie.
+**Visszakeresett előzmény (a pre-flight lefuttatta, 2026-09-19):**
+[`adr/0130`](../adr/0130-setlist-v2-song-progress-and-epic-3-closure-boundary.md) (Setlist V2 + a
+session-controller határa, `bm25#1 emb#7`), [`adr/0129`](../adr/0129-song-trainer-ui-loop-speed-and-result-boundary.md)
+(a trainer-session/result szerződése), [`adr/0125`](../adr/0125-song-trainer-setup-configuration-boundary.md)
+(„route-literál a katalógus helyett" elutasítva; „unreachable-status szabály: kitalált capability tilos"),
+[`halts/E15-R07 H2`](../../.pipeline/) (a nem elérhető, flag alatt hard-`false` képernyők NEM Ch15
+design-migrációs ügyek — ezért kellett D5-ben a MÉRT A3-kényszer, nem hivatkozás),
+[`lessons/L558`](../LESSONS.md) (a `flutter_test` 800×600-as alapviewportján a túlcsordulás-cella
+akár ÜRES fát is mérhet — a migráció celláihoz telefon-méretű viewport kell),
+[`lessons/L612`](../LESSONS.md) (a kör sikere viszi pirosra a kaput),
+[`lessons/L337`](../LESSONS.md) / [`lessons/L357`](../LESSONS.md) (H3-osztály: a listán kívüli fájl).
 
 ## 0.0 A `hold` FELOLDVA (2026-09-05)
 
@@ -90,6 +100,44 @@ került ki (a `test/tooling/screen_reachability_test.dart` SZÁNDÉKOSAN csak
 ELŐTTI briefen piros (7 cella), utána zöld; a cellák a briefet a KÓDHOZ mérik
 (a `SongSetlist`-termelők grepje, a `LearnScreen` szerződése, a retirement-plan
 saját táblája), nem egy kézzel másolt listához.
+
+## 0.2 Pre-flight újramérés — 2026-09-19, `main @ ba8233af`
+
+A §0.1 revízió óta a `main` egyetlen commitot kapott: magát az önjavító kört
+(`ba8233af`, csak `docs/` + `tools/tests/`). A §2 MINDEN mért tényét a pre-flight
+újramérte, és **változatlanul igazolta**:
+
+```
+$ dart run tool/check_screen_reachability.dart --format json
+measuredScreenCount=97  unreachableCount=3
+  SetlistSessionScreen      reachable=false declarative=[] imperative=[]
+  SetlistListScreenV2       reachable=false declarative=[] imperative=[]
+  PracticePlanPreviewScreen reachable=false                       # E17-R04 tárgya
+  SetlistDetailScreen       reachable=true  [setlist_list_screen.dart:24]   # legacy világ
+$ grep -c design_system .../setlist_list_screen_v2.dart → 0 | .../setlist_session_screen.dart → 1
+$ grep -rn "UnimplementedError" lib/features/song_trainer/ | wc -l → 0
+$ grep -rn "SongSetlist(" --include=*.dart lib → 4 (konstruktor, dekódolás, adapter, a v2 lista:248)
+$ feature_flags.dart:247 → songTrainerV2Enabled: nonProd        (a kör NEM módosítja)
+$ tools/tests/test_e17_r03_setlist_session_scope.py → 9 passed
+```
+
+**Két kérdést csak ez a mérés tudott eldönteni — az [ADR 0585](../adr/0585-setlist-session-v2-native-entry-and-measured-outcome.md) D3 és D4 pontja zárja le:**
+
+- **D3 (az availability KÉT rétege).** A `SetlistAvailabilityResolver` typedef
+  **szinkron** (`setlist_session_controller.dart:4-5`), a `SongRepository` viszont
+  kizárólag aszinkron (`song_repository.dart:295-306`) — a dokumentum tartalma
+  szinkron rétegből elvileg sem érhető el. Ezért: a resolver egy EGYSZER betöltött
+  `repository.list(...)` pillanatkép (`SongSummary.documentId/revision/trashed`)
+  fölött zár (hiányzó/trashed → `missingSong`), a mély okokat pedig a runner méri a
+  MÁR LÉTEZŐ launcher hibakódjain (`notFound` → `missingSong`, `staleRevision` →
+  `requiresMigration`, `notPlayable` → `invalidConfig`), `SetlistItemResult.skipped`
+  formában. A `SongSetlistItem.initialAvailability` perzisztált TIPP, nem mérés.
+- **D4 (a befejezés-varrat helye).** A `SongTrainerSessionRoute` ma a result-route-ot
+  nyitja meg, és a HÍVÓJÁNAK semmit nem ad vissza
+  (`song_trainer_session_route.dart:130-146`) — varrat nélkül a §5.4 nem
+  teljesíthető. A varrat a session-route saját, már meglévő `SongTrainerResult`-ját
+  adja vissza a navigációs hívónak; az egydalos út (setup→session→result,
+  „practice again", fail-closed `extra`-redirect) bit-azonos marad.
 
 ```ai-router
 schema_version = 1
@@ -222,7 +270,7 @@ Reprodukció: `dart run tool/check_screen_reachability.dart --format json`.
 
 **A pin-őrök jogosultsága (S10/S11, mérve: E13-R16/F9 full-gate 32867296946, E13-R17/H3 `test/app/navigation/` +33 → +30 −3):** a fenti listán szereplő, a briefen KÍVÜL élő pin-tesztek azért kerültek az `allowed_paths`-ba ÉS a `gate_tests`-be, mert a bekötés a route által renderelt képernyő TÍPUSÁT mozdíthatja el. A jogosultság PONTOSAN ennyi: a lecserélt képernyő típusának átírása a pinnelő cellában. **Cella törlése, `skip`-je vagy gyengítése TILOS** — ha egy cella a típus-átíráson túl válik pirossá, az a kör BLOKKOLÓ lelete, nem a cella hibája.
 
-## 5. Kötött architekturális döntések (ADR 0522)
+## 5. Kötött architekturális döntések (ADR 0585)
 
 ### 5.1 A belépés a V2 setlist-felületről megy, nem a legacy részletből
 
