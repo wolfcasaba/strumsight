@@ -71,7 +71,7 @@ import 'package:strumsight/features/song_trainer/domain/models/tempo_map.dart';
 import 'package:strumsight/features/song_trainer/domain/repositories/song_asset_repository.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_library_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_overview_screen.dart';
-import 'package:strumsight/features/song_trainer/presentation/song_trainer_launch.dart';
+import 'package:strumsight/features/song_trainer/presentation/screens/song_trainer_session_route.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../fixtures/practice_generator/plan/plan_fixtures.dart';

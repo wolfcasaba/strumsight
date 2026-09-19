@@ -166,7 +166,9 @@ class WrappedCard extends StatelessWidget {
                   start: 0.6,
                   end: 0.9,
                   child: Text(
-                    '🔥 ${recap.streak}-day streak',
+                    // MI-H — the streak line reads through l10n; the 🔥 stays
+                    // as-is (a glyph, not copy).
+                    '🔥 ${l10n.shareCardWrappedStreakLine(recap.streak)}',
                     style: const TextStyle(
                       fontFamily: 'Montserrat',
                       fontWeight: FontWeight.w800,

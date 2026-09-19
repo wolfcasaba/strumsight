@@ -49,7 +49,10 @@ import '../../features/practice/presentation/screens/practice_hub_screen.dart';
 import '../../features/practice/presentation/screens/practice_setup_screen.dart';
 import '../../features/practice/presentation/screens/practice_session_screen.dart';
 import '../../features/practice/public.dart'
-    show practiceCatalogProvider, practiceCategoryFromCode;
+    show
+        PracticeHistoryEntry,
+        practiceCatalogProvider,
+        practiceCategoryFromCode;
 import '../../features/practice_generator/application/usecase/revise_practice_plan.dart'
     show PlanRevisionProposal;
 import '../../features/practice_generator/application/controller/today_plan_controller.dart'
@@ -242,38 +245,19 @@ void _openLibrarySession(
   BuildContext context, {
   required AppLocalizations l10n,
   required AsyncValue<List<LibraryItem>> items,
+  required List<PracticeHistoryEntry> history,
   required String route,
   required String sessionId,
 }) {
   final messenger = ScaffoldMessenger.of(context);
   final resolved = items.value;
-  if (resolved == null) {
-    // No data yet. `hasError` separates "the library could not be read"
-    // (a real unavailability) from "not finished yet" (a wait).
-    messenger.showSnackBar(
-      SnackBar(
-        key: Key(
-          items.hasError
-              ? 'progress-evidence-unavailable'
-              : 'progress-evidence-loading',
-        ),
-        content: Text(
-          items.hasError
-              ? l10n.progressEvidenceUnavailable
-              : l10n.progressEvidenceLoading,
-        ),
-      ),
-    );
-    return;
-  }
-  LibraryItem? match;
-  for (final item in resolved) {
-    if (item.id == sessionId) {
-      match = item;
-      break;
+  if (resolved != null) {
+    for (final item in resolved) {
+      if (item.id != sessionId) continue;
+      context.push(route.replaceFirst(':sessionId', sessionId), extra: item);
+      return;
     }
-  }
-  if (match == null) {
+    // The aggregation SETTLED and does not carry it: a real miss.
     messenger.showSnackBar(
       SnackBar(
         key: const Key('progress-evidence-unavailable'),
@@ -282,7 +266,44 @@ void _openLibrarySession(
     );
     return;
   }
-  context.push(route.replaceFirst(':sessionId', sessionId), extra: match);
+  if (items.hasError) {
+    // A2b — the unified library could not be read at all (its four sources
+    // need repositories this surface does not otherwise depend on). Every
+    // mastery evidence sample on this tree is produced by
+    // `masteryEvidenceFromPracticeHistoryEntry`, so the referenced session
+    // is always a practice-history entry; rebuild the item from the SAME
+    // in-memory history the projection was built from rather than telling
+    // the learner a session they can see is gone.
+    for (final entry in history) {
+      if (entry.id != sessionId) continue;
+      context.push(
+        route.replaceFirst(':sessionId', sessionId),
+        extra: PracticeLibraryItem(
+          id: entry.id,
+          title: entry.displayTitle,
+          createdAt: entry.createdAt,
+          syncStatus: LibrarySyncStatus.synced,
+        ),
+      );
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        key: const Key('progress-evidence-unavailable'),
+        content: Text(l10n.progressEvidenceUnavailable),
+      ),
+    );
+    return;
+  }
+  // No data and no error: the read is still in flight. A wait is not a miss,
+  // and saying "this session is not in your library" here would be a claim
+  // the app could not have measured (R34, audit MI-C).
+  messenger.showSnackBar(
+    SnackBar(
+      key: const Key('progress-evidence-loading'),
+      content: Text(l10n.progressEvidenceLoading),
+    ),
+  );
 }
 
 /// R26 (audit MI4) — the "Import file" CTA's real flow.
@@ -705,6 +726,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                 context,
                 l10n: l10n,
                 items: libraryItems,
+                history: practiceHistory,
                 route: route,
                 sessionId: sessionId,
               ),

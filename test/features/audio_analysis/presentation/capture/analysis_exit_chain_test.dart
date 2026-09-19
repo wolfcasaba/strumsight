@@ -30,6 +30,10 @@ import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/features/audio_analysis/application/analysis_isolate_runner.dart';
 import 'package:strumsight/features/audio_analysis/application/analysis_capture_providers.dart';
+import 'package:strumsight/core/foundation/app_failure.dart';
+import 'package:strumsight/core/foundation/app_result.dart';
+import 'package:strumsight/features/audio_analysis/domain/analysis_document.dart';
+import 'package:strumsight/features/audio_analysis/domain/analysis_repository.dart';
 import 'package:strumsight/features/audio_analysis/application/analysis_providers.dart';
 import 'package:strumsight/features/audio_analysis/data/capture/recording_run.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_progress.dart';
@@ -87,6 +91,12 @@ Future<GoRouter> _openAnalysisHome(WidgetTester tester) async {
       tunerEngineProvider.overrideWithValue(tunerEngine),
       onboardingSeenProvider.overrideWith(() => OnboardingController(true)),
       recentAnalysesProvider.overrideWith(_noAnalyses),
+      // The capture flow resolves the repository to persist a finished run;
+      // the run below never completes, but the composition still needs the
+      // bootstrap seam bound.
+      analysisRepositoryProvider.overrideWithValue(
+        const _NoopAnalysisRepository(),
+      ),
       // The run never completes: these cells measure the WAY BACK, and a
       // completed run would drag the persistence path — a separate
       // subject — into every one of them.
@@ -215,8 +225,14 @@ void main() {
     expect(find.byType(AnalysisHomeScreen), findsOneWidget);
   });
 
-  testWidgets('the processing step is PUSHED over the recording step, and '
-      'its back arrow returns there', (tester) async {
+  // The processing step REPLACES the recording step (E17-R02): the
+  // Recording Stage owns the microphone lease and must unmount — and
+  // release it — the moment the run starts, so it cannot stay underneath.
+  // What the exit chain still requires is that the step is reached with a
+  // stack under it: the analysis HOME is that stack, and the back arrow
+  // returns there rather than stranding the user.
+  testWidgets('the processing step REPLACES the recording step, and its back '
+      'arrow returns to the analysis home', (tester) async {
     final router = await _openAnalysisHome(tester);
     await _tapRecord(tester);
 
@@ -226,9 +242,10 @@ void main() {
     expect(router.canPop(), isTrue);
 
     await tester.tap(_backArrowOf(AnalysisProcessingScreen));
-    await _pumpFrames(tester);
+    await tester.pumpAndSettle();
 
-    expect(find.byType(AnalysisRecordingScreen), findsOneWidget);
+    expect(find.byType(AnalysisHomeScreen), findsOneWidget);
+    expect(find.byType(AnalysisProcessingScreen), findsNothing);
   });
 
   testWidgets('R26 preserved — "start over" still lands on the step this run '
@@ -247,6 +264,8 @@ void main() {
     processing.onRestart!();
     await _pumpUntilGone(tester, find.byType(AnalysisProcessingScreen));
 
+    // A microphone run starts over on the Recording Stage — a FRESH one,
+    // because the previous Stage released its lease when it unmounted.
     expect(find.byType(AnalysisRecordingScreen), findsOneWidget);
     expect(find.byType(AnalysisProcessingScreen), findsNothing);
   });
@@ -280,11 +299,10 @@ void main() {
     await _pumpFrames(tester);
     expect(find.byType(AnalysisProcessingScreen), findsOneWidget);
 
+    // The Recording Stage is NOT underneath: the processing step replaced
+    // it so the microphone lease is released the moment the run starts
+    // (E17-R02). One more pop therefore lands on the analysis home.
     await tester.tap(_backArrowOf(AnalysisProcessingScreen));
-    await _pumpFrames(tester);
-    expect(find.byType(AnalysisRecordingScreen), findsOneWidget);
-
-    await tester.tap(_backArrowOf(AnalysisRecordingScreen));
     await tester.pumpAndSettle();
     expect(
       find.byType(AnalysisHomeScreen),
@@ -353,4 +371,39 @@ final class _PendingRun implements AnalysisRunHandle {
   Future<void> cancel() async {
     await _progress.close();
   }
+}
+
+/// The exit-chain cells never complete a run, so nothing is ever written;
+/// the repository only has to EXIST for the capture flow's composition.
+final class _NoopAnalysisRepository implements AnalysisRepository {
+  const _NoopAnalysisRepository();
+
+  @override
+  Future<AppResult<List<AnalysisSummary>>> list() async =>
+      const Success<List<AnalysisSummary>>(<AnalysisSummary>[]);
+
+  @override
+  Future<AppResult<AnalysisDocument>> getById(String id) async =>
+      const Failure<AnalysisDocument>(
+        StorageFailure(code: AnalysisRepositoryErrorCode.notFound),
+      );
+
+  @override
+  Future<AppResult<void>> save(AnalysisSaveRequest request) async =>
+      const Success<void>(null);
+
+  @override
+  Future<AppResult<void>> replace(
+    String id,
+    AnalysisSaveRequest request,
+  ) async => const Success<void>(null);
+
+  @override
+  Future<AppResult<void>> rename({
+    required String id,
+    required String newTitle,
+  }) async => const Success<void>(null);
+
+  @override
+  Future<AppResult<void>> delete(String id) async => const Success<void>(null);
 }

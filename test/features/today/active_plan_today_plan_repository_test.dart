@@ -21,32 +21,16 @@
 library;
 
 import 'package:flutter/widgets.dart' show Locale;
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/core/i18n/effective_locale.dart';
-import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/features/practice_generator/public.dart';
 import 'package:strumsight/features/today/data/active_plan_today_plan_repository.dart';
 import 'package:strumsight/features/today/domain/today_plan_snapshot.dart';
-import 'package:strumsight/features/today/providers/today_providers.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../fixtures/practice_generator/plan/plan_fixtures.dart' as fixtures;
-import '../../support/preference_store.dart';
 
 /// The fixture plan schedules exactly one day: 2026-08-17.
 DateTime _onPlanDay() => DateTime(2026, 8, 17, 9);
-
-Future<AdaptivePracticePlan?> _activePlan(Ref ref) async => fixtures.plan();
-
-Future<AdaptivePracticePlan?> _noPlan(Ref ref) async => null;
-
-/// The same corrupt active-plan pointer
-/// `practice_generator_providers_test.dart`'s M4 cell uses — a REAL read
-/// failure, not a mocked one.
-const _corruptPointer = <String, Object>{
-  'ss.practice_generator.plan.active_pointer': 'not-json-at-all{{{',
-};
 
 ActivePlanTodayPlanRepository _repository(
   AdaptivePracticePlan? plan, {
@@ -138,101 +122,15 @@ void main() {
     });
   });
 
-  group('todayPlanSnapshotProvider reads the real active plan', () {
-    test('T1p an activated plan reaches the hub', () async {
-      final container = ProviderContainer(
-        overrides: [
-          ...preferenceOverrides(),
-          // The hub's copy now follows the PHONE when no preference is
-          // stored (T6), so this cell states the phone's language instead
-          // of depending on whatever the test host reports.
-          platformLocalesProvider.overrideWithValue(const [Locale('en')]),
-          practiceGeneratorClockProvider.overrideWithValue(_onPlanDay),
-          activePracticePlanProvider.overrideWith(_activePlan),
-        ],
-      );
-      addTearDown(container.dispose);
-
-      await container.read(activePracticePlanProvider.future);
-      final snapshot = container.read(todayPlanSnapshotProvider);
-
-      expect(snapshot.availability, TodayPlanAvailability.ready);
-      expect(snapshot.recommendedTaskLabel, 'Primary focus');
-      expect(snapshot.totalTaskCount, 1);
-    });
-
-    test('T2p no activated plan stays the zero-state', () async {
-      final container = ProviderContainer(
-        overrides: [
-          ...preferenceOverrides(),
-          activePracticePlanProvider.overrideWith(_noPlan),
-        ],
-      );
-      addTearDown(container.dispose);
-
-      await container.read(activePracticePlanProvider.future);
-      final snapshot = container.read(todayPlanSnapshotProvider);
-
-      expect(snapshot.availability, TodayPlanAvailability.unavailable);
-      expect(snapshot.hasPlan, isFalse);
-    });
-
-    test('T5 a corrupt plan record is unreadable, never "no plan"', () async {
-      final container = ProviderContainer(
-        overrides: [...preferenceOverrides(_corruptPointer)],
-      );
-      addTearDown(container.dispose);
-
-      await expectLater(
-        container.read(activePracticePlanProvider.future),
-        throwsA(isA<Object>()),
-      );
-      final snapshot = container.read(todayPlanSnapshotProvider);
-
-      expect(snapshot.availability, TodayPlanAvailability.unreadable);
-      expect(snapshot.hasPlan, isFalse);
-      expect(snapshot.availability, isNot(TodayPlanAvailability.unavailable));
-    });
-
-    test('T6 an unset language preference follows the phone', () async {
-      final container = _hubOnHungarianPhone();
-
-      await container.read(activePracticePlanProvider.future);
-      final snapshot = container.read(todayPlanSnapshotProvider);
-
-      expect(
-        snapshot.recommendedTaskLabel,
-        'Elsődleges fókusz',
-        reason:
-            'MEASURED before the re-audit: a stored `null` (the DEFAULT, '
-            'meaning "follow the system") resolved to English, so this hero '
-            'read "Primary focus" inside an otherwise Hungarian app',
-      );
-    });
-
-    test('T7 an explicit preference still wins over the phone', () async {
-      final container = _hubOnHungarianPhone(
-        preferences: {StorageKeys.locale: 'en'},
-      );
-
-      await container.read(activePracticePlanProvider.future);
-      final snapshot = container.read(todayPlanSnapshotProvider);
-
-      expect(snapshot.recommendedTaskLabel, 'Primary focus');
-    });
-  });
-}
-
-/// The hub, on a Hungarian phone, with the fixture plan active.
-ProviderContainer _hubOnHungarianPhone({Map<String, Object>? preferences}) {
-  final container = ProviderContainer(
-    overrides: [
-      ...preferenceOverrides(preferences),
-      platformLocalesProvider.overrideWithValue(const [Locale('hu')]),
-      practiceGeneratorClockProvider.overrideWithValue(_onPlanDay),
-      activePracticePlanProvider.overrideWith(_activePlan),
-    ],
-  );
-  addTearDown(container.dispose);
-  return container;
+  // The PROVIDER-level cells (T1p/T2p/T5/T6/T7) were retired in the
+  // 2026-09-19 integration. `todayPlanRepositoryProvider` on this tree is
+  // the `main` line's `CurriculumTodayPlanRepository`: the hub's plan is the
+  // curriculum LADDER's next rung, not the practice generator's activated
+  // plan, and the two are different products with different zero-states
+  // (`test/features/today/today_hub_test.dart` pins the shipped one). The
+  // projection this file exists for is still fully measured above — the
+  // four groups over `ActivePlanTodayPlanRepository` itself — so the class
+  // stays honest for whichever surface binds it next; only the claim about
+  // WHICH provider the Today tab reads was removed, because it is no longer
+  // true.
 }

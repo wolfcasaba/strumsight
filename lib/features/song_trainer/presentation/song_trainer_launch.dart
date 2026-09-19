@@ -23,31 +23,24 @@ import '../domain/models/loop_config.dart';
 import '../domain/models/song_id.dart';
 import '../domain/models/song_section.dart';
 import '../domain/models/trainer_config.dart';
+import 'screens/song_trainer_session_route.dart';
 import '../domain/models/trainer_range.dart';
 
-/// Everything the result route needs as `extra`.
+/// The result route's `extra` type lives with the route that consumes it
+/// (`screens/song_trainer_session_route.dart`). The 2026-09-19 integration
+/// collapsed the two parallel definitions into that one: a second class of
+/// the same name made every `state.extra is SongTrainerResultArgs` redirect
+/// depend on WHICH library the pushing side imported, so a push from the
+/// Stage silently redirected to the song overview.
 ///
-/// Before R8 the route received a bare [SongTrainerResult], which is why its
-/// retry / next buttons had nothing to act on — the configuration the
-/// finished session was compiled from never travelled with the result.
-@immutable
-final class SongTrainerResultArgs {
-  const SongTrainerResultArgs({required this.result, this.config});
-
-  /// Accepts the payload itself or the pre-R8 bare-result shape, so a route
-  /// restored from an older stack still renders.
-  factory SongTrainerResultArgs.from(Object? extra) {
-    if (extra is SongTrainerResultArgs) return extra;
-    if (extra is SongTrainerResult) {
-      return SongTrainerResultArgs(result: extra);
-    }
-    throw ArgumentError.value(extra, 'extra', 'Not a Song Trainer result.');
+/// The pre-R8 bare-result shape is still accepted, so a route restored from
+/// an older stack still renders.
+SongTrainerResultArgs songTrainerResultArgsFrom(Object? extra) {
+  if (extra is SongTrainerResultArgs) return extra;
+  if (extra is SongTrainerResult) {
+    return SongTrainerResultArgs(result: extra);
   }
-
-  final SongTrainerResult result;
-
-  /// The setup configuration the finished session ran with, when known.
-  final TrainerConfig? config;
+  throw ArgumentError.value(extra, 'extra', 'Not a Song Trainer result.');
 }
 
 /// Builds the session inputs for [config] and pushes the session route with

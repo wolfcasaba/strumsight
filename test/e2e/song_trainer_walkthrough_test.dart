@@ -60,6 +60,7 @@ import 'package:strumsight/l10n/app_localizations.dart';
 import '../support/fake_audio.dart';
 import '../support/fake_clock.dart';
 import '../support/fake_engines.dart';
+import '../support/in_memory_song_progress_repository.dart';
 import '../support/preference_store.dart';
 
 /// The shipped practice song this walk uses — read from the SAME asset the
@@ -133,6 +134,12 @@ Future<_Walk> _bootLibrary(
       tunerEngineProvider.overrideWithValue(tunerEngine),
       onboardingSeenProvider.overrideWith(() => OnboardingController(true)),
       songRepositoryProvider.overrideWithValue(repository),
+      // R8: the routed controller also wires the per-measure progress
+      // committer, so this bootstrap seam has to be bound here too (the
+      // shipped composition binds it in `production_overrides.dart`).
+      songProgressRepositoryProvider.overrideWithValue(
+        InMemorySongProgressRepository(),
+      ),
       // Platform boundary: the production player builds an `audioplayers`
       // `AudioPlayer` (a real method channel) the moment the transport is
       // created, and it reads the asset store this harness does not mount.

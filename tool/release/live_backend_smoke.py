@@ -332,15 +332,6 @@ _NOT_EXERCISED: dict[tuple[str, str], str] = {
         "community_writes_enabled, a deploy switch this bring-up chain does "
         "not assume"
     ),
-    ("POST", "/community/notifications/read-all"): (
-        "takes a cutoff notification id the single-account chain cannot "
-        "obtain (empty inbox); registered only under community_writes_enabled"
-    ),
-    ("PUT", "/community/notifications/preferences/{category}"): (
-        "a preference write registered only under community_writes_enabled, "
-        "a deploy switch this bring-up chain does not assume; GET "
-        "/community/notifications/preferences already proves the read shape"
-    ),
     # Javító sáv 2026-09-06 R5 — the three client call sites wired that
     # round (`docs/ui/apk-functionality-audit-2026-09-06.md` §5).
     ("GET", "/community/bookmarks"): (

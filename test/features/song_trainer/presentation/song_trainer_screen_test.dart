@@ -614,14 +614,21 @@ void main() {
     expect(inBounds.resolve(measureCount: 2, sections: sections), isNotNull);
   });
 
-  // R13 (audit §5.2): the speed slider of a SCORED session. It used to be
-  // handed `null` — the judged timeline was compiled once, at the setup
-  // speed, and nothing could re-time it. The controller can now move the
-  // targets and the audio together at a bar boundary, so the running row
-  // must hand the slider a live handler instead of an inert one.
-  testWidgets('R13 a running scored session gets a live speed handler', (
-    tester,
-  ) async {
+  // R13 (audit §5.2): the re-timing of a SCORED session. The judged timeline
+  // used to be compiled once, at the setup speed, and nothing could re-time
+  // it, so `canChangeBackingRate` was false for every scored run.
+  // `PracticeTargetRescaler` moves the targets and the audio together at a
+  // bar boundary, and this cell measures THAT — the controller's own answer.
+  //
+  // What it no longer measures is a live `Slider` on the RUNNING row: since
+  // E16-R01/A3 the running Stage deliberately renders a read-only tempo
+  // READOUT there (`song-trainer-speed` is a `Semantics`+`Text`), because
+  // the transport accepts `SetSongTransportSpeed` only in `ready`/`paused`
+  // (`song_transport_test.dart` pins that) and a slider that silently
+  // refused every drag was the dead affordance that round removed. The
+  // adjustable control lives on the paused Stage, fed by `_ownedSpeed()`.
+  testWidgets('R13 a running scored session can be re-timed, and shows an '
+      'honest read-only tempo readout while it runs', (tester) async {
     final harness = _Harness.scored();
     addTearDown(harness.dispose);
     await harness.controller.prepare();
@@ -660,10 +667,14 @@ void main() {
     await tester.pump();
 
     expect(harness.controller.state.status, SongTrainerStatus.running);
-    final slider = tester.widget<Slider>(
-      find.byKey(const Key('song-trainer-speed')),
+    expect(find.byKey(const Key('song-trainer-speed')), findsOneWidget);
+    expect(
+      find.byKey(const Key('song-trainer-speed-disabled')),
+      findsNothing,
+      reason:
+          'a scored session the controller CAN re-time must not claim the '
+          'tempo is unchangeable',
     );
-    expect(slider.onChanged, isNotNull);
   });
 }
 

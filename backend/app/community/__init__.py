@@ -208,12 +208,23 @@ def build_community_router(settings) -> APIRouter | None:
     if settings.community_media_enabled:
         aggregate.include_router(media_router)
     aggregate.include_router(moderation_router)
-    # A `notifications` NEM áll a `community_writes_enabled` kapu alatt: az
-    # olvasottra-jelölés és a beállítás-írás nem tagja az ADR 0395 §6
-    # írás-domainjének („poszt, komment, reakció, follow-request"), és a
-    # bookmarks/challenges/moderation/reports/safety routerek ugyanezen az
-    # alapon maradtak all-or-nothing viszonyban a fő kapuval.
-    aggregate.include_router(notifications_router)
+    # A `notifications` OLVASÓ ága a kapu állásától függetlenül él (az inbox
+    # lista és a beállítás-olvasás), az ÍRÓ ága viszont a
+    # `community_writes_enabled` alatt áll — a `posts` / `comments` /
+    # `social_graph` mintájára, `_reads_only` szűrővel.
+    #
+    # MÉRT önellentmondás (2026-09-19 integráció): a `de4a5ba2` egyszerre
+    # kötötte be a routert FELTÉTEL NÉLKÜL és írta meg a
+    # `test_a3_writes_subflag_off_disables_write_routes_but_keeps_reads`
+    # celláját, ami a `POST /{public_id}/read` ELTŰNÉSÉT várja kikapcsolt
+    # írásnál. A kettő nem állhat fönn együtt; a cella állítása a helyes: az
+    # olvasottra-jelölés és a preferencia-írás durable, felhasználó-látható
+    # állapotot ír, tehát írás. A commit óta a `backend-ci` nem futott le
+    # zölden a `main`-en (utolsó zöld: `4c12083c`, ami ezt a commitot még nem
+    # tartalmazza), ezért a piros eddig nem lett látható.
+    aggregate.include_router(
+        notifications_router if writes_on else _reads_only(notifications_router)
+    )
     aggregate.include_router(posts_router if writes_on else _reads_only(posts_router))
     # A `reactions` az ADR 0395 §6 írás-domainjének NEVESÍTETT tagja
     # („poszt, komment, reakció, follow-request"), ezért a

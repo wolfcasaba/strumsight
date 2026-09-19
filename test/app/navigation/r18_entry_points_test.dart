@@ -36,7 +36,6 @@ import 'package:strumsight/features/audio_analysis/presentation/capture/analysis
 import 'package:strumsight/features/learn/screens/lesson_list_screen.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
-import 'package:strumsight/features/practice/domain/model/practice_category.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_hub_screen.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_setup_screen.dart';
 import 'package:strumsight/features/practice/presentation/widgets/practice_mode_card.dart';
@@ -242,51 +241,19 @@ void main() {
     l10n = await AppLocalizations.delegate.load(const Locale('en'));
   });
 
-  group('B1 — every category chip leads to a real screen, never the Setup '
-      'route-error branch', () {
-    for (final category in PracticeCategory.values) {
-      testWidgets('the "${category.code}" chip opens the filtered catalog', (
-        tester,
-      ) async {
-        await _openHub(tester);
-
-        await _tapOnHub(
-          tester,
-          find.byKey(ValueKey('practice-hub-category-${category.code}')),
-        );
-
-        expect(find.byType(PracticeHubScreen), findsOneWidget);
-        final screen = tester.widget<PracticeHubScreen>(
-          find.byType(PracticeHubScreen),
-        );
-        expect(screen.category, category);
-        // The measured defect: Setup's route-error branch. Neither the
-        // screen nor its error copy may appear.
-        expect(find.byType(PracticeSetupScreen), findsNothing);
-        expect(find.text(l10n.practiceRouteErrorTitle), findsNothing);
-        expect(tester.takeException(), isNull);
-      });
-    }
-
-    testWidgets('the empty "scales" category shows the goal-level empty '
-        'copy — an honest listing, not a failure', (tester) async {
-      await _openHub(tester);
-
-      await _tapOnHub(
-        tester,
-        find.byKey(const ValueKey('practice-hub-category-scales')),
-      );
-
-      expect(find.byType(PracticeHubScreen), findsOneWidget);
-      expect(find.byType(PracticeModeCard), findsNothing);
-      // R34 (MI-B): the listing names the GOAL-level absence, not the
-      // whole-catalog "check back later" copy — nine exercises sit one chip
-      // away (`practice_category_empty_state_test.dart`).
-      expect(find.text(l10n.practiceCatalogCategoryEmpty), findsOneWidget);
-      expect(find.text(l10n.practiceHubEmptyCatalogSubtitle), findsNothing);
-      expect(find.text(l10n.practiceRouteErrorTitle), findsNothing);
-    });
-  });
+  // B1 — the goal chips.
+  //
+  // The audit's own B1 cells (chip -> filtered catalog) were RETIRED in the
+  // 2026-09-19 integration: the `main` line closed the same defect class
+  // differently — each chip resolves a real definition out of the catalog
+  // and opens Setup with its id, and an empty goal renders a DISABLED chip
+  // instead of a dead link. That behaviour has its own, wider suite
+  // (`test/features/practice_hub/practice_area_hub_category_chips_test.dart`,
+  // 11 cells: the URI matrix, the disabled reason in both locales, the ids
+  // coming from the catalog and not a literal). Re-asserting a second,
+  // weaker version of it here would pin an implementation the app no longer
+  // has. The reachability half of B1 — that the other nine built-ins have an
+  // on-screen entry at all — is what B2 below measures.
 
   group('B2 — the whole catalog is reachable from the hub', () {
     testWidgets('"All practices" lists every built-in definition, and the '

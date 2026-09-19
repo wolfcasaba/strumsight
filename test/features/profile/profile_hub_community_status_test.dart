@@ -167,12 +167,28 @@ void main() {
     expect(find.text(l10n.profileHubCommunityEnabledMessage), findsOneWidget);
   });
 
+  // L4 — the build flag off still wins. Since E18-R19 the hub does not
+  // render the Community section AT ALL while the capability is off: a
+  // heading whose only content is "not available in this build" promises
+  // something the learner cannot open, so the honest answer is silence.
+  // What L4 measures is unchanged — the build flag beats every server-side
+  // status — only the shape of "off" is: no section, and in particular NONE
+  // of the server-status copy L1..L3 pin for the enabled build.
   testWidgets('L4 — the build flag off still wins', (tester) async {
     await tester.pumpWidget(
       _host(communityEnabled: false, repo: _ProfileRepository()),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(l10n.profileHubCommunityDisabledReason), findsOneWidget);
+    expect(find.text(l10n.profileHubCommunitySectionTitle), findsNothing);
+    expect(find.text(l10n.profileHubCommunityEnabledMessage), findsNothing);
+    expect(
+      find.text(l10n.profileHubCommunityServerDisabledMessage),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('profile-hub-community-entry')),
+      findsNothing,
+    );
   });
 }

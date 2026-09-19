@@ -199,8 +199,14 @@ Future<void> launchChangeReview(
         number: 1,
         createdAt: activePlan.createdAt,
         reason: PlanRevisionReason.learnerReschedule,
+        // A change set must connect DISTINCT revisions
+        // (`plan_change_set.dart`), and this synthetic base stands for "the
+        // plan as it is now", which has no stored predecessor. Its genesis
+        // side therefore gets its own id instead of the active one: passing
+        // the active revision on both sides threw `ArgumentError` on every
+        // change-review launch that did not carry a `previous`.
         changeSet: PlanChangeSet(
-          fromRevisionId: activePlan.activeRevisionId,
+          fromRevisionId: RevisionId.generate(generateId),
           toRevisionId: activePlan.activeRevisionId,
           changes: const <PlanChange>[],
         ),

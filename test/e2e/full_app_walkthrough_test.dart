@@ -511,7 +511,13 @@ void main() {
         );
 
         expect(find.byType(TodayHubScreen), findsOneWidget);
-        await tester.tap(find.byKey(const ValueKey('today-hub-primary-cta')));
+        // The Today CTA lands on the curriculum LADDER whenever the plan
+        // names a rung, and the shipped course always does (see stop 3a
+        // above) — so the Practice hub is reached the way stops 3b/5-8
+        // reach theirs. What this cell measures starts one screen later:
+        // the Analysis door is opened AND left through the controls on
+        // screen, never a test-side `router.go`.
+        session.router.go(AppRoutes.practiceHub);
         await tester.pumpAndSettle();
         expect(find.byType(PracticeAreaHubScreen), findsOneWidget);
 

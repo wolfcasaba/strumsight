@@ -135,7 +135,13 @@ void main() {
     expect(find.text('87%'), findsOneWidget);
     // Streak line now resolves through l10n (MI-H) — the placeholder ICU
     // pattern produces `6-day streak` for `en` and `6 napos sorozat` for `hu`.
-    expect(find.text(l10n.shareCardWrappedStreakLine(6)), findsOneWidget);
+    // The 🔥 is a GLYPH, not copy, so it stays outside the ARB value and in
+    // front of it on the card (2026-09-19 integration: the `main` card's
+    // pixel-pinned layout keeps the emoji).
+    expect(
+      find.text('🔥 ${l10n.shareCardWrappedStreakLine(6)}'),
+      findsOneWidget,
+    );
     expect(find.text('Jul 6 – Jul 12'), findsOneWidget);
   });
 
@@ -161,7 +167,10 @@ void main() {
         locale: locale,
       );
       final l10n = await AppLocalizations.delegate.load(locale);
-      expect(find.text(l10n.shareCardWrappedStreakLine(6)), findsOneWidget);
+      expect(
+        find.text('🔥 ${l10n.shareCardWrappedStreakLine(6)}'),
+        findsOneWidget,
+      );
     });
   }
 }

@@ -429,36 +429,6 @@
       "path": "/community/reports",
       "source": "lib/features/community/data/repositories/post_repository_impl.dart:560",
       "status": "mounted"
-    },
-    {
-      "method": "GET",
-      "path": "/community/notifications",
-      "source": "lib/features/community/data/repositories/notification_repository_impl.dart:135",
-      "status": "mounted"
-    },
-    {
-      "method": "POST",
-      "path": "/community/notifications/{public_id}/read",
-      "source": "lib/features/community/data/repositories/notification_repository_impl.dart:155",
-      "status": "mounted"
-    },
-    {
-      "method": "POST",
-      "path": "/community/notifications/read-all",
-      "source": "lib/features/community/data/repositories/notification_repository_impl.dart:171",
-      "status": "mounted"
-    },
-    {
-      "method": "GET",
-      "path": "/community/notifications/preferences",
-      "source": "lib/features/community/data/repositories/notification_repository_impl.dart:191",
-      "status": "mounted"
-    },
-    {
-      "method": "PUT",
-      "path": "/community/notifications/preferences/{category}",
-      "source": "lib/features/community/data/repositories/notification_repository_impl.dart:212",
-      "status": "mounted"
     }
   ]
 }

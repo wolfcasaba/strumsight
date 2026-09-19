@@ -100,7 +100,7 @@ def test_classify_contract_covers_the_real_contract_with_no_unclassified_entries
     entries = smoke.load_contract(_REAL_CONTRACT_PATH)
     # Merged 2026-09-19: the javito sav entries (R14/R16/R27/R36) plus
     # main's notifications/challenge mounts.
-    assert len(entries) == 76
+    assert len(entries) == 71
 
     classifications = smoke.classify_contract(entries)
     by_kind: dict[str, int] = {}
@@ -111,7 +111,7 @@ def test_classify_contract_covers_the_real_contract_with_no_unclassified_entries
     assert by_kind.get("unclassified", 0) == 0, [
         c for c in classifications if c.kind == "unclassified"
     ]
-    assert by_kind == {"exercised": 15, "not_exercised": 61}
+    assert by_kind == {"exercised": 13, "not_exercised": 58}
 
 
 def test_classify_contract_fails_closed_on_an_uncovered_mounted_entry():

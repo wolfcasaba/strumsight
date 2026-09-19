@@ -49,6 +49,7 @@ import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../support/fake_audio.dart';
 import '../../support/fake_practice_observation_gateway.dart';
+import '../../support/in_memory_song_progress_repository.dart';
 import '../../support/preference_store.dart';
 
 const _entry = Key('setlist-session-entry');
@@ -177,6 +178,11 @@ Future<void> _pumpDetail(
         setlistsProvider.overrideWith(() => _SeededSetlists(const [_setlist])),
         // The seams main.dart wires, with in-memory stores.
         songRepositoryProvider.overrideWithValue(v2),
+        // R8: the routed controller also wires the per-measure progress
+        // committer, so this bootstrap seam has to be bound here too.
+        songProgressRepositoryProvider.overrideWithValue(
+          InMemorySongProgressRepository(),
+        ),
         songAssetRepositoryProvider.overrideWithValue(
           const _NoopAssetRepository(),
         ),
