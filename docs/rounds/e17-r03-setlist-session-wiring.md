@@ -551,7 +551,7 @@ tools/round-gate.sh test/features/song_trainer/ test/features/songs/setlist_list
 
 ## 11. Review — a Claude tölti ki
 
-**VERDIKT: APPROVED** — 0 nyitott BLOCKER/MAJOR. A teljes jelentés:
+**VERDIKT: az implementáció APPROVED (0 nyitott BLOCKER/MAJOR), a kör viszont `H3`-mal MEGÁLLT — a merge-blokkoló a brief scope-ja, nem a kód (l. a jelentés §10-ét).** A teljes jelentés:
 [`docs/reviews/e17-r03-review.md`](../reviews/e17-r03-review.md).
 
 - Gate SAJÁT kézzel, izolált `/tmp/review-e17-r03` klónon, `c6980fa0`-n: 14/14 ZÖLD.

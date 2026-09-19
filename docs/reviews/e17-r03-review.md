@@ -6,7 +6,12 @@
 - **Implementer:** `sonnet-impl` (Claude Sonnet 5, `--effort high`) · **Reviewer:** Claude (Opus 5), read-only
 - **Review-példány:** friss `/tmp/review-e17-r03` klón az origin `c6980fa0` HEAD-jén (a közös munkafán próba NEM futott)
 
-## VÉGSŐ DÖNTÉS: **APPROVED** — 0 nyitott BLOCKER/MAJOR
+## VÉGSŐ DÖNTÉS: az implementáció **APPROVED** (0 nyitott BLOCKER/MAJOR a diffben),
+## de a kör **NEM MERGE-ELHETŐ**: `H3` — l. a §10-et
+
+A CI a merge SHA-n egyetlen cellán piros, és a gyökérok **a brief scope-ja**,
+nem az implementáció. A feloldás `allowed_paths`-tágítást kíván, ami az
+ADR 0087 §2 szerint nem a kör-orchestrátor hatásköre.
 
 ---
 
@@ -213,3 +218,88 @@ mérés együtt mozdult.
 `feature_flags.dart` (A11), `setlist_session_controller.dart` szemantikája,
 a legacy `songs` setlist-út, és a `test/tooling/screen_reachability_test.dart`
 — utóbbi a kör mérőeszköze, és a diff nem érinti.
+
+
+---
+
+## 10. MERGE-BLOKKOLÓ — `H3`, és NEM implementációs hiba
+
+### A mérés
+
+`full-gate.yml` run [`35419712787`](https://github.com/wolfcasaba/strumsight/actions/runs/35419712787),
+head SHA `5e11eb87` (= a merge SHA): **11185 teszt zöld, 1 piros, 26 skipped**.
+A piros cella:
+
+```
+❌ test/tooling/placeholder_wiring_test.dart:312
+   A4/A5 — the walked set (from actually RUNNING the walkthrough) and the
+   excluded table are disjoint, and their union covers every measured
+   reachable screen
+Expected: empty
+  Actual: Set:[
+            'lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart',
+            'lib/features/song_trainer/presentation/screens/setlist_session_screen.dart'
+          ]
+reachable screens missing from both the walk and the exclusion table (A4)
+```
+
+**Ez pontosan a kör SIKERE** ([L612](../LESSONS.md) hibaosztálya): a guard
+minden *mért-elérhető* képernyőtől megköveteli, hogy VAGY bejárja a
+walkthrough, VAGY szerepeljen a dokumentált kimaradó táblában. A kör két
+képernyőt tett elérhetővé, és egyik listán sincsenek.
+
+### Miért nem oldható fel a kör hatáskörén belül
+
+A guard PONTOSAN két bemenetből dolgozik, és **egyik sincs a brief
+`allowed_paths`-ában**:
+
+| Bemenet | Hol él | `allowed_paths`-ban? |
+|---|---|---|
+| a bejárt halmaz — `runCoreWalkthrough` | `test/e2e/full_app_walkthrough_test.dart` (`placeholder_wiring_test.dart:7`) | **NINCS** (a lista csak a `test/e2e/song_trainer_walkthrough_test.dart`-ot engedi) |
+| a kimaradó tábla — §3.2 | `docs/release/full-app-verification.md` (`placeholder_wiring_test.dart:275-278`) | **NINCS** |
+
+Maga a `test/tooling/placeholder_wiring_test.dart` sincs sem az
+`allowed_paths`-ban, sem a **`gate_tests`-ben** — ezért a lokális, célzott
+kapu (és az én reviewer-gate-em is) zölden ment át azon a fán, amit a kör
+pirosra visz. A hiba csak a teljes CI-ban, ~40 perccel később derült ki.
+
+**A feloldás tehát `allowed_paths`-TÁGÍTÁS**, ami az ADR 0087 §2 /
+`brief-lint` S15 szerint nem a kör-orchestrátor hatásköre → **H3**.
+
+### A precedens: az E17-R01 briefje EZT MÁR MEGOLDOTTA
+
+Ugyanez a fejezet, két körrel korábban, ugyanezzel a hibaosztállyal
+találkozott, és a briefje **fel is sorolta mindkét fájlt**:
+
+```
+$ grep -n "full_app_walkthrough\|placeholder_wiring" docs/rounds/e17-r01-onboarding-first-win-stage-wiring.md
+29:  "test/e2e/full_app_walkthrough_test.dart",          # allowed_paths
+43:  "test/e2e/full_app_walkthrough_test.dart",          # gate_tests
+56:  "test/tooling/placeholder_wiring_test.dart",        # gate_tests
+```
+
+A feloldás ott **bejárás** volt, nem kimaradás (`c455e8ae [E17-R01] …`
+módosította a walkthrough-t; a `b7bb53c1 fix(docs): a First-Win állomás
+kikerült a §3.2 kimaradó táblából — a main óta BEJÁRT` commit pedig utólag ki
+is vette a táblából). Egy megnyitható képernyőnél ez az őszinte irány.
+
+### Javasolt javítás az önjavító körnek (ADR 0112)
+
+1. A brief `allowed_paths`-ába: `test/e2e/full_app_walkthrough_test.dart`
+   **és** `docs/release/full-app-verification.md`.
+2. A brief `gate_tests`-ébe **és** a §7 gate-parancsba:
+   `test/tooling/placeholder_wiring_test.dart` + `test/e2e/full_app_walkthrough_test.dart`
+   — enélkül a lokális kapu megint zölden engedi át ugyanezt (a `brief-lint`
+   S9 a képernyő-leltár EGYIK őrét, a `screen_reachability_test`-et keresi; ezt
+   a MÁSODIK leltár-őrt nem ismeri).
+3. A javító kör a két képernyőt **járja be** a `runCoreWalkthrough`-ban (az
+   E17-R01 precedense), ne a kimaradó táblába tegye — a `/song-trainer/setlists`
+   a `songTrainerEnabled` kapu alatt él, és a Song Library AppBar-akciójából
+   nyílik.
+
+### Ami ettől NEM változik
+
+A §1–§9 minden megállapítása áll: a diff scope-tiszta, a 14 lépéses célzott
+gate zöld, a két független falszifikációs próba harap, az A1–A11 teljesül, a
+Router CI `success` a merge SHA-n (`35419236949`), és a kör diffjében **0
+nyitott BLOCKER/MAJOR** van. A halt a brief scope-járól szól, nem a kódról.
