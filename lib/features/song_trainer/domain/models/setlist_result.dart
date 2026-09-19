@@ -49,6 +49,26 @@ final class SetlistItemResult {
     repairRequired: false,
   );
 
+  /// A tétel el sem indult: a dal betöltése vagy a munkamenet előállítása
+  /// meghiúsult.
+  ///
+  /// A `skipped`-től az különbözteti meg, hogy a futtató MEGPRÓBÁLTA
+  /// elindítani a tételt (a beolvasott elérhetőség `ready` volt), és a
+  /// hiba futás közben derült ki — a `repairRequired` ezért igaz, az
+  /// [availability] pedig a MÉRT okot hordozza (nem található dal, hiányzó
+  /// kíséret, érvénytelen felülírás), nem a setlistben tárolt régi értéket.
+  factory SetlistItemResult.failed({
+    required String itemId,
+    SetlistItemAvailability availability = SetlistItemAvailability.invalidConfig,
+    Duration activeDuration = Duration.zero,
+  }) => SetlistItemResult._(
+    itemId: itemId,
+    status: SetlistItemResultStatus.failed,
+    availability: availability,
+    activeDuration: activeDuration,
+    repairRequired: true,
+  );
+
   factory SetlistItemResult.skipped({
     required String itemId,
     required SetlistItemAvailability availability,

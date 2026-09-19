@@ -47,11 +47,22 @@ abstract final class AppRoutes {
   static const String songTrainerSetup = '/song-trainer/setup/:songId';
   static const String songTrainerSession = '/song-trainer/session/:songId';
   static const String songTrainerResult = '/song-trainer/result/:songId';
+  // Setlist V2 (WP-H1, 2026-09-06). A lista a legacy `/setlists` UTÓDJA a
+  // `songTrainerV2Enabled` mögött; a legacy útvonal változatlanul a legacy
+  // képernyőt rendereli (A5). A munkamenet `extra`-ja `SetlistSessionArgs`.
+  static const String songTrainerSetlists = '/song-trainer/setlists';
+  static const String songTrainerSetlistSession =
+      '/song-trainer/setlist-session';
   static const String tutorHome = '/tutor/home';
   static const String tutorChat = '/tutor/chat';
   static const String tutorProfile = '/tutor/profile';
   static const String tutorPrivacy = '/tutor/privacy';
   static const String tutorData = '/tutor/data';
+
+  /// A tutor gyakorlásterv-előnézete (WP-H2, 2026-09-06). `extra`-ként egy
+  /// `TutorPracticePlanPreviewArgs` kell hozzá (draft + fordítási kontextus);
+  /// enélkül a route a tutor kezdőlapjára irányít vissza.
+  static const String tutorPracticePlanPreview = '/tutor/practice-plan';
   static const String visionSetup = '/vision/setup';
   static const String visionGuitarGeometry = '/vision/guitar-geometry';
   static const String visionSession = '/vision/session';

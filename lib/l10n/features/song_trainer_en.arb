@@ -1,0 +1,12 @@
+{
+  "@@locale": "en",
+  "setlistV2RunSheetTitle": "How do you want to run “{name}”?",
+  "@setlistV2RunSheetTitle": {
+    "description": "Title of the sheet that asks for the setlist run mode (scored practice or playback-only performance).",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  }
+}

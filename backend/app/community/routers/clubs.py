@@ -71,7 +71,15 @@ from ..schemas.club import (
     TargetProfileRequest,
     UpdateClubRequest,
 )
+from ..schemas.challenge import ChallengePageOut
 from ..schemas.feed import FeedPage, PinnedPostList
+from ..routers.challenges import challenge_page_to_out
+from ..services.challenge_query_service import (
+    CHALLENGE_PAGE_SIZE_DEFAULT,
+    CHALLENGE_STATUS_ACTIVE,
+    is_allowed_challenge_status,
+    list_challenges,
+)
 from ..services.club_content_service import list_club_pinned
 from ..services.club_service import (
     BlockedClubRelationship,
@@ -706,5 +714,70 @@ def transfer_ownership_endpoint(
             _raise_for_service_error(exc)
         db.commit()
         return _club_to_out(db, club, viewer_public_id)
+    finally:
+        next(db_gen, None)
+
+
+# ---------------------------------------------------------------------------
+# GET /community/clubs/{public_id}/challenges  —  a klub kihívásai (WP-H4)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{public_id}/challenges", status_code=status.HTTP_200_OK)
+def club_challenges_endpoint(
+    public_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser,
+    page_size: int | None = Query(default=None, ge=1, le=100),
+    status_filter: str | None = Query(default=None, alias="status", max_length=32),
+) -> ChallengePageOut:
+    """A klub kihívásai — ez a végpont táplálja a Kihívások fület.
+
+    **MÉRT hiány (2026-09-06).** A ``club_detail_screen.dart``
+    ``clubChallengesProvider``-e egy őszinte „nincs szerver-oldali
+    végpont" állapotot adott vissza, mert tényleg nem volt: a
+    ``challenges`` router minden útvonala írás volt. A fül ezért
+    SOHA nem mutatott sort.
+
+    **A klub-kapu ELŐBB dől el, mint a kihívás-szűrés.** A
+    ``get_club`` a láthatósági kapu (privát klub csak tagnak) — egy
+    nem látható klub ``ClubNotFound`` → 404, ugyanaz a válasz, mint
+    egy nem létező klubé. Ha a szűrést hívnánk előbb, egy privát klub
+    LÉTE kiderülne az üres-lista vs. 404 különbségből.
+
+    Alapértelmezés szerint az ``active`` ablak megy ki (a fül „aktív
+    kihívások" ígérete); a ``status`` paraméterrel kérhető
+    ``upcoming`` / ``ended`` is.
+    """
+    if status_filter is None:
+        status_filter = CHALLENGE_STATUS_ACTIVE
+    elif not is_allowed_challenge_status(status_filter):
+        raise HTTPException(
+            status_code=422,
+            detail=f"unsupported status filter {status_filter!r}",
+        )
+    db_gen = _session_factory(request)
+    db = next(db_gen)
+    try:
+        try:
+            viewer_id = _resolve_internal_profile_id(db, current_user.id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        try:
+            club = get_club(
+                db, club_public_id=public_id, viewer_profile_id=viewer_id
+            )
+        except _SERVICE_ERRORS as exc:
+            _raise_for_service_error(exc)
+        page = list_challenges(
+            db,
+            viewer_profile_id=viewer_id,
+            now=_utcnow(),
+            cursor=None,
+            limit=page_size or CHALLENGE_PAGE_SIZE_DEFAULT,
+            status_filter=status_filter,
+            club_public_id=club.public_id,
+        )
+        return challenge_page_to_out(page)
     finally:
         next(db_gen, None)

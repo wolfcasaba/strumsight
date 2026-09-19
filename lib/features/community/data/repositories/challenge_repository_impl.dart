@@ -53,10 +53,21 @@ final communityChallengeApiClientProvider = Provider<ApiClient?>(
 /// ``DisabledCommunityProfileRepository`` so the controller code
 /// path is uniform across the three repository flavours.
 final class DisabledCommunityChallengeRepository
-    implements CommunityChallengeRepository {
+    implements CommunityChallengeRepository, CommunityClubChallengeReader {
   const DisabledCommunityChallengeRepository();
 
   static const Failure<Never> _disabled = Failure(ConfigurationFailure());
+
+  /// A klub-fül „nem tudjuk" ága ITT keletkezik, és sehol máshol: a
+  /// letiltott fiók-réteg mellett nincs kit megkérdezni. A
+  /// [ConfigurationFailure] az a jelzés, amit a
+  /// ``clubChallengesProvider`` a `ClubChallengesUnavailable`
+  /// állapotra fordít — üres listát adni itt hazugság lenne.
+  @override
+  Future<CommunityPage<CommunityChallengeDefinition>> clubChallenges({
+    required ContentId clubId,
+    required int limit,
+  }) async => throw _disabled.error;
 
   @override
   Future<CommunityPage<CommunityChallengeDefinition>> listChallenges({
@@ -117,10 +128,41 @@ final class DisabledCommunityChallengeRepository
 }
 
 /// Live HTTP-backed challenge repository.
-class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
+class HttpCommunityChallengeRepository
+    implements CommunityChallengeRepository, CommunityClubChallengeReader {
   HttpCommunityChallengeRepository(this._client);
 
   final ApiClient _client;
+
+  /// WP-H4 (2026-09-06) — a klub AKTÍV kihívásai.
+  ///
+  /// A végpont (``GET /community/clubs/{public_id}/challenges``) a
+  /// klub-kaput ELŐBB alkalmazza, mint a szűrést: egy privát klub
+  /// nem-tagnak 404-et ad, nem üres oldalt. A repository ezt NEM
+  /// nyeli el — a hívó (a fül) így meg tudja különböztetni a
+  /// „nincs kihívás" állítást a „nem érhető el" állapottól.
+  ///
+  /// A ``status`` paramétert szándékosan nem küldjük: a szerver
+  /// alapértelmezése az ``active`` ablak, és a fül pontosan ezt
+  /// ígéri. Egy itt kiküldött, de a szerveren mást jelentő érték
+  /// ugyanaz a néma hibaosztály lenne, amit a klub-repository D2
+  /// cellája mér.
+  @override
+  Future<CommunityPage<CommunityChallengeDefinition>> clubChallenges({
+    required ContentId clubId,
+    required int limit,
+  }) async {
+    final result = await _client.getJson<dynamic>(
+      '/community/clubs/${clubId.value}/challenges',
+      queryParameters: <String, Object?>{'page_size': limit},
+      decode: decodeChallengeListPage,
+    );
+    return switch (result) {
+      Success(:final value) =>
+        value as CommunityPage<CommunityChallengeDefinition>,
+      Failure(:final error) => throw error,
+    };
+  }
 
   @override
   Future<CommunityPage<CommunityChallengeDefinition>> listChallenges({

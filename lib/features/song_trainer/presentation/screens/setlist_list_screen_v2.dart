@@ -5,6 +5,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../application/setlists/setlist_controller.dart';
 import '../../domain/models/song_id.dart';
 import '../../domain/models/song_setlist.dart';
+import '../setlists/setlist_session_entry.dart';
 import '../widgets/setlist_item_availability_badge.dart';
 
 final class SetlistListScreenV2 extends StatefulWidget {
@@ -72,6 +73,20 @@ final class _SetlistListScreenV2State extends State<SetlistListScreenV2> {
     }
   }
 
+  /// A dalcsomag futtatásának belépési pontja.
+  ///
+  /// A mód a felhasználóé (Practice = pontozott, mikrofonnal; Performance =
+  /// csak lejátszás), ezért a lista KÉRDEZ, nem választ helyette — a
+  /// dalcsomag-munkamenet a választott móddal indul.
+  Future<void> _run(SongSetlist setlist) async {
+    final mode = await showModalBottomSheet<SetlistSessionMode>(
+      context: context,
+      builder: (_) => _SetlistRunSheet(setlist: setlist),
+    );
+    if (mode == null || !mounted) return;
+    await openSetlistSession(context, setlist: setlist, mode: mode);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -101,6 +116,11 @@ final class _SetlistListScreenV2State extends State<SetlistListScreenV2> {
               final setlist = values[index];
               return Card(
                 child: ListTile(
+                  // A sor MEGNYITÁSA indítja a dalcsomagot (mód-választással).
+                  // Szándékosan a meglévő sor gesztusa, nem új gomb: a
+                  // szerkesztés ikonja marad az egyetlen látható művelet.
+                  key: Key('setlist-open-${setlist.id}'),
+                  onTap: _isSaving ? null : () => _run(setlist),
                   title: Text(setlist.name),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -153,6 +173,50 @@ final class _SetlistListScreenV2State extends State<SetlistListScreenV2> {
             },
           ),
         },
+      ),
+    );
+  }
+}
+
+/// Mód-választó a dalcsomag indításához.
+///
+/// A két mód valódi különbsége (pontozás + mikrofon vs. csak lejátszás)
+/// kimondva szerepel, mert ez dönti el, kér-e a munkamenet mikrofont.
+final class _SetlistRunSheet extends StatelessWidget {
+  const _SetlistRunSheet({required this.setlist});
+
+  final SongSetlist setlist;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          ListTile(
+            title: Text(
+              l10n.setlistV2RunSheetTitle(setlist.name),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          ListTile(
+            key: const Key('setlist-run-practice'),
+            leading: const Icon(Icons.school_outlined),
+            title: Text(l10n.setlistSessionStartPractice),
+            subtitle: Text(l10n.setlistSessionPracticeDescription),
+            onTap: () =>
+                Navigator.of(context).pop(SetlistSessionMode.practice),
+          ),
+          ListTile(
+            key: const Key('setlist-run-performance'),
+            leading: const Icon(Icons.play_arrow_outlined),
+            title: Text(l10n.setlistSessionStartPerformance),
+            subtitle: Text(l10n.setlistSessionPerformanceDescription),
+            onTap: () =>
+                Navigator.of(context).pop(SetlistSessionMode.performance),
+          ),
+        ],
       ),
     );
   }

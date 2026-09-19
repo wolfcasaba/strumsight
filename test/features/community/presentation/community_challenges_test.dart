@@ -434,6 +434,32 @@ void main() {
         );
       },
     );
+
+    // WP-H4 (2026-09-06): a `GET /community/challenges` végpont eddig NEM
+    // LÉTEZETT — a `listChallenges` 404-et kapott, tehát a szállított
+    // kompozícióban ez a lista SOHA nem tudott sort mutatni. A végpont
+    // megépült; ez a cella azt rögzíti, hogy a képernyő MINDEN
+    // szerver-sorhoz pontosan egy sort rajzol (nem az elsőt, nem
+    // összevonva).
+    testWidgets('minden szerver-sorhoz EGY lista-sor tartozik', (tester) async {
+      final fake = _RecordingChallengeRepository();
+      fake.listResult = CommunityPage<CommunityChallengeDefinition>(
+        items: <CommunityChallengeDefinition>[
+          _challenge(id: 'c1', type: ChallengeType.friends),
+          _challenge(id: 'c2', type: ChallengeType.club),
+          _challenge(id: 'c3', type: ChallengeType.periodicGlobal),
+        ],
+        cursor: const CursorPage.haltedAfterRequest(),
+      );
+
+      await _pumpScreen(tester, fake);
+
+      expect(find.byType(ListTile), findsNWidgets(3));
+      expect(find.text('No active challenges yet.'), findsNothing);
+      // A lista lezárult (`haltedAfterRequest`), tehát NINCS
+      // „még töltök" jelző a végén — az azt állítaná, hogy jön még sor.
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    });
   });
 
   // MÉRT hiba (2026-09-06 review, MINOR-6): a ranglista-belépő a zászló

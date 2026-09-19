@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/config/app_config.dart';
+import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../l10n/app_localizations.dart';
@@ -79,13 +82,23 @@ class SongListScreen extends ConsumerWidget {
         title: Text(l10n.songsTitle),
         actions: [
           IconButton(
+            key: const Key('songs-open-setlists'),
             icon: const Icon(Icons.queue_music),
             tooltip: l10n.setlistsTitle,
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const SetlistListScreen(),
-              ),
-            ),
+            // A dalcsomagok EGYETLEN belépési pontja a szállított
+            // felületen. Song Trainer V2 mellett a V2 lista nyílik (a
+            // legacy lista utódja, E03 §25 / Kör 22); a flag nélkül
+            // változatlanul a legacy képernyő — a `/setlists` és a
+            // `/songs/setlists` útvonal is érintetlenül a legacy
+            // képernyőt rendereli (A5).
+            onPressed: () =>
+                ref.read(appConfigProvider).flags.songTrainerV2Enabled
+                ? context.push(AppRoutes.songTrainerSetlists)
+                : Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const SetlistListScreen(),
+                    ),
+                  ),
           ),
         ],
       ),

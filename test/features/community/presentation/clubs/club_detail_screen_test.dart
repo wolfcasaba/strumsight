@@ -230,13 +230,20 @@ void main() {
       },
     );
 
-    // 2026-09-06 — a klub-kihívások ŐSZINTE „még nem elérhető" állapota.
-    // A provider korábban `UnimplementedError`-t dobott, és a fül a
-    // hiba-ágon a „No active challenges." szöveget rajzolta: a hiányzó
-    // szerver-végpontot a felhasználó „ennek a klubnak nincs kihívása"
-    // állításként olvasta. A cella pontosan ezt a hazugságot tiltja meg.
+    // 2026-09-06 — a klub-kihívások ŐSZINTE „nem elérhető" állapota.
+    //
+    // Két korábbi állomás: a provider előbb `UnimplementedError`-t dobott
+    // (a fül a hiba-ágon a „No active challenges." szöveget rajzolta — a
+    // hiányzó szerver-végpontot a felhasználó „ennek a klubnak nincs
+    // kihívása" állításként olvasta), majd mindig „nem elérhető"-t adott.
+    //
+    // A WP-H4 óta a végpont LÉTEZIK, és a provider valódi sorokat kér — de
+    // ebben a teszt-környezetben nincs fiók-réteg, tehát a
+    // `DisabledCommunityChallengeRepository` felel `ConfigurationFailure`-rel.
+    // A cella pontosan azt rögzíti, hogy EBBEN az esetben sem az „üres
+    // lista" hazugság megy ki.
     testWidgets('the Challenges tab states that club challenges are NOT '
-        'available yet — never an empty list (no server endpoint)', (
+        'available on an account-less build — never an empty list', (
       tester,
     ) async {
       final fake = _RecordingClubRepository.build(
@@ -301,6 +308,79 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('No active challenges.'), findsOneWidget);
+      expect(
+        find.byKey(const Key('club-challenges-unavailable')),
+        findsNothing,
+      );
+    });
+
+    // WP-H4 (2026-09-06) — a harmadik variáns: a szerver TÉNYLEG adott
+    // sorokat. Eddig ez az ág elérhetetlen volt (nem volt végpont), ezért
+    // sosem mérte senki, hogy a fül ki is rajzolja őket.
+    testWidgets('a loaded, NON-empty challenge list renders one row per '
+        'server item — with the metric and the difficulty', (tester) async {
+      final fake = _RecordingClubRepository.build(
+        _club(
+          publicId: 'club-1',
+          name: 'Blues Lovers',
+          visibility: ClubVisibility.discoverable,
+          memberCount: 12,
+          myRole: ClubRole.member,
+        ),
+      );
+
+      await tester.pumpWidget(
+        _wrap(
+          fake,
+          extraOverrides: <Override>[
+            clubChallengesProvider.overrideWith(
+              (ref, arg) async =>
+                  ClubChallengesLoaded(<CommunityChallengeSummaryPlaceholder>[
+                    CommunityChallengeSummaryPlaceholder(
+                      challengePublicId: 'ch-1',
+                      metric: 'score',
+                      difficulty: 3,
+                      startsAt: DateTime.utc(2026, 9, 1),
+                      endsAt: DateTime.utc(2026, 9, 30),
+                    ),
+                    CommunityChallengeSummaryPlaceholder(
+                      challengePublicId: 'ch-2',
+                      metric: 'streak',
+                      difficulty: 5,
+                      startsAt: DateTime.utc(2026, 9, 2),
+                      endsAt: DateTime.utc(2026, 9, 20),
+                    ),
+                  ]),
+            ),
+          ],
+        ),
+      );
+      await _pumpScreen(tester);
+
+      await tester.tap(find.text('Challenges'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is Text &&
+              widget.data != null &&
+              widget.data!.startsWith('score • '),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is Text &&
+              widget.data != null &&
+              widget.data!.startsWith('streak • '),
+        ),
+        findsOneWidget,
+      );
+      // Sem az „üres" állítás, sem a „nem tudjuk" közlés nem hangzik el,
+      // amikor tényleg vannak sorok.
+      expect(find.text('No active challenges.'), findsNothing);
       expect(
         find.byKey(const Key('club-challenges-unavailable')),
         findsNothing,

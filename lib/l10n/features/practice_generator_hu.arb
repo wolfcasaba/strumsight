@@ -1,0 +1,17 @@
+{
+  "@@locale": "hu",
+  "planSetupGenerating": "Készül a terved…",
+  "@planSetupGenerating": {},
+  "planSetupGenerateFailed": "Ezekből a válaszokból nem tudtunk tervet készíteni. Nézd át az elérhetőségedet, és próbáld újra.",
+  "@planSetupGenerateFailed": {},
+  "planAdjustAction": "Terv igazítása",
+  "@planAdjustAction": {},
+  "planAdjustUpToDate": "Nincs mit igazítani – a terved naprakész.",
+  "@planAdjustUpToDate": {},
+  "planAdjustApplied": "A terv frissült.",
+  "@planAdjustApplied": {},
+  "planAdjustFailed": "Nem sikerült frissíteni a tervet. Semmi nem változott.",
+  "@planAdjustFailed": {},
+  "planAdjustNoPlan": "Még nincs aktív terv, amit igazítani lehetne.",
+  "@planAdjustNoPlan": {}
+}

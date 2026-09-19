@@ -1,0 +1,19 @@
+{
+  "@@locale": "hu",
+  "aiTutorHomePracticePlanCta": "Gyakorlásterv",
+  "aiTutorPlanGeneratedTitle": "{minutes} perces gyakorlásterv",
+  "@aiTutorPlanGeneratedTitle": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "aiTutorPlanRationaleGrounded": "Az aktív céljaidból és a rögzített gyakorlásaidból állt össze.",
+  "aiTutorPlanRationaleWithoutGoals": "Még nincs aktív tanulási célod, ezért a blokkok a puszta idősablont követik.",
+  "aiTutorPlanRationaleWithoutHistory": "Még egyetlen gyakorlás sincs rögzítve, ezért minden tempó a gyakorlat saját alapértéke.",
+  "aiTutorPlanRationaleWithoutTargets": "Néhány blokkhoz nincs illeszkedő gyakorlat a beépített katalógusban; azok csak időzítők, nem indíthatók.",
+  "aiTutorPlanSaveUnavailable": "A mentés még nem elérhető: az alkalmazásban semmi nem tárol tutor-gyakorlástervet. Indítsd el helyette — az első blokkja megnyílik a gyakorlómotorban.",
+  "aiTutorPlanStartUnavailable": "Az indítás ebben a buildben nem elérhető: a gyakorlómotor ki van kapcsolva, így nincs hová átadni a tervet.",
+  "aiTutorPlanStartNoRunnableBlock": "Ebben a tervben nincs indítható gyakorlatblokk, így nincs mit elindítani."
+}

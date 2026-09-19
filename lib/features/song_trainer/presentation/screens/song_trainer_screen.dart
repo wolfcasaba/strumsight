@@ -25,11 +25,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../settings/public.dart';
 import '../../application/song_trainer_providers.dart';
+import '../setlists/setlist_session_entry.dart';
 import '../../application/trainer/song_trainer_controller.dart';
 import '../../application/trainer/song_trainer_state.dart';
 import '../../domain/models/song_id.dart';
@@ -96,6 +98,7 @@ final class SongTrainerScreen extends ConsumerStatefulWidget {
 final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
   SongTrainerController? _ownedController;
   Stream<SongTrainerState>? _ownedControllerStates;
+  StreamSubscription<SongTrainerEffect>? _effects;
 
   @override
   Widget build(BuildContext context) {
@@ -110,6 +113,14 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
         // instance instead.
         _ownedController = controller;
         _ownedControllerStates = controller.states;
+        // A vezérlő `NavigateToSongTrainerResult` effektusát eddig SENKI nem
+        // hallgatta: a pontozott munkamenet eredménye megszületett, de az
+        // eredmény-útvonalra semmi nem navigált (mérve 2026-09-06). A
+        // feliratkozás a képernyővel él és hal (`dispose`), és a vezérlő
+        // SAJÁT (autoDispose családból jövő) példányához kötődik — nem egy
+        // külön, élő provider tartja életben.
+        unawaited(_effects?.cancel());
+        _effects = controller.effects.listen(_onEffect);
       }
       return StreamBuilder<SongTrainerState>(
         stream: _ownedControllerStates,
@@ -121,11 +132,36 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
     return _buildScaffold(context, widget.state);
   }
 
+  /// Navigates to the result screen when the controller finalises a scored
+  /// session, then hands that result back to whoever pushed this Stage.
+  ///
+  /// The second step is what makes a Setlist run measurable: the setlist
+  /// item runner awaits this route's pop value, so a finished song comes
+  /// back as `completed` instead of "the learner left" (`partial`). When
+  /// nothing awaits it — a directly opened session — the value is simply
+  /// dropped and the pop behaves exactly as a back gesture would.
+  Future<void> _onEffect(SongTrainerEffect effect) async {
+    if (effect is! NavigateToSongTrainerResult) return;
+    final songId = widget.songId;
+    if (songId == null || !mounted) return;
+    final router = GoRouter.maybeOf(context);
+    if (router == null) return;
+    await router.push<void>(
+      songTrainerResultLocation(songId),
+      extra: effect.result,
+    );
+    if (!mounted) return;
+    final current = GoRouter.maybeOf(context);
+    if (current == null || !current.canPop()) return;
+    current.pop(effect.result);
+  }
+
   @override
   void dispose() {
     // §0.0/B/B7 — the Stage does not own the transport/practice resource; it
     // notifies the owner's exit path on every route exit rather than relying
     // solely on Riverpod's own provider-teardown timing.
+    unawaited(_effects?.cancel());
     unawaited(_ownedController?.dispose());
     super.dispose();
   }

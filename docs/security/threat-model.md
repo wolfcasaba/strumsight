@@ -50,9 +50,15 @@ jelenlétét) release előtt fail-closed méri. Egy csendben törölt vagy
    login + cloud settings sync; a detekció 100%-ban a kliensen marad).
 3. **diagnostics-upload** — a `POST /diagnostics` Lab-mode feltöltési út
    (`backend/app/routers/diagnostics.py`).
-4. **community-media-upload** — a Community presigned-PUT média-feltöltés
-   (ADR 0410, `backend/app/community/services/media_upload_service.py` és
-   társai).
+4. **community-media-upload** — a Community média-feltöltés. KÉT út,
+   ugyanazon a service-rétegen: az ADR 0410 presigned-PUT pipeline-ja
+   (`backend/app/community/services/media_upload_service.py`) és a
+   WP-H5 óta élő, SZERVER-OLDALON FOGADOTT HTTP-felület
+   (`backend/app/community/routers/media.py`). A kettő különbsége
+   biztonsági, nem stiláris: a presigned úton a szerver SOHA nem látja a
+   bájtokat, ezért nem tud magic-byte-ot szimatolni és EXIF-et törölni —
+   a szállított útvonal ezért a szerver-oldali fogadás, a presigned
+   pipeline pedig egy jövőbeli, objektumtáras kör számára marad meg.
 5. **model-package** — a bundlelt ML modell-bináriskomponensek (kézi és
    vision modellek) integritása (`lib/core/ml/vision_model_manifest.dart`).
 6. **community** — az aszinkron Community platform (post/komment/follow/club/
@@ -237,6 +243,94 @@ release_gate: true
 guard:
   path: backend/tests/community/test_media_upload.py
   test: test_a4_finalize_rejects_oversize_bucket_object
+```
+
+A következő öt ellenintézkedés a WP-H5 óta élő, szerver-oldalon fogadott
+útvonalé (`backend/app/community/routers/media.py`). Ezek NEM a fenti három
+duplikátumai: a T-MEDIA-01..03 a presigned pipeline finalize-lépését méri
+(a szerver a bucket metaadatát olvassa vissza), a T-MEDIA-04..08 pedig
+azt, amit KIZÁRÓLAG a bájtokat ténylegesen kézben tartó út tud
+megcsinálni.
+
+**Fenyegetés (tampering — content-type confusion átnevezett fájllal):** egy
+PNG-t `.jpg` néven és `image/jpeg` fejléccel feltöltve a szervernek a
+TARTALOM alapján kell döntenie. A kiterjesztés és a deklarált fejléc
+egyike sem bizonyíték; a deklarált típus egyetlen szerepe, hogy egyeznie
+kell a magic-byte-okból kiolvasottal.
+
+```yaml
+id: T-MEDIA-04
+component: community-media-upload
+threat: tampering
+release_gate: true
+guard:
+  path: backend/tests/community/test_media_router.py
+  test: test_a1_a_renamed_file_with_a_lying_header_is_refused
+```
+
+**Fenyegetés (information-disclosure — EXIF/GPS kiszivárgás):** a
+feltöltött kép EXIF/XMP/ICC blokkja és a hangfájl ID3/RIFF metaadata
+GPS-koordinátát, eszköz-sorozatszámot és szerzői megjegyzést hordoz. A
+szervernek a TÁROLT példányból kell eltávolítania, nem csak a válaszból —
+a mérce ezért a teljes körbefordulás (feltöltés → moderátori jóváhagyás →
+letöltés), plusz a lemezre írt objektum önálló ellenőrzése.
+
+```yaml
+id: T-MEDIA-05
+component: community-media-upload
+threat: information-disclosure
+release_gate: true
+guard:
+  path: backend/tests/community/test_media_router.py
+  test: test_a3_the_secret_never_survives_a_round_trip
+```
+
+**Fenyegetés (elevation-of-privilege — IDOR a média-olvasáson):** egy
+idegen hívó nem tudhatja meg, hogy egy adott `public_id` létezik-e. A
+„nincs ilyen", a „van, de nem a tiéd", a „nincs poszthoz kötve", a „még
+nincs jóváhagyva" és a „törölt" ág MIND ugyanazt a 404-et adja, ugyanazzal
+a törzzsel.
+
+```yaml
+id: T-MEDIA-06
+component: community-media-upload
+threat: elevation-of-privilege
+release_gate: true
+guard:
+  path: backend/tests/community/test_media_router.py
+  test: test_a4_a_stranger_cannot_read_an_unattached_upload
+```
+
+**Fenyegetés (denial-of-service — tárhely-kimerítés):** a Kör 18
+`MAX_LIVE_UPLOADS_PER_PROFILE` kvótája a NEM véglegesített sorokat
+számolja, a szerver-oldali út viszont ugyanazon a kérésen belül
+véglegesít — a régi kvóta itt SOHA nem tud tüzelni. A routernek ezért
+saját, tárolt-bájt és darabszám alapú kvótája van.
+
+```yaml
+id: T-MEDIA-07
+component: community-media-upload
+threat: denial-of-service
+release_gate: true
+guard:
+  path: backend/tests/community/test_media_router.py
+  test: test_a8b_the_item_quota_stops_hoarding
+```
+
+**Fenyegetés (elevation-of-privilege — saját tartalom jóváhagyása):** az
+ADR 0412 D5 szerint az emberi review-kapu az EGYETLEN út a `ready`
+állapotba. Ha a feltöltő (vagy bármely hitelesített hívó) maga is le
+tudná zárni a review-t, a moderáció megkerülhető lenne, és a kapu
+díszletté válna.
+
+```yaml
+id: T-MEDIA-08
+component: community-media-upload
+threat: elevation-of-privilege
+release_gate: true
+guard:
+  path: backend/tests/community/test_media_router.py
+  test: test_a6b_only_a_moderator_can_resolve_the_review
 ```
 
 ## 6. model-package

@@ -176,3 +176,33 @@ abstract interface class CommunityChallengeRepository {
     required int limit,
   });
 }
+
+/// A klub-hatókörű kihívás-olvasás — KÜLÖN szerződés, szándékosan
+/// nem a [CommunityChallengeRepository] tizedik metódusa (WP-H4,
+/// 2026-09-06).
+///
+/// **Miért külön.** A [CommunityChallengeRepository] docstringje
+/// kimondja: „a D1 »freezed on, signature fagyott« szabály" — a
+/// felületet KILENC teszt-fake implementálja (köztük a
+/// `test/ui/goldens/**` alatti golden-fake-ek). Egy tizedik absztrakt
+/// metódus mind a kilencet fordítási hibára vinné, holott a
+/// klub-fülnek semmi köze a meghívás-életciklushoz. A külön interfész
+/// ezt a csatolást szünteti meg: aki tudja, implementálja; aki nem,
+/// az `is` teszten elbukik, és a hívó a „nem tudjuk" ágra megy —
+/// pontosan úgy, ahogy a fül eddig is viselkedett.
+///
+/// **Miért nem lista, hanem oldal.** A szerver
+/// (`GET /community/clubs/{public_id}/challenges`) lapozható
+/// burkolót ad; a [CommunityPage] megőrzi a „vége" (`halted`) és a
+/// „van még" (`continued`) különbséget, amit egy csupasz `List`
+/// eldobna.
+abstract interface class CommunityClubChallengeReader {
+  /// A klub AKTÍV kihívásainak egy oldala.
+  ///
+  /// Dobás (nem üres oldal), ha a hívás nem elérhető vagy elszáll —
+  /// az üres oldal ÁLLÍTÁS: „ennek a klubnak nincs aktív kihívása".
+  Future<CommunityPage<CommunityChallengeDefinition>> clubChallenges({
+    required ContentId clubId,
+    required int limit,
+  });
+}

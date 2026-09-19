@@ -58,17 +58,48 @@ gyártó: az addigi eredmény számít, és az `activeDuration` mutatja, meddig
 jutott a tanuló. A `completed` hamis állítás lenne (mintha végigjátszotta
 volna), a `failed` szintén (nem bukott el, abbahagyta).
 
-### 2. Tutor gyakorlásterv-előnézet
+### 2. Tutor gyakorlásterv-előnézet — ✅ FELOLDVA (WP-H2, 2026-09-06)
 
 `ai_tutor/presentation/screens/practice_plan_preview_screen.dart`
 
-**Az akadály:** a képernyő `PracticePlanDraft` + `PracticePlanValidationContext`
-párt kér. A `PracticePlanCompiler` elő tudná állítani, de **a teljes tutor
-tervezési útvonal hivatkozatlan**: sem a fordítót, sem a
-`PracticePlanDraft.deterministicTemplate`-et nem hívja semmi a `lib/`-ben.
-A `PracticePlanCompilationContext` hat bemenete közül a
-`practiceTargets`-nek (`PracticePlanTargetInput`) egyáltalán nincs
-előállítója.
+**Az akadály volt:** a képernyő `PracticePlanDraft` +
+`PracticePlanValidationContext` párt kér. A `PracticePlanCompiler` elő tudta
+volna állítani, de a teljes tutor tervezési útvonal hivatkozatlan volt, és a
+`PracticePlanCompilationContext` hat bemenete közül a `practiceTargets`-nek
+(`PracticePlanTargetInput`) egyáltalán nem volt előállítója.
+
+**A megépült folyamat:**
+
+| bemenet | forrás |
+|---|---|
+| `practiceTargets` | `PracticePlanTargetSource` — beépített gyakorlat-katalógus (`BuiltinPracticeCatalog`) + gyakorlás-előzmény (`practiceHistoryRepositoryProvider`) |
+| `songs` | a felhasználó dalos-könyve (`songsProvider`) |
+| `userAvoidList` | `StudentProfile.avoidList` (tutor profil) |
+| `activeTuning` | `GuitarProfile.tuning` (tutor profil) |
+| `capabilities` | a két leltárból SZÁRMAZTATVA — csak nem üres leltárra adjuk meg |
+| `availableSkillIds` | `SkillTaxonomy.initial` |
+
+A `CompilePracticePlanPreview` use-case futtatja a fordítót, és a hiányzó
+bemeneteket stabil kóddal jelenti (`PracticePlanInputCode.*`) — ezek a draft
+indoklásába kerülnek, tehát a képernyőn LÁTSZANAK. Belépési pont: a Tutor
+kezdőlap „Gyakorlásterv" CTA-ja → `/tutor/practice-plan` (`aiTutorEnabled`
+kapu, rossz típusú `extra` esetén vissza a tutor kezdőlapra).
+
+**Ami őszintén HIÁNYZIK:**
+
+- A **mentésnek nincs fogadó oldala.** A `practice_generator`
+  `AdaptivePracticePlan` dokumentuma generálási provenance-t, `PracticeGoal`-
+  okat és `ExercisePrescription`-öket kér, amiket a tutor draftja nem hordoz;
+  tutor-terv tárolója pedig nincs a fában. Ezért a Mentés gomb TILTOTT és
+  kimondja az okot — nem nyit írást ígérő megerősítő lapot.
+- A **készség-azonosítók** nem köthetők: a katalógus `skillTags` szótára
+  (`'downstrokes'`, `'quarterNotes'`, …) és a tutor `SkillTaxonomy` id-jei
+  (`'strum.downStroke'`, …) DISZJUNKTAK, leképező tábla sehol nincs — ezért
+  egyetlen blokk sem deklarál kötelező készséget.
+- Az **indítás** VALÓDI: a fordított terv első futtatható blokkja ugyanazon a
+  `practicePrepareSinkProvider`-en megy a gyakorló-motorba, amit a Practice
+  Setup képernyő is használ, majd `/practice/session`. Ha a gyakorló-motor
+  zászlaja ki van kapcsolva, az Indítás gomb tiltott és kimondja az okot.
 
 ---
 

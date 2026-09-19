@@ -166,8 +166,14 @@ round, unscheduled.
   `_screen.dart`, so a `_screen_v2.dart` file never entered the measurement
   at all. Widening the filter is what made this row honest — the screen did
   not become unreachable, it had simply never been counted.
-- `lib/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart`
-  (`PracticePlanPreviewScreen`, already migrated) — same.
+- ~~`lib/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart`~~
+  (`PracticePlanPreviewScreen`, already migrated) — **feloldva (WP-H2,
+  2026-09-06).** A tutor tervezési útvonala megépült: a
+  `PracticePlanTargetSource` a beépített gyakorlat-katalógusból és a
+  gyakorlás-előzményből állítja elő a `practiceTargets` bemenetet, a
+  `CompilePracticePlanPreview` use-case összeállítja a fordítási kontextust,
+  és a Tutor kezdőlap „Gyakorlásterv" CTA-ja a `/tutor/practice-plan`
+  útvonalra navigál a draft + kontextus párral.
 - `lib/features/onboarding/screens/first_win_stage_screen.dart`
   (`FirstWinStageScreen`, already migrated) — same.
 
@@ -212,7 +218,7 @@ catch.
 
 | Screen | Class | Reachable | Flag-gated | Verdict | Owner round | Successor | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `lib/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart` | `PracticePlanPreviewScreen` | no | no | unreachable | — | — | Already design-system migrated but no measured construction site anywhere in lib/. |
+| `lib/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart` | `PracticePlanPreviewScreen` | yes | yes | keep | — | — | Reachable since WP-H2 (2026-09-06): registered at `/tutor/practice-plan` under `aiTutorEnabled`, pushed from the Tutor Home practice-plan CTA. Already design-system migrated. |
 | `lib/features/ai_tutor/presentation/screens/tutor_chat_screen.dart` | `TutorChatScreen` | yes | yes | migrate | E15-R05 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/ai_tutor/presentation/screens/tutor_data_screen.dart` | `TutorDataScreen` | yes | yes | migrate | E15-R05 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/ai_tutor/presentation/screens/tutor_home_screen.dart` | `TutorHomeScreen` | yes | yes | migrate | E15-R05 | — | Legacy, reachable — Ch15 design-system migration. |

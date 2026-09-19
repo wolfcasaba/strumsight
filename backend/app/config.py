@@ -11,6 +11,9 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEFAULT_DIAGNOSTICS_DIR = str(Path(__file__).resolve().parents[1] / "diagnostics_data")
+_DEFAULT_COMMUNITY_MEDIA_DIR = str(
+    Path(__file__).resolve().parents[1] / "community_media_data"
+)
 BCRYPT_MAX_PASSWORD_BYTES = 72
 
 # Closed environment value set (ADR 0445 D1). The client's enum names
@@ -103,6 +106,14 @@ class Settings(BaseSettings):
     community_media_enabled: bool = False
     community_leaderboard_enabled: bool = False
     community_clubs_enabled: bool = False
+
+    # Where the server-received media router (WP-H5) writes uploaded
+    # objects. Mirrors `diag_dir` — a repo-local default so the backend
+    # boots with zero setup, overridden in production via
+    # STRUMSIGHT_COMMUNITY_MEDIA_DIR. The directory is only created when
+    # `community_media_enabled` is on and the first upload arrives; a
+    # deployment with the flag off never touches it.
+    community_media_dir: str = _DEFAULT_COMMUNITY_MEDIA_DIR
 
     @property
     def community_postgres_ready(self) -> bool:

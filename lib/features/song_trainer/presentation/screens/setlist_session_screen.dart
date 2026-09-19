@@ -9,6 +9,19 @@ import '../../domain/models/song_setlist.dart';
 typedef SetlistPracticeRunnerFactory = SetlistItemRunner Function();
 typedef SetlistSessionCompleted = void Function(SetlistResult result);
 
+/// A dalcsomag-munkamenet útvonalának `extra` értéke.
+///
+/// A futtatandó dalcsomagot és a mód-döntést a LISTA hozza (ott választ a
+/// felhasználó Practice és Performance között), ezért a route nem tölt be
+/// semmit — a képernyő így ugyanazt a két bemenetet kapja, mint a közvetlen
+/// widget-tesztekben.
+final class SetlistSessionArgs {
+  const SetlistSessionArgs({required this.setlist, required this.mode});
+
+  final SongSetlist setlist;
+  final SetlistSessionMode mode;
+}
+
 final class SetlistSessionScreen extends StatefulWidget {
   const SetlistSessionScreen({
     super.key,

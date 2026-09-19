@@ -78,8 +78,10 @@ import 'package:strumsight/core/design_system/public.dart';
 
 import '../../../../../core/foundation/app_failure.dart';
 import '../../../../../l10n/app_localizations.dart';
+import '../../../data/repositories/challenge_repository_impl.dart';
 import '../../../data/repositories/feed_repository_impl.dart';
 import '../../../domain/entities/community_club.dart';
+import '../../../domain/repositories/challenge_repository.dart';
 import '../../../domain/entities/community_post.dart';
 import '../../../domain/value_objects/content_id.dart';
 import '../../../domain/value_objects/cursor_page.dart';
@@ -159,14 +161,18 @@ sealed class ClubChallengesState {
   const ClubChallengesState();
 }
 
-/// **NINCS SZERVER-OLDALI VÉGPONT.**
+/// **A KÉPESSÉG NEM ÉRHETŐ EL EZEN A BUILDEN.**
 ///
-/// A `backend/app/community/routers/challenges.py` öt útvonalat visz, és
-/// MIND írás (`POST` ×4, `DELETE` ×1): nincs olyan felület, ami egy klub
-/// kihívásait listázná. A fül ezt KIMONDJA
-/// (`communityClubChallengesUnavailableTitle/Body`), és nem üres listát
-/// rajzol: az üres lista azt ÁLLÍTANÁ, hogy ennek a klubnak nincs aktív
-/// kihívása, holott az igazság az, hogy nem tudjuk
+/// A szerver-oldali végpont 2026-09-06 (WP-H4) óta LÉTEZIK
+/// (`GET /community/clubs/{public_id}/challenges`), ezért ez az állapot
+/// már nem a hiányzó backendet jelenti, hanem azt az egy esetet, amikor
+/// nincs kit megkérdezni: a fiók-réteg nélküli buildet, ahol a
+/// `communityChallengeRepositoryProvider` a
+/// [DisabledCommunityChallengeRepository]-t adja.
+///
+/// A fül ezt KIMONDJA (`communityClubChallengesUnavailableTitle/Body`),
+/// és nem üres listát rajzol: az üres lista azt ÁLLÍTANÁ, hogy ennek a
+/// klubnak nincs aktív kihívása, holott az igazság az, hogy nem tudjuk
 /// (`UNKNOWN > CONFIDENTLY WRONG`, a `feed_repository_impl.dart`
 /// `profilePosts` precedense).
 final class ClubChallengesUnavailable extends ClubChallengesState {
@@ -181,18 +187,57 @@ final class ClubChallengesLoaded extends ClubChallengesState {
   final List<CommunityChallengeSummaryPlaceholder> challenges;
 }
 
-/// A klub aktív kihívásai.
+/// A klub aktív kihívásai — `GET /community/clubs/{id}/challenges`.
 ///
-/// 2026-09-06-ig ez a provider `UnimplementedError`-t DOBOTT, és a fül a
-/// hiba-ágon a „nincs kihívás" szöveget rajzolta — vagyis a felhasználó egy
-/// hiányzó végpontot „ez a klub nem hirdetett kihívást" üzenetként olvasott.
-/// A hiányt most a VISSZATÉRÉSI ÉRTÉK viszi: nem kivétel (mert nem hiba
-/// történt — a képesség hiányzik), és nem üres lista (mert az hazugság
-/// lenne).
+/// **Két korábbi állomás, két külön hibaosztály.** 2026-09-06-ig ez a
+/// provider előbb `UnimplementedError`-t DOBOTT (a fül a hiba-ágon a
+/// „nincs kihívás" szöveget rajzolta — a felhasználó egy hiányzó
+/// végpontot „ez a klub nem hirdetett kihívást" üzenetként olvasott),
+/// majd — a hiányt kimondva — mindig [ClubChallengesUnavailable]-t
+/// adott, mert a backend tényleg nem tudott klub-kihívást listázni.
+///
+/// A WP-H4 végpontja után a provider VALÓDI sorokat kér. A „nem
+/// tudjuk" állapot MEGMARAD, de egyetlen okra szűkül: a fiók-réteg
+/// nélküli build [DisabledCommunityChallengeRepository]-jára, ami
+/// [ConfigurationFailure]-rel felel. Minden más hiba (hálózat, 5xx)
+/// FELSZÁLL — a fül hiba-ága rajzolja —, mert az nem „nincs képesség",
+/// hanem meghiúsult kérés.
 final clubChallengesProvider = FutureProvider.autoDispose
-    .family<ClubChallengesState, ContentId>(
-      (ref, clubId) async => const ClubChallengesUnavailable(),
-    );
+    .family<ClubChallengesState, ContentId>((ref, clubId) async {
+      final repository = ref.watch(communityChallengeRepositoryProvider);
+      // A klub-olvasás KÜLÖN szerződés (l. `CommunityClubChallengeReader`):
+      // a kilenc teszt-fake közül egyik sem implementálja, ezért egy
+      // felülíratlan fake mellett a fül továbbra is az őszinte
+      // „nem tudjuk" ágra megy — nem egy hazug üres listára.
+      if (repository is! CommunityClubChallengeReader) {
+        return const ClubChallengesUnavailable();
+      }
+      // A `CommunityClubChallengeReader` NEM altípusa a
+      // `CommunityChallengeRepository`-nak (szándékosan külön szerződés),
+      // ezért a típus-szűkítés után is kell az explicit nézet.
+      final reader = repository as CommunityClubChallengeReader;
+      try {
+        final page = await reader.clubChallenges(
+          clubId: clubId,
+          limit: _kClubFeedPageSize,
+        );
+        return ClubChallengesLoaded(
+          page.items
+              .map(
+                (challenge) => CommunityChallengeSummaryPlaceholder(
+                  challengePublicId: challenge.id.value,
+                  metric: challenge.metric,
+                  difficulty: challenge.difficulty,
+                  startsAt: challenge.startsAt,
+                  endsAt: challenge.endsAt,
+                ),
+              )
+              .toList(growable: false),
+        );
+      } on ConfigurationFailure {
+        return const ClubChallengesUnavailable();
+      }
+    });
 
 /// A klub-feed és a kitűzöttek egyoldalas lapmérete. A szerver 100-nál
 /// vág; a fül ennél kevesebbet kér, mert nem lapoz.

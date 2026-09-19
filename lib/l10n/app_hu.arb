@@ -347,6 +347,7 @@
   "aiTutorHomeIntro": "Beszélgess a gitártanároddal. Kérdezz akkordokról, pengetőmintákról, gyakorlási tervekről vagy dalokról.",
   "aiTutorHomeModelStatusTitle": "Tanár modell",
   "aiTutorHomeModelUnavailableMessage": "A tanár modell nem érhető el. Böngészhetsz tovább, de a válaszok sikertelenek lehetnek.",
+  "aiTutorHomePracticePlanCta": "Gyakorlásterv",
   "aiTutorHomeStart": "Beszélgetés indítása",
   "aiTutorHomeTitle": "AI Tanár",
   "aiTutorPlanActionTitle": "Terv",
@@ -434,6 +435,14 @@
   "aiTutorPlanEditedSource": "Általad szerkesztve",
   "aiTutorPlanEmpty": "Nem maradt gyakorlási blokk.",
   "aiTutorPlanGeneratedSource": "Javasolt terv",
+  "aiTutorPlanGeneratedTitle": "{minutes} perces gyakorlásterv",
+  "@aiTutorPlanGeneratedTitle": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
   "aiTutorPlanIncreaseDuration": "{type} hosszabbítása egy perccel",
   "@aiTutorPlanIncreaseDuration": {
     "placeholders": {
@@ -488,9 +497,16 @@
       }
     }
   },
+  "aiTutorPlanRationaleGrounded": "Az aktív céljaidból és a rögzített gyakorlásaidból állt össze.",
+  "aiTutorPlanRationaleWithoutGoals": "Még nincs aktív tanulási célod, ezért a blokkok a puszta idősablont követik.",
+  "aiTutorPlanRationaleWithoutHistory": "Még egyetlen gyakorlás sincs rögzítve, ezért minden tempó a gyakorlat saját alapértéke.",
+  "aiTutorPlanRationaleWithoutTargets": "Néhány blokkhoz nincs illeszkedő gyakorlat a beépített katalógusban; azok csak időzítők, nem indíthatók.",
   "aiTutorPlanSave": "Terv mentése",
+  "aiTutorPlanSaveUnavailable": "A mentés még nem elérhető: az alkalmazásban semmi nem tárol tutor-gyakorlástervet. Indítsd el helyette — az első blokkja megnyílik a gyakorlómotorban.",
   "aiTutorPlanSemantics": "Gyakorlási terv előnézete",
   "aiTutorPlanStart": "Terv indítása",
+  "aiTutorPlanStartNoRunnableBlock": "Ebben a tervben nincs indítható gyakorlatblokk, így nincs mit elindítani.",
+  "aiTutorPlanStartUnavailable": "Az indítás ebben a buildben nem elérhető: a gyakorlómotor ki van kapcsolva, így nincs hová átadni a tervet.",
   "aiTutorPlanTotalDuration": "Teljes idő: {minutes} perc",
   "@aiTutorPlanTotalDuration": {
     "placeholders": {
@@ -2533,6 +2549,16 @@
   "pitchMetricStabilityCents": "Hangmagasság stabilitása",
   "pitchMetricSustainedNoteDuration": "Kitartott hang időtartama",
   "pitchMetricUnwantedDropoutRatio": "Nem kívánt hangkimaradás aránya",
+  "planAdjustAction": "Terv igazítása",
+  "@planAdjustAction": {},
+  "planAdjustApplied": "A terv frissült.",
+  "@planAdjustApplied": {},
+  "planAdjustFailed": "Nem sikerült frissíteni a tervet. Semmi nem változott.",
+  "@planAdjustFailed": {},
+  "planAdjustNoPlan": "Még nincs aktív terv, amit igazítani lehetne.",
+  "@planAdjustNoPlan": {},
+  "planAdjustUpToDate": "Nincs mit igazítani – a terved naprakész.",
+  "@planAdjustUpToDate": {},
   "planChangeReviewAccept": "Módosítások elfogadása",
   "planChangeReviewAfter": "Utána",
   "planChangeReviewBefore": "Előtte",
@@ -2639,6 +2665,10 @@
   "@planSetupEquipmentTitle": {},
   "planSetupFinish": "Beállítás befejezése",
   "@planSetupFinish": {},
+  "planSetupGenerateFailed": "Ezekből a válaszokból nem tudtunk tervet készíteni. Nézd át az elérhetőségedet, és próbáld újra.",
+  "@planSetupGenerateFailed": {},
+  "planSetupGenerating": "Készül a terved…",
+  "@planSetupGenerating": {},
   "planSetupGoalCustom": "Egyéni cél",
   "@planSetupGoalCustom": {},
   "planSetupGoalRhythm": "Ritmus",
@@ -3780,6 +3810,15 @@
   "setlistV2LoopCount": "Ismétlések száma",
   "setlistV2Name": "Dalcsomag neve",
   "setlistV2OverridesInvalid": "Adj meg pozitív sebességet és ismétlésszámot.",
+  "setlistV2RunSheetTitle": "Hogyan futtatod a(z) „{name}” dalcsomagot?",
+  "@setlistV2RunSheetTitle": {
+    "description": "Title of the sheet that asks for the setlist run mode (scored practice or playback-only performance).",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "setlistV2Save": "Mentés",
   "setlistV2SaveFailed": "A dalcsomagot nem sikerült menteni.",
   "setlistV2SongId": "Dalazonosító",

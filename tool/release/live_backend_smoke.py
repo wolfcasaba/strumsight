@@ -75,10 +75,14 @@ _DEFAULT_CONTRACT_PATH = (
     _REPO_ROOT / "docs" / "contracts" / "client-backend-endpoints.json"
 )
 
-# No route in `backend/app/community/routers/challenges.py` matches ANY id
-# shape for the three known_gap paths (there is no GET route registered at
-# all) — a fixed placeholder is enough to prove the path 404s.
-_KNOWN_GAP_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000"
+# WP-H4 (2026-09-06): the contract carries NO `known_gap` entry any more —
+# the three challenges-listing paths were built (`GET /community/challenges`,
+# `.../{id}`, `.../{id}/me`), so the chain now EXERCISES the list endpoint
+# instead of probing it for a 404. The `known_gap` machinery
+# (`classify_contract`'s branch + `_record_expected_absent` below) is kept
+# deliberately: it is the generic handling for the next time a client call
+# lands ahead of its server route, and `backend/tests/test_live_smoke_contract.py`
+# keeps both halves under test.
 
 
 class _HttpError(Exception):
@@ -219,6 +223,12 @@ _EXERCISED_ORDER: tuple[tuple[str, str], ...] = (
     ("PUT", "/community/profiles/me"),
     ("GET", "/community/blocked"),
     ("GET", "/community/muted"),
+    # WP-H4 — the challenge list is a genuine single-account exercise: an
+    # account with no challenges gets `{"items": [], "next_cursor": null}`,
+    # which still proves the route is mounted, authenticated and returns
+    # the paged wire shape the Flutter client decodes. Until 2026-09-06
+    # this path was a `known_gap` 404 probe.
+    ("GET", "/community/challenges"),
 )
 
 # Every other `mounted` contract entry, with the documented reason it is out
@@ -316,6 +326,20 @@ _NOT_EXERCISED: dict[tuple[str, str], str] = {
     ),
     ("GET", "/community/leaderboards/{challenge_public_id}"): (
         "requires an existing challenge id; see the results endpoint above"
+    ),
+    ("GET", "/community/challenges/{challenge_public_id}"): (
+        "requires an existing challenge id this single-account chain has no "
+        "way to create — no challenge-creation endpoint is mounted; the "
+        "LIST endpoint above proves the read surface"
+    ),
+    ("GET", "/community/challenges/{challenge_public_id}/me"): (
+        "requires an existing challenge id; see the challenge detail entry "
+        "above"
+    ),
+    ("GET", "/community/clubs/{public_id}/challenges"): (
+        "requires an existing club, which needs POST /community/clubs — an "
+        "endpoint the client calls but this bring-up chain does not, so the "
+        "single-account chain has no club id to scope by"
     ),
 }
 
@@ -707,30 +731,32 @@ def run_chain(client, *, email: str, password: str) -> list[StepResult]:
     ):
         return steps
 
-    # known_gap probes (ADR 0503 D1 "Következmények") — the SAME chain, same
-    # halt-on-divergence discipline, proving the three challenges-listing
-    # paths are still absent on this deploy.
-    known_gap_paths = (
-        ("known_gap_challenges", "GET", "/community/challenges"),
-        (
-            "known_gap_challenge_detail",
-            "GET",
-            f"/community/challenges/{_KNOWN_GAP_PLACEHOLDER_ID}",
-        ),
-        (
-            "known_gap_challenge_me",
-            "GET",
-            f"/community/challenges/{_KNOWN_GAP_PLACEHOLDER_ID}/me",
-        ),
-    )
-    for name, method, path in known_gap_paths:
-        try:
-            resp = client.get(path, headers=auth_headers)
-        except _HttpError as error:
-            steps.append(StepResult(name, method, path, False, f"request failed: {error}"))
-            return steps
-        if not _record_expected_absent(steps, name=name, method=method, path=path, resp=resp):
-            return steps
+    # WP-H4 (2026-09-06) — the challenges LIST used to be a `known_gap` 404
+    # probe here; the route now exists, so the chain exercises it for real.
+    # An account with no challenges still gets a 200 paged envelope, which
+    # is what the Flutter `listChallenges` decoder needs to see.
+    try:
+        resp = client.get("/community/challenges", headers=auth_headers)
+    except _HttpError as error:
+        steps.append(
+            StepResult(
+                "community_challenges_list",
+                "GET",
+                "/community/challenges",
+                False,
+                f"request failed: {error}",
+            )
+        )
+        return steps
+    if not _record(
+        steps,
+        name="community_challenges_list",
+        method="GET",
+        path="/community/challenges",
+        resp=resp,
+        expected_status=200,
+    ):
+        return steps
 
     return steps
 

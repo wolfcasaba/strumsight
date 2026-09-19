@@ -18,6 +18,8 @@ class PracticePlanPreviewScreen extends StatefulWidget {
     this.onDraftChanged,
     this.onSave,
     this.onStart,
+    this.saveUnavailableMessage,
+    this.startUnavailableMessage,
   });
 
   final PracticePlanDraft draft;
@@ -26,6 +28,22 @@ class PracticePlanPreviewScreen extends StatefulWidget {
   final ValueChanged<PracticePlanDraft>? onDraftChanged;
   final ValueChanged<PracticePlanDraft>? onSave;
   final ValueChanged<PracticePlanDraft>? onStart;
+
+  /// Why the plan cannot be saved, when it cannot (WP-H2, 2026-09-06).
+  ///
+  /// A non-null message DISABLES the save action and renders the reason under
+  /// the buttons. Measured: no receiving side exists for a saved tutor plan —
+  /// `practice_generator`'s `AdaptivePracticePlan` needs a generation-request
+  /// provenance, `PracticeGoal`s with skill priorities and
+  /// `ExercisePrescription`s with success criteria, none of which a
+  /// [PracticePlanDraft] carries. A button that opens the write-confirmation
+  /// sheet and then writes nothing would be the lie this parameter prevents.
+  final String? saveUnavailableMessage;
+
+  /// Why the plan cannot be started, when it cannot — same contract as
+  /// [saveUnavailableMessage] (e.g. the practice engine is flag-disabled in
+  /// this build, so there is nothing to hand the compiled block to).
+  final String? startUnavailableMessage;
 
   @override
   State<PracticePlanPreviewScreen> createState() =>
@@ -260,7 +278,7 @@ class _PracticePlanPreviewScreenState extends State<PracticePlanPreviewScreen> {
                 children: <Widget>[
                   ElevatedButton(
                     key: const ValueKey('plan-save'),
-                    onPressed: isValid
+                    onPressed: isValid && widget.saveUnavailableMessage == null
                         ? () => unawaited(
                             _confirmAndCommit(
                               context,
@@ -275,7 +293,7 @@ class _PracticePlanPreviewScreenState extends State<PracticePlanPreviewScreen> {
                   ),
                   FilledButton.tonal(
                     key: const ValueKey('plan-start'),
-                    onPressed: isValid
+                    onPressed: isValid && widget.startUnavailableMessage == null
                         ? () => unawaited(
                             _confirmAndCommit(
                               context,
@@ -291,6 +309,25 @@ class _PracticePlanPreviewScreenState extends State<PracticePlanPreviewScreen> {
                   ),
                 ],
               ),
+              // An action with no receiving side says so in place, next to
+              // the button it disables — it never opens a confirmation sheet
+              // that promises a write nothing performs.
+              if (widget.saveUnavailableMessage != null) ...<Widget>[
+                const SizedBox(height: 12),
+                Text(
+                  key: const ValueKey('plan-save-unavailable'),
+                  widget.saveUnavailableMessage!,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+              if (widget.startUnavailableMessage != null) ...<Widget>[
+                const SizedBox(height: 12),
+                Text(
+                  key: const ValueKey('plan-start-unavailable'),
+                  widget.startUnavailableMessage!,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
             ],
           ),
         ),

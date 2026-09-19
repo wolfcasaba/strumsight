@@ -17,6 +17,8 @@ export 'application/service/plan_execution_coordinator.dart';
 export 'application/service/outcome_ingestion_service.dart';
 export 'application/usecase/record_practice_outcome.dart';
 export 'application/usecase/revise_practice_plan.dart';
+export 'application/usecase/propose_plan_catch_up.dart';
+export 'application/usecase/apply_plan_revision.dart';
 export 'application/usecase/pause_practice_plan.dart';
 export 'application/usecase/resume_practice_plan.dart';
 export 'application/usecase/delete_practice_planning_data.dart';
@@ -93,7 +95,9 @@ export 'domain/service/song_goal_planner.dart';
 
 export 'presentation/controller/plan_setup_controller.dart';
 export 'presentation/controller/plan_preview_controller.dart';
+export 'presentation/plan_preview_args.dart';
 export 'presentation/providers/practice_generator_providers.dart';
+export 'presentation/routes/practice_generator_routes.dart';
 export 'presentation/screens/plan_setup_screen.dart';
 export 'presentation/screens/plan_preview_screen.dart';
 export 'presentation/screens/today_plan_screen.dart';

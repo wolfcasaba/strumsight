@@ -15,7 +15,7 @@ Acceptance-map:
       test_main_exits_2_on_an_unclassified_contract_without_touching_the_network
   A2  test_full_chain_passes_against_a_freshly_migrated_lab_app
       test_chain_halts_at_the_first_divergence_and_later_steps_never_run
-      test_known_gap_path_present_turns_the_chain_red_without_running_later_steps
+      test_the_known_gap_machinery_still_reports_a_present_route_as_a_break
   A5  every cell in this file drives an in-process TestClient — no socket is
       ever opened (offline gate, ADR 0503 D4).
 """
@@ -98,7 +98,7 @@ class _CountingClient:
 
 def test_classify_contract_covers_the_real_contract_with_no_unclassified_entries():
     entries = smoke.load_contract(_REAL_CONTRACT_PATH)
-    assert len(entries) == 34
+    assert len(entries) == 35
 
     classifications = smoke.classify_contract(entries)
     by_kind: dict[str, int] = {}
@@ -109,7 +109,12 @@ def test_classify_contract_covers_the_real_contract_with_no_unclassified_entries
     assert by_kind.get("unclassified", 0) == 0, [
         c for c in classifications if c.kind == "unclassified"
     ]
-    assert by_kind == {"exercised": 10, "not_exercised": 21, "known_gap": 3}
+    # WP-H4 (2026-09-06): a harom challenges `known_gap` sor `mounted`
+    # lett -- a lista bekerult az EXERCISED lancba, a reszlet / sajat
+    # reszvetel / klub-kihivasok pedig a dokumentalt NOT_EXERCISED
+    # tablaba (mindharomhoz challenge- vagy klub-id kellene, amit egy
+    # egyszamlas bring-up lanc nem tud letrehozni).
+    assert by_kind == {"exercised": 11, "not_exercised": 24}
 
 
 def test_classify_contract_fails_closed_on_an_uncovered_mounted_entry():
@@ -187,9 +192,7 @@ def test_full_chain_passes_against_a_freshly_migrated_lab_app(tmp_path, monkeypa
         "community_profile_update",
         "community_blocked",
         "community_muted",
-        "known_gap_challenges",
-        "known_gap_challenge_detail",
-        "known_gap_challenge_me",
+        "community_challenges_list",
     ]
     for step in steps:
         assert step.ok, f"{step.name} unexpectedly failed: {step.detail}"
@@ -201,7 +204,7 @@ def test_chain_halts_at_the_first_divergence_and_later_steps_never_run(
     """ADR 0503 D2. Pre-registering the email OUTSIDE the chain forces the
     chain's OWN `register` call to 409 — the first possible divergence
     point — and proves every later step (login, auth_me, settings,
-    community, known_gap) is never even called, not merely unreported."""
+    community, challenges) is never even called, not merely unreported."""
     settings = _migrated_lab_settings(tmp_path, monkeypatch)
     app = create_app(settings)
     email = "live-smoke-halts@strumsight.app"
@@ -227,31 +230,56 @@ def test_chain_halts_at_the_first_divergence_and_later_steps_never_run(
     assert counting_client.call_count == 2
 
 
-def test_known_gap_path_present_turns_the_chain_red_without_running_later_steps(
-    tmp_path, monkeypatch
-):
-    """§6.1 mátrix — "A `known_gap` utakat a smoke hibának veszi" row,
-    inverted: if a `known_gap` path stops 404ing (e.g. a future round
-    implements it without updating the contract), the chain must go RED
-    at exactly that step, and the two remaining known_gap probes must
-    never run."""
-    settings = _migrated_lab_settings(tmp_path, monkeypatch)
-    app = create_app(settings)
+def test_the_known_gap_machinery_still_reports_a_present_route_as_a_break():
+    """§6.1 mátrix — "A `known_gap` utakat a smoke hibának veszi" row.
 
-    @app.get("/community/challenges")
-    def _stale_contract_route() -> dict[str, bool]:
-        return {"unexpectedly": True}
+    WP-H4 (2026-09-06) óta a szerződésben NINCS `known_gap` sor: a három
+    challenges-olvasó útvonal megépült, a listát a lánc most ki is
+    próbálja. A gépezet viszont MARAD — a következő olyan körhöz, ahol
+    egy kliens-hívás megelőzi a szerver-útvonalát —, ezért itt
+    KÖZVETLENÜL mérjük, nem a láncon át:
 
-    with TestClient(app) as client:
-        counting_client = _CountingClient(client)
-        steps = smoke.run_chain(
-            counting_client,
-            email="live-smoke-known-gap@strumsight.app",
-            password="live-smoke-fake-correct-horse",
+    * a `classify_contract` egy `known_gap` bejegyzést továbbra is
+      `known_gap`-nek sorol be (nem `unclassified`-nak, ami a
+      fail-closed ág lenne),
+    * a `_record_expected_absent` a 404-et PASS-nak, bármi mást
+      TÖRÉSNEK jelent — ez az „a szerződés elavult" jelzés.
+    """
+    classifications = smoke.classify_contract(
+        [
+            smoke.ContractEndpoint(
+                method="GET", path="/community/not-built-yet", status="known_gap"
+            )
+        ]
+    )
+    assert [c.kind for c in classifications] == ["known_gap"]
+
+    steps: list = []
+    assert (
+        smoke._record_expected_absent(
+            steps,
+            name="probe",
+            method="GET",
+            path="/community/not-built-yet",
+            resp=smoke.Response(status_code=404, body=b"{}"),
         )
+        is True
+    )
+    assert steps[-1].ok is True
 
-    assert steps[-1].name == "known_gap_challenges"
+    assert (
+        smoke._record_expected_absent(
+            steps,
+            name="probe",
+            method="GET",
+            path="/community/not-built-yet",
+            resp=smoke.Response(status_code=200, body=b"{}"),
+        )
+        is False
+    )
     assert steps[-1].ok is False
-    assert "expected GET /community/challenges -> 404 (known_gap)" in steps[-1].detail
-    assert "known_gap_challenge_detail" not in [s.name for s in steps]
-    assert "known_gap_challenge_me" not in [s.name for s in steps]
+    assert (
+        "expected GET /community/not-built-yet -> 404 (known_gap)"
+        in steps[-1].detail
+    )
+    assert "the contract may be stale" in steps[-1].detail

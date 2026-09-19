@@ -25,9 +25,23 @@ import '../widgets/plan_reason_sheet.dart';
 /// §5.5: there is no network call in this surface — every text shown comes
 /// from the ARB; every block card is local.
 class PlanPreviewScreen extends StatefulWidget {
-  const PlanPreviewScreen({required this.controller, super.key});
+  const PlanPreviewScreen({
+    required this.controller,
+    this.onConfirmed,
+    super.key,
+  });
 
   final PlanPreviewController controller;
+
+  /// Where a SUCCESSFUL confirmation goes. `null` keeps the historical
+  /// behaviour (pop back to whoever pushed the preview); the route host
+  /// passes the Today destination, so an activated plan is shown, not the
+  /// wizard the learner just finished.
+  ///
+  /// Called only after [PlanPreviewController.confirmConfirmed] reports a
+  /// success — a failed activation still shows the retry snackbar and stays
+  /// on this screen (§5.1: never navigate away from an unsaved plan).
+  final VoidCallback? onConfirmed;
 
   /// Convenience factory used by tests: builds a controller from the given
   /// inputs and wraps it in [PlanPreviewScreen]. Production callers can
@@ -168,7 +182,12 @@ class _PlanPreviewScreenState extends State<PlanPreviewScreen> {
                     );
                     return;
                   }
-                  navigator.maybePop();
+                  final onConfirmed = widget.onConfirmed;
+                  if (onConfirmed == null) {
+                    navigator.maybePop();
+                    return;
+                  }
+                  onConfirmed();
                 },
               ),
             ],

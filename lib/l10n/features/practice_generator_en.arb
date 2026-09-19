@@ -1,0 +1,17 @@
+{
+  "@@locale": "en",
+  "planSetupGenerating": "Building your plan…",
+  "@planSetupGenerating": {},
+  "planSetupGenerateFailed": "We couldn't build a plan from these answers. Check your availability and try again.",
+  "@planSetupGenerateFailed": {},
+  "planAdjustAction": "Adjust my plan",
+  "@planAdjustAction": {},
+  "planAdjustUpToDate": "Nothing to adjust — your plan is up to date.",
+  "@planAdjustUpToDate": {},
+  "planAdjustApplied": "Plan updated.",
+  "@planAdjustApplied": {},
+  "planAdjustFailed": "We couldn't update the plan. Nothing was changed.",
+  "@planAdjustFailed": {},
+  "planAdjustNoPlan": "There is no active plan to adjust yet.",
+  "@planAdjustNoPlan": {}
+}

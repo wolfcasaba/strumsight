@@ -83,10 +83,18 @@ ScheduleCandidate scheduleCandidateFor(
   ExerciseCandidate candidate,
   PracticeGenerationRequest request,
 ) => ScheduleCandidate(
-  // Ugyanaz az azonosító-alak, amit a `PracticeCatalogSnapshot` az
-  // egyediség ellenőrzésére használ — így a beosztás és a katalógus
-  // ugyanarra a kulcsra hivatkozik.
-  identity: '${candidate.source.code}:${candidate.exerciseId}',
+  // `ExerciseCandidate.sortKey` — pontosan az a kulcs, amivel a
+  // `GenerationOrchestrator` VISSZAKERESI a jelöltet a katalógusból
+  // (`_candidateFor`: `candidate.sortKey == scheduled.identity`).
+  //
+  // 2026-09-06 MÉRT hiba: itt korábban a `source:exerciseId` alak állt (a
+  // `PlanValidationContext.identityOf` kulcsa), a `sortKey` viszont a
+  // tartalom-revíziót is tartalmazza. A kettő SOSEM egyezik, ezért a
+  // generálás minden valódi katalógussal `StateError: No catalog candidate
+  // matches …` hibára futott. Nem tűnt fel, mert a beosztás-összeállítót
+  // eddig semmi nem hívta végig — ez a kör az első, amelyik tényleg
+  // generál.
+  identity: candidate.sortKey,
   focus: focusFor(candidate, request),
   materialKind: CandidateMaterialKind.newMaterial,
   loadLevel: dominantLoadLevel(candidate.loadProfile),

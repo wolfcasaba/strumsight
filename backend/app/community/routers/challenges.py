@@ -84,6 +84,28 @@ from ..services.challenge_verification_service import (
 from ..services.challenge_verification_service import (
     submit_result,
 )
+from ..schemas.challenge import (
+    ChallengeOut,
+    ChallengePageOut,
+    ChallengeParticipationOut,
+    MyParticipationOut,
+)
+from ..services.challenge_query_service import (
+    CHALLENGE_PAGE_SIZE_DEFAULT,
+)
+from ..services.challenge_query_service import (
+    ChallengeNotFound as ChallengeReadNotFound,
+)
+from ..services.challenge_query_service import (
+    ChallengePage as ChallengeQueryPage,
+)
+from ..services.challenge_query_service import (
+    ChallengeView,
+    get_challenge,
+    get_my_participation,
+    is_allowed_challenge_status,
+    list_challenges,
+)
 
 router = APIRouter(prefix="/community/challenges", tags=["community-challenges"])
 
@@ -886,6 +908,198 @@ async def post_submit_result(
             pass
 
 
+# ---------------------------------------------------------------------------
+# READ surface — WP-H4 (2026-09-06).
+#
+# MÉRT hiány: eddig a router MINDEN útvonala írás volt, holott a
+# kliens (``challenge_repository_impl.dart``) HÁROM GET-et hívott —
+# és 404-et kapott. A hiányt a ``client-backend-endpoints.json``
+# három ``known_gap`` sora rögzítette; ez a blokk zárja őket.
+#
+# Az útvonalnevek NEM új találmányok: a
+# ``challenge_repository_impl.dart`` már ezeket hívta, és az SDD
+# §21 végpont-táblája ugyanezt írja elő
+# (``GET /v1/community/challenges``, ``.../{id}``, ``.../{id}/me``).
+#
+# A LÁTHATÓSÁG a service-é (``challenge_query_service``); a router
+# csak feloldja a hívó profilját, és a ``ChallengeNotFound``-ot
+# 404-re képezi — ismeretlen és rejtett ugyanaz a válasz.
+# ---------------------------------------------------------------------------
+
+
+def _resolve_caller_profile_internal_id(db: Session, user_id: int) -> int:
+    """A hívó belső ``community_profiles.id``-ja a JWT subjectből.
+
+    A READ service a belső id-vel dolgozik (az FK-oszlopok alakja);
+    a public_id-s testvér-helper (``_resolve_caller_profile_public_id``)
+    a wire-alakhoz kell. A kettő ugyanannak a sornak a két nézete —
+    a Kör 23 ``leaderboards.py`` ugyanígy tartja mindkettőt.
+    """
+    from sqlalchemy import text as _sa_text
+
+    row = db.execute(
+        _sa_text("SELECT id FROM community_profiles WHERE user_id = :uid"),
+        {"uid": user_id},
+    ).first()
+    if row is None:
+        raise ValueError("caller has no community profile")
+    return int(row[0])
+
+
+def _challenge_view_to_out(view: ChallengeView) -> ChallengeOut:
+    return ChallengeOut(
+        public_id=view.public_id,
+        author_public_id=view.author_public_id,
+        type=view.type,
+        metric=view.metric,
+        difficulty=view.difficulty,
+        starts_at=view.starts_at,
+        ends_at=view.ends_at,
+        version=view.version,
+        club_id=view.club_id,
+    )
+
+
+def challenge_page_to_out(page: ChallengeQueryPage) -> ChallengePageOut:
+    """Service-oldal → wire-oldal.
+
+    Publikus (nem ``_`` előtagú), mert a klub-router
+    (``routers/clubs.py``) ugyanezt a leképezést használja a
+    ``GET /community/clubs/{public_id}/challenges`` végponton — egy
+    második, kézzel másolt leképezés ott némán elcsúszhatna a
+    kliens dekóderétől.
+    """
+    return ChallengePageOut(
+        items=[_challenge_view_to_out(view) for view in page.items],
+        next_cursor=page.next_cursor,
+    )
+
+
+@router.get("", status_code=status.HTTP_200_OK)
+def get_list_challenges(
+    request: Request,
+    current_user: CurrentUser,
+    cursor: str | None = Query(default=None, max_length=512),
+    limit: int = Query(default=CHALLENGE_PAGE_SIZE_DEFAULT, ge=1, le=100),
+    status_filter: str | None = Query(default=None, alias="status", max_length=32),
+    club_id: uuid.UUID | None = Query(default=None),
+) -> ChallengePageOut:
+    """A néző számára LÁTHATÓ kihívások egy oldala.
+
+    Query paraméterek:
+
+    * ``cursor`` — az előző oldal opaque kurzora; az ELSŐ oldalon
+      hiányzik (a kliens nem küld üres sztringet). Sérült kurzor a
+      lista elejéről indul újra, nem hibázik.
+    * ``limit`` — lapméret, ``[1, 100]``.
+    * ``status`` — ``active`` | ``upcoming`` | ``ended``, szerver-idő
+      szerint. Ismeretlen érték **422**, nem néma elnyelés: egy
+      elfogadottnak látszó, de figyelmen kívül hagyott szűrő
+      ugyanaz a hibaosztály, amit a klub-repository D2 cellája mér.
+    * ``club_id`` — egy klub public_id-ja; a klub-hatókörű
+      kihívásokra szűkít.
+    """
+    if status_filter is not None and not is_allowed_challenge_status(status_filter):
+        raise HTTPException(
+            status_code=422,
+            detail=f"unsupported status filter {status_filter!r}",
+        )
+    db_gen = _session_factory(request)
+    db = next(db_gen)
+    try:
+        try:
+            viewer_id = _resolve_caller_profile_internal_id(db, current_user.id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        page = list_challenges(
+            db,
+            viewer_profile_id=viewer_id,
+            now=_now(),
+            cursor=cursor,
+            limit=limit,
+            status_filter=status_filter,
+            club_public_id=club_id,
+        )
+        return challenge_page_to_out(page)
+    finally:
+        next(db_gen, None)
+
+
+@router.get("/{challenge_public_id}", status_code=status.HTTP_200_OK)
+def get_challenge_detail(
+    challenge_public_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser,
+) -> ChallengeOut:
+    """Egy kihívás részletei, ha a néző láthatja.
+
+    Ismeretlen public_id és a néző elől REJTETT kihívás ugyanazt a
+    404-et kapja, ugyanazzal a szöveggel — a kettő
+    megkülönböztethetősége maga lenne a szivárgás.
+    """
+    db_gen = _session_factory(request)
+    db = next(db_gen)
+    try:
+        try:
+            viewer_id = _resolve_caller_profile_internal_id(db, current_user.id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        try:
+            view = get_challenge(
+                db,
+                challenge_public_id=challenge_public_id,
+                viewer_profile_id=viewer_id,
+            )
+        except ChallengeReadNotFound as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return _challenge_view_to_out(view)
+    finally:
+        next(db_gen, None)
+
+
+@router.get("/{challenge_public_id}/me", status_code=status.HTTP_200_OK)
+def get_my_participation_endpoint(
+    challenge_public_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser,
+) -> MyParticipationOut:
+    """A HÍVÓ saját részvétel-/eredmény-állapota egy kihíváson.
+
+    200 + ``{"participant": null}``, ha a hívónak nincs sem
+    résztvevő-, sem meghívás-sora — ez ÁLLÍTÁS („nem veszel részt"),
+    nem hiba. A 404 külön jelentést visz: „nincs ilyen kihívás (vagy
+    nem látod)". A kettő összemosása elárulná egy rejtett sor
+    létezését.
+    """
+    db_gen = _session_factory(request)
+    db = next(db_gen)
+    try:
+        try:
+            viewer_id = _resolve_caller_profile_internal_id(db, current_user.id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        try:
+            participation = get_my_participation(
+                db,
+                challenge_public_id=challenge_public_id,
+                viewer_profile_id=viewer_id,
+            )
+        except ChallengeReadNotFound as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        if participation is None:
+            return MyParticipationOut(participant=None)
+        return MyParticipationOut(
+            participant=ChallengeParticipationOut(
+                participant_public_id=participation.participant_public_id,
+                invite_state=participation.invite_state,
+                best_metric_value=participation.best_metric_value,
+            )
+        )
+    finally:
+        next(db_gen, None)
+
+
 __all__ = [
+    "challenge_page_to_out",
     "router",
 ]

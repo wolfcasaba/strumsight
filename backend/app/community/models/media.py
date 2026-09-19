@@ -282,6 +282,31 @@ class CommunityMedia(Base):
     # uploads; the Kör 19 media-processing round will write
     # this.
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # WP-H5 — the post this media hangs on, or NULL while the
+    # upload is still unattached.
+    #
+    # This column is what makes media visibility DERIVED rather
+    # than duplicated: an attached row is visible to exactly the
+    # viewers who can read its post (audience + block +
+    # moderation gate, resolved through ``post_service.get_post``
+    # in ``routers/media.py::_visible_media``), and an unattached
+    # row is visible to its owner alone. Storing a second
+    # ``audience`` column on the media row would let the two
+    # drift apart — a post edited to ``private`` whose attached
+    # recording stayed ``public`` is precisely the leak this
+    # shape cannot express.
+    #
+    # ``ondelete='SET NULL'`` rather than CASCADE: deleting a
+    # post must not silently destroy the author's recording, and
+    # the detached row correctly falls back to owner-only
+    # visibility. The FK is nullable for the same reason the
+    # upload flow needs it — a media row exists before the post
+    # that will carry it.
+    post_id: Mapped[int | None] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        ForeignKey("community_posts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     # 64-char hex SHA-256 digest (ADR 0410 §D4 — the project's
     # uniform content-hash family). The finalize path compares
     # against the bucket-side SHA-256 (the in-memory fake's
@@ -430,6 +455,16 @@ class CommunityMedia(Base):
             "ix_community_media_profile_processing",
             "profile_id",
             "processing_state",
+        ),
+        # WP-H5 — backs the "which media hangs on this post" lookup
+        # the feed / post-detail projection makes once per rendered
+        # card. Partial-index semantics are left to the dialect; the
+        # column is NULL for every unattached row, and both
+        # PostgreSQL and SQLite skip NULLs in a b-tree scan for an
+        # equality predicate.
+        Index(
+            "ix_community_media_post",
+            "post_id",
         ),
     )
 

@@ -14,6 +14,8 @@ export '../application/service/plan_execution_coordinator.dart';
 export '../application/service/outcome_ingestion_service.dart';
 export '../application/usecase/record_practice_outcome.dart';
 export '../application/usecase/revise_practice_plan.dart';
+export '../application/usecase/propose_plan_catch_up.dart';
+export '../application/usecase/apply_plan_revision.dart';
 export '../application/usecase/pause_practice_plan.dart';
 export '../application/usecase/resume_practice_plan.dart';
 export '../application/usecase/delete_practice_planning_data.dart';

@@ -79,7 +79,33 @@ final class GenerationOrchestrator {
   Stream<GenerationProgress> get progress => _progressController.stream;
 
   /// Starts one run, or returns the existing in-flight run for the same id.
-  Future<AppResult<AdaptivePracticePlan>> generate(GenerationPlanInput input) {
+  ///
+  /// The run ends with [GenerationPlanActivation.activate]: the returned plan
+  /// is already `active`.
+  Future<AppResult<AdaptivePracticePlan>> generate(GenerationPlanInput input) =>
+      _start(input, activate: true);
+
+  /// Runs the same pipeline as [generate] but STOPS before activation and
+  /// returns the validated plan in its `draft` status.
+  ///
+  /// This is what the Setup wizard needs (SDD Ch8 §18 pipeline: `Draft
+  /// preview → User confirmation → Persist active revision`, and the Ch8
+  /// acceptance line "Preview nélkül nincs automatikus tervaktiválás").
+  /// Calling [generate] from the wizard would persist an active plan the
+  /// learner has not seen yet — the preview screen's explicit-confirm gate
+  /// ([PlanPreviewController.confirmConfirmed]) would then be decorative.
+  ///
+  /// No pipeline stage is duplicated: assembly, validation and deterministic
+  /// repair are the very same code path, only the terminal activation effect
+  /// is skipped.
+  Future<AppResult<AdaptivePracticePlan>> generateDraft(
+    GenerationPlanInput input,
+  ) => _start(input, activate: false);
+
+  Future<AppResult<AdaptivePracticePlan>> _start(
+    GenerationPlanInput input, {
+    required bool activate,
+  }) {
     final existing = _runs[input.request.id];
     if (existing != null) return existing.future;
 
@@ -87,7 +113,7 @@ final class GenerationOrchestrator {
     late final Future<AppResult<AdaptivePracticePlan>> future;
     future =
         Future<AppResult<AdaptivePracticePlan>>.microtask(
-          () => _run(input, source),
+          () => _run(input, source, activate: activate),
         ).whenComplete(() {
           final current = _runs[input.request.id];
           if (current?.future == future) _runs.remove(input.request.id);
@@ -105,8 +131,9 @@ final class GenerationOrchestrator {
 
   Future<AppResult<AdaptivePracticePlan>> _run(
     GenerationPlanInput input,
-    _GenerationCancellationSource cancellation,
-  ) async {
+    _GenerationCancellationSource cancellation, {
+    required bool activate,
+  }) async {
     try {
       await _checkpoint(
         input.request.id,
@@ -140,6 +167,14 @@ final class GenerationOrchestrator {
             ValidationFailure(cause: validation.issues),
           );
         }
+      }
+
+      if (!activate) {
+        // The draft path stops here, BEFORE the activating checkpoint: no
+        // `activating` progress event is emitted for a run that never
+        // activates, so a progress listener cannot mistake a preview for a
+        // persisted plan.
+        return Success<AdaptivePracticePlan>(plan);
       }
 
       await _checkpoint(

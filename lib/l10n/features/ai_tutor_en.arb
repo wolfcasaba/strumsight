@@ -1,0 +1,19 @@
+{
+  "@@locale": "en",
+  "aiTutorHomePracticePlanCta": "Practice plan",
+  "aiTutorPlanGeneratedTitle": "{minutes}-minute practice plan",
+  "@aiTutorPlanGeneratedTitle": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "aiTutorPlanRationaleGrounded": "Built from your active goals and your recorded practice sessions.",
+  "aiTutorPlanRationaleWithoutGoals": "You have no active learning goal yet, so the blocks follow the plain duration template.",
+  "aiTutorPlanRationaleWithoutHistory": "No practice session has been recorded yet, so every tempo is the exercise's own default.",
+  "aiTutorPlanRationaleWithoutTargets": "Some blocks have no matching exercise in the built-in catalog; those are timers only and cannot be started.",
+  "aiTutorPlanSaveUnavailable": "Saving is not available yet: nothing in the app stores a tutor practice plan. Start the plan instead — its first block opens in the practice engine.",
+  "aiTutorPlanStartUnavailable": "Starting is not available in this build: the practice engine is switched off, so there is nothing to hand the plan to.",
+  "aiTutorPlanStartNoRunnableBlock": "This plan has no runnable exercise block, so there is nothing to start."
+}

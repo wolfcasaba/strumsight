@@ -354,6 +354,7 @@
   "aiTutorHomeIntro": "Talk to your guitar tutor. Ask about chords, strumming patterns, practice routines, or song help.",
   "aiTutorHomeModelStatusTitle": "Tutor model",
   "aiTutorHomeModelUnavailableMessage": "The tutor model could not be reached. You can still browse, but responses may fail.",
+  "aiTutorHomePracticePlanCta": "Practice plan",
   "aiTutorHomeStart": "Start conversation",
   "aiTutorHomeTitle": "AI Tutor",
   "aiTutorPlanActionTitle": "Plan",
@@ -441,6 +442,14 @@
   "aiTutorPlanEditedSource": "Edited by you",
   "aiTutorPlanEmpty": "No practice blocks remain.",
   "aiTutorPlanGeneratedSource": "Suggested plan",
+  "aiTutorPlanGeneratedTitle": "{minutes}-minute practice plan",
+  "@aiTutorPlanGeneratedTitle": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
   "aiTutorPlanIncreaseDuration": "Add one minute to {type}",
   "@aiTutorPlanIncreaseDuration": {
     "placeholders": {
@@ -495,9 +504,16 @@
       }
     }
   },
+  "aiTutorPlanRationaleGrounded": "Built from your active goals and your recorded practice sessions.",
+  "aiTutorPlanRationaleWithoutGoals": "You have no active learning goal yet, so the blocks follow the plain duration template.",
+  "aiTutorPlanRationaleWithoutHistory": "No practice session has been recorded yet, so every tempo is the exercise's own default.",
+  "aiTutorPlanRationaleWithoutTargets": "Some blocks have no matching exercise in the built-in catalog; those are timers only and cannot be started.",
   "aiTutorPlanSave": "Save plan",
+  "aiTutorPlanSaveUnavailable": "Saving is not available yet: nothing in the app stores a tutor practice plan. Start the plan instead — its first block opens in the practice engine.",
   "aiTutorPlanSemantics": "Practice plan preview",
   "aiTutorPlanStart": "Start plan",
+  "aiTutorPlanStartNoRunnableBlock": "This plan has no runnable exercise block, so there is nothing to start.",
+  "aiTutorPlanStartUnavailable": "Starting is not available in this build: the practice engine is switched off, so there is nothing to hand the plan to.",
   "aiTutorPlanTotalDuration": "Total time: {minutes} minutes",
   "@aiTutorPlanTotalDuration": {
     "placeholders": {
@@ -2572,6 +2588,16 @@
   "pitchMetricStabilityCents": "Pitch stability",
   "pitchMetricSustainedNoteDuration": "Sustained note duration",
   "pitchMetricUnwantedDropoutRatio": "Unwanted pitch dropout ratio",
+  "planAdjustAction": "Adjust my plan",
+  "@planAdjustAction": {},
+  "planAdjustApplied": "Plan updated.",
+  "@planAdjustApplied": {},
+  "planAdjustFailed": "We couldn't update the plan. Nothing was changed.",
+  "@planAdjustFailed": {},
+  "planAdjustNoPlan": "There is no active plan to adjust yet.",
+  "@planAdjustNoPlan": {},
+  "planAdjustUpToDate": "Nothing to adjust — your plan is up to date.",
+  "@planAdjustUpToDate": {},
   "planChangeReviewAccept": "Accept changes",
   "planChangeReviewAfter": "After",
   "planChangeReviewBefore": "Before",
@@ -2678,6 +2704,10 @@
   "@planSetupEquipmentTitle": {},
   "planSetupFinish": "Finish setup",
   "@planSetupFinish": {},
+  "planSetupGenerateFailed": "We couldn't build a plan from these answers. Check your availability and try again.",
+  "@planSetupGenerateFailed": {},
+  "planSetupGenerating": "Building your plan…",
+  "@planSetupGenerating": {},
   "planSetupGoalCustom": "A custom goal",
   "@planSetupGoalCustom": {},
   "planSetupGoalRhythm": "Rhythm",
@@ -3819,6 +3849,15 @@
   "setlistV2LoopCount": "Loop count",
   "setlistV2Name": "Setlist name",
   "setlistV2OverridesInvalid": "Enter a positive speed and loop count.",
+  "setlistV2RunSheetTitle": "How do you want to run “{name}”?",
+  "@setlistV2RunSheetTitle": {
+    "description": "Title of the sheet that asks for the setlist run mode (scored practice or playback-only performance).",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "setlistV2Save": "Save",
   "setlistV2SaveFailed": "The setlist could not be saved.",
   "setlistV2SongId": "Song ID",

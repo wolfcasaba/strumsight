@@ -46,12 +46,8 @@ import '../../features/practice_generator/application/usecase/revise_practice_pl
     show PlanRevisionProposal;
 import '../../features/practice_generator/presentation/plan_preview_args.dart';
 import '../../features/practice_generator/presentation/providers/practice_generator_providers.dart';
-import '../../features/practice_generator/presentation/screens/plan_change_review_screen.dart';
-import '../../features/practice_generator/presentation/screens/plan_preview_screen.dart';
+import '../../features/practice_generator/presentation/routes/practice_generator_routes.dart';
 import '../../features/practice_generator/presentation/screens/plan_privacy_screen.dart';
-import '../../features/practice_generator/presentation/screens/weekly_plan_screen.dart';
-import '../../features/practice_generator/presentation/screens/plan_setup_screen.dart';
-import '../../features/practice_generator/presentation/screens/today_plan_screen.dart';
 import '../../features/practice_hub/screens/practice_area_hub_screen.dart';
 import '../../features/profile_hub/screens/profile_hub_screen.dart';
 import '../../features/progress/screens/progress_screen.dart';
@@ -64,12 +60,18 @@ import '../../features/streak/screens/streak_screen.dart';
 import '../../features/song_trainer/public.dart';
 import '../../features/song_trainer/application/song_trainer_providers.dart';
 import '../../features/song_trainer/application/trainer/song_trainer_result.dart';
+import '../../features/song_trainer/presentation/screens/setlist_session_screen.dart'
+    show SetlistSessionArgs;
+import '../../features/song_trainer/presentation/setlists/setlist_session_entry.dart';
 import '../../features/song_trainer/presentation/screens/song_editor_screen.dart';
 import '../../features/song_trainer/presentation/screens/song_overview_screen.dart';
 import '../../features/song_trainer/presentation/screens/song_result_screen.dart';
 import '../../features/song_trainer/presentation/screens/song_trainer_screen.dart';
 import '../../features/song_trainer/presentation/screens/trainer_setup_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_chat_screen.dart';
+import '../../features/ai_tutor/presentation/practice_plan_preview_args.dart';
+import '../../features/ai_tutor/presentation/providers/practice_plan_providers.dart';
+import '../../features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_data_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_home_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_privacy_screen.dart';
@@ -536,35 +538,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (practiceGeneratorEnabled) ...[
         GoRoute(
           path: AppRoutes.practiceGeneratorSetup,
-          builder: (_, _) => Consumer(
-            builder: (context, ref, _) => PlanSetupScreen(
-              controller: ref.watch(planSetupControllerProvider),
-            ),
-          ),
+          builder: (_, _) => const PlanSetupRoute(),
         ),
         GoRoute(
           path: AppRoutes.practiceGeneratorToday,
-          builder: (_, _) => Consumer(
-            builder: (context, ref, _) => TodayPlanScreen(
-              controller: ref.watch(todayPlanControllerProvider),
-            ),
-          ),
+          builder: (_, _) => const TodayPlanRoute(),
         ),
         GoRoute(
           path: AppRoutes.practiceGeneratorWeekly,
-          builder: (_, _) => Consumer(
-            builder: (context, ref, _) {
-              final plan = ref.watch(activePracticePlanProvider);
-              // A `plan` a képernyő szerződésében NULLAZHATÓ, és a `null`
-              // ott a „még nincs terv" állapot — nem hiányzó adat. Betöltés
-              // közben tehát nem hazudunk üres tervet: ugyanaz a `null`
-              // megy be, amit a képernyő maga is kezel.
-              return WeeklyPlanScreen(
-                plan: plan.value,
-                today: ref.watch(practiceGeneratorTodayProvider)(),
-              );
-            },
-          ),
+          builder: (_, _) => const WeeklyPlanRoute(),
         ),
         GoRoute(
           path: AppRoutes.practiceGeneratorPrivacy,
@@ -585,33 +567,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           redirect: (_, state) => state.extra is PracticePlanPreviewArgs
               ? null
               : AppRoutes.practiceGeneratorToday,
-          builder: (_, state) => Consumer(
-            builder: (context, ref, _) {
-              final args = state.extra! as PracticePlanPreviewArgs;
-              return PlanPreviewScreen(
-                controller: ref.watch(planPreviewControllerFactoryProvider)(
-                  initialPlan: args.plan,
-                  validationContext: args.validationContext,
-                ),
-              );
-            },
-          ),
+          builder: (_, state) =>
+              PlanPreviewRoute(args: state.extra! as PracticePlanPreviewArgs),
         ),
         GoRoute(
           path: AppRoutes.practiceGeneratorChangeReview,
           redirect: (_, state) => state.extra is PlanRevisionProposal
               ? null
               : AppRoutes.practiceGeneratorToday,
-          builder: (_, state) => Builder(
-            builder: (context) => PlanChangeReviewScreen(
-              proposal: state.extra! as PlanRevisionProposal,
-              // Mindkét ág a mai tervre visz vissza. A javaslat
-              // ELFOGADÁSA a `RevisePracticePlan` dolga, és azt a hívó
-              // folyamat végzi el — a route nem ír tervet, mert akkor a
-              // döntés két helyen születne.
-              onAccepted: () => context.go(AppRoutes.practiceGeneratorToday),
-              onRejected: () => context.go(AppRoutes.practiceGeneratorToday),
-            ),
+          builder: (_, state) => PlanChangeReviewRoute(
+            proposal: state.extra! as PlanRevisionProposal,
           ),
         ),
       ],
@@ -652,8 +617,37 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
         GoRoute(
           path: AppRoutes.songTrainerResult,
+          // WP-H1 — az eredmény-képernyő KIZÁRÓLAG `extra`-ból dolgozik, ezért
+          // egy mélylink (vagy egy elveszett `extra`) eddig cast-hibával
+          // omlott össze. A `librarySession` mintája szerint inkább a
+          // könyvtárra esik vissza.
+          redirect: (_, state) => state.extra is SongTrainerResult
+              ? null
+              : AppRoutes.songTrainerLibrary,
           builder: (_, state) =>
               SongResultScreen(result: state.extra! as SongTrainerResult),
+        ),
+        // Setlist V2 (WP-H1). A lista a `songTrainerV2Enabled` mögött a
+        // legacy setlist-lista utódja (E03 §25, Kör 22); a legacy
+        // `/setlists` és `/songs/setlists` érintetlenül a legacy képernyőt
+        // rendereli (A5 legacy-route szabály).
+        GoRoute(
+          path: AppRoutes.songTrainerSetlists,
+          builder: (_, _) =>
+              Consumer(builder: (_, ref, _) => buildSetlistListScreenV2(ref)),
+        ),
+        GoRoute(
+          path: AppRoutes.songTrainerSetlistSession,
+          redirect: (_, state) => state.extra is SetlistSessionArgs
+              ? null
+              : AppRoutes.songTrainerSetlists,
+          builder: (_, state) => Consumer(
+            builder: (context, ref, _) => buildSetlistSessionScreen(
+              context,
+              ref,
+              state.extra! as SetlistSessionArgs,
+            ),
+          ),
         ),
       ],
       // E13-R08 (D14 fix round) — `/practice/live` moved OUT of the shell
@@ -857,6 +851,58 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRoute(
           path: AppRoutes.tutorData,
           builder: (_, _) => const TutorDataScreen(),
+        ),
+        // A gyakorlásterv-előnézet a tervezési folyamat LÉPÉSE: a lefordított
+        // tervet (draft + fordítási kontextus) a hívó adja át `extra`-ként.
+        // `extra` nélkül nincs mit mutatni — ilyenkor a tutor kezdőlapjára
+        // esünk vissza, nem rajzolunk kitalált tervet. Ugyanaz a redirect-őr,
+        // amit a tervező előnézete használ.
+        GoRoute(
+          path: AppRoutes.tutorPracticePlanPreview,
+          redirect: (_, state) => state.extra is TutorPracticePlanPreviewArgs
+              ? null
+              : AppRoutes.tutorHome,
+          builder: (_, state) => Consumer(
+            builder: (context, ref, _) {
+              final args = state.extra! as TutorPracticePlanPreviewArgs;
+              final l10n = AppLocalizations.of(context);
+              return PracticePlanPreviewScreen(
+                draft: args.draft,
+                validationContext: args.validationContext,
+                // MÉRVE (WP-H2): a mentésnek NINCS fogadó oldala. A
+                // `practice_generator` `AdaptivePracticePlan` dokumentuma
+                // generálási provenance-t, `PracticeGoal`-okat és
+                // `ExercisePrescription`-öket kér, amelyeket a tutor
+                // draftja nem hordoz, és tutor-terv tárolója sincs a fában.
+                // Ezért a gomb KIMONDJA a hiányt, nem tesz úgy, mintha írna.
+                saveUnavailableMessage: l10n.aiTutorPlanSaveUnavailable,
+                startUnavailableMessage: practiceEnabled
+                    ? null
+                    : l10n.aiTutorPlanStartUnavailable,
+                // Az indítás VALÓDI átadás: a (szerkesztett) tervet
+                // újrafordítjuk, és az első futtatható blokkot ugyanazon a
+                // `practicePrepareSinkProvider`-en adjuk át a gyakorló-
+                // motornak, amit a Practice Setup képernyő is használ.
+                onStart: practiceEnabled
+                    ? (draft) {
+                        final outcome = ref.read(practicePlanLaunchProvider)(
+                          draft,
+                          args.compilationContext,
+                        );
+                        if (outcome == PracticePlanLaunchOutcome.launched) {
+                          context.go(AppRoutes.practiceSession);
+                          return;
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(l10n.aiTutorPlanStartNoRunnableBlock),
+                          ),
+                        );
+                      }
+                    : null,
+              );
+            },
+          ),
         ),
       ],
       if (visionEnabled && visionSetupEnabled) ...[

@@ -40,11 +40,15 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/routing/app_route.dart';
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../application/planning/compile_practice_plan_preview.dart';
+import '../practice_plan_preview_args.dart';
+import '../providers/practice_plan_providers.dart';
 
 class TutorHomeScreen extends StatelessWidget {
   const TutorHomeScreen({super.key});
@@ -79,6 +83,27 @@ class TutorHomeScreen extends StatelessWidget {
                 icon: Icons.chat,
                 label: l10n.aiTutorHomeStart,
                 onPressed: () => context.go(AppRoutes.tutorChat),
+              ),
+              // A gyakorlásterv-előnézet belépési pontja (WP-H2,
+              // 2026-09-06). A tervet a megnyomás pillanatában fordítjuk le
+              // a VALÓS adatokból (beépített gyakorlat-katalógus,
+              // gyakorlás-előzmény, aktív célok, dalos-könyv, profil), és a
+              // draft + fordítási kontextus párt `extra`-ként visszük át.
+              //
+              // A `Consumer` a gomb köré és NEM a képernyő köré kerül: az
+              // `adaptive_scaffold_test.dart` ezt a képernyőt a tutor
+              // providerek felülírása NÉLKÜL rendereli, ezért build közben
+              // nem szabad providert olvasni — a `ref.read` csak a
+              // megnyomáskor fut.
+              const SizedBox(height: SsSpacing.space3),
+              Consumer(
+                builder: (context, ref, _) => SsButton(
+                  key: const Key('tutorHomePracticePlanCta'),
+                  variant: SsButtonVariant.secondary,
+                  icon: Icons.checklist,
+                  label: l10n.aiTutorHomePracticePlanCta,
+                  onPressed: () => _openPracticePlanPreview(context, ref),
+                ),
               ),
               // A tutor három MELLÉK-képernyője (profil, adatvédelem,
               // adatok) be volt kötve a routerbe, de a szállított felületről
@@ -116,4 +141,43 @@ class TutorHomeScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The 10-minute plan of SDD Ch5 §5.4 ("Van tíz percem, ritmusban szeretnék
+/// javulni") — the only plan length the tutor offers from Home today.
+const Duration _tutorPracticePlanDuration = Duration(minutes: 10);
+
+/// Compiles a practice-plan preview from live app data and pushes it.
+///
+/// The localized title and rationale sentences are built HERE, in the
+/// presentation layer, and handed to the use case as
+/// [PracticePlanPreviewLabels] — the application layer never reads
+/// `AppLocalizations`. Which rationale sentences end up in the draft is the
+/// use case's measurement, not this screen's choice.
+Future<void> _openPracticePlanPreview(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final l10n = AppLocalizations.of(context);
+  final compilation = await ref.read(compilePracticePlanPreviewProvider)(
+    targetDuration: _tutorPracticePlanDuration,
+    labels: PracticePlanPreviewLabels(
+      title: l10n.aiTutorPlanGeneratedTitle(
+        _tutorPracticePlanDuration.inMinutes,
+      ),
+      groundedInEvidence: l10n.aiTutorPlanRationaleGrounded,
+      withoutGoals: l10n.aiTutorPlanRationaleWithoutGoals,
+      withoutHistory: l10n.aiTutorPlanRationaleWithoutHistory,
+      withoutPracticeTargets: l10n.aiTutorPlanRationaleWithoutTargets,
+    ),
+  );
+  if (!context.mounted) return;
+  context.push(
+    AppRoutes.tutorPracticePlanPreview,
+    extra: TutorPracticePlanPreviewArgs(
+      draft: compilation.draft,
+      compilationContext: compilation.compilationContext,
+      absentInputs: compilation.absentInputs,
+    ),
+  );
 }

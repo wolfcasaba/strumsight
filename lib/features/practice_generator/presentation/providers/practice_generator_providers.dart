@@ -26,6 +26,8 @@ import '../../application/controller/today_plan_controller.dart';
 import '../../application/service/generation_orchestrator.dart';
 import '../../application/usecase/delete_practice_planning_data.dart';
 import '../../application/usecase/export_practice_planning_data.dart';
+import '../../application/usecase/apply_plan_revision.dart';
+import '../../application/usecase/propose_plan_catch_up.dart';
 import '../../application/usecase/revise_practice_plan.dart';
 import '../../application/usecase/start_plan_generation.dart';
 import '../../data/local/generation_draft_repository.dart';
@@ -278,6 +280,50 @@ final exportPracticePlanningDataProvider = Provider<ExportPracticePlanningData>(
 final revisePracticePlanProvider = Provider<RevisePracticePlan>(
   (ref) => RevisePracticePlan(clock: ref.watch(practiceGeneratorClockProvider)),
 );
+
+/// PRODUCES the `PlanRevisionProposal` the change-review screen needs, from
+/// the learner's own active plan (2026-09-06). Without it the screen had no
+/// caller at all — its route redirected away because nothing ever built its
+/// mandatory `extra`.
+final proposePlanCatchUpProvider = Provider<ProposePlanCatchUp>(
+  (ref) => ProposePlanCatchUp(
+    revise: ref.watch(revisePracticePlanProvider),
+    repository: ref.watch(localPracticePlanRepositoryProvider),
+    today: ref.watch(practiceGeneratorTodayProvider),
+    generateId: ref.watch(practiceGeneratorIdGeneratorProvider),
+  ),
+);
+
+/// Persists an accepted revision through the REAL repository — never a
+/// no-op: an "accept" that does not move the active pointer is exactly the
+/// silent-no-op trap the composition root exists to prevent.
+final applyPlanRevisionProvider = Provider<ApplyPlanRevision>(
+  (ref) => ApplyPlanRevision(
+    revise: ref.watch(revisePracticePlanProvider),
+    repository: ref.watch(localPracticePlanRepositoryProvider),
+  ),
+);
+
+/// The request behind the proposal currently under review.
+///
+/// `go_router`'s `extra` carries the [PlanRevisionProposal] (that is the
+/// route's typed contract), but ACCEPTING it needs the request that produced
+/// it. Re-deriving the request on accept would risk applying a different
+/// change set from the one displayed; holding it here keeps "what was shown"
+/// and "what gets saved" the same object.
+final class PendingPlanRevision extends Notifier<RevisePracticePlanRequest?> {
+  @override
+  RevisePracticePlanRequest? build() => null;
+
+  void remember(RevisePracticePlanRequest? request) => state = request;
+
+  void clear() => state = null;
+}
+
+final pendingPlanRevisionProvider =
+    NotifierProvider<PendingPlanRevision, RevisePracticePlanRequest?>(
+      PendingPlanRevision.new,
+    );
 
 // ---------------------------------------------------------------------------
 // Screen 5/6 — TodayPlanScreen

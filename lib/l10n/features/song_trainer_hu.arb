@@ -1,0 +1,12 @@
+{
+  "@@locale": "hu",
+  "setlistV2RunSheetTitle": "Hogyan futtatod a(z) „{name}” dalcsomagot?",
+  "@setlistV2RunSheetTitle": {
+    "description": "Title of the sheet that asks for the setlist run mode (scored practice or playback-only performance).",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  }
+}

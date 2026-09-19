@@ -11,10 +11,21 @@ import '../../domain/policy/scheduling_policy.dart';
 /// A compact week projection which keeps rest, unavailable and completed days
 /// distinct from a learner-missed session.
 class WeeklyPlanScreen extends StatelessWidget {
-  const WeeklyPlanScreen({required this.plan, required this.today, super.key});
+  const WeeklyPlanScreen({
+    required this.plan,
+    required this.today,
+    this.onAdjustPlan,
+    super.key,
+  });
 
   final AdaptivePracticePlan? plan;
   final LocalDate today;
+
+  /// Same contract as `TodayPlanScreen.onAdjustPlan`: the host produces the
+  /// revision proposal and opens the change-review screen with it. The week
+  /// view is where a missed day is actually VISIBLE, so the control belongs
+  /// here too.
+  final VoidCallback? onAdjustPlan;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +50,18 @@ class WeeklyPlanScreen extends StatelessWidget {
       );
     }
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.weeklyPlanTitle)),
+      appBar: AppBar(
+        title: Text(l10n.weeklyPlanTitle),
+        actions: <Widget>[
+          if (onAdjustPlan != null)
+            IconButton(
+              key: const Key('weekly-plan-adjust'),
+              onPressed: onAdjustPlan,
+              icon: const Icon(Icons.tune_outlined),
+              tooltip: l10n.planAdjustAction,
+            ),
+        ],
+      ),
       body: ListView.separated(
         padding: const EdgeInsets.all(SsSpacing.space4),
         itemCount: plan!.days.length,

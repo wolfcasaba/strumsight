@@ -2,15 +2,25 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../domain/model/practice_generation_request.dart';
 import '../controller/plan_setup_controller.dart';
 import '../widgets/availability_editor.dart';
 import '../widgets/practice_goal_picker.dart';
 
 /// Five-step, locally resumable plan-input wizard.
 class PlanSetupScreen extends StatefulWidget {
-  const PlanSetupScreen({required this.controller, super.key});
+  const PlanSetupScreen({required this.controller, this.onGenerate, super.key});
 
   final PlanSetupController controller;
+
+  /// Runs the generation for the finished wizard request and takes the
+  /// learner onward (to the plan preview).
+  ///
+  /// Optional so the screen stays independently testable, but a `null`
+  /// callback means the wizard ENDS at step 5 with nothing generated —
+  /// which is exactly the dead end the shipped app had. The route host
+  /// always supplies it.
+  final Future<void> Function(PracticeGenerationRequest request)? onGenerate;
 
   @override
   State<PlanSetupScreen> createState() => _PlanSetupScreenState();
@@ -18,6 +28,7 @@ class PlanSetupScreen extends StatefulWidget {
 
 class _PlanSetupScreenState extends State<PlanSetupScreen> {
   late final TextEditingController _comfortController;
+  bool _isGenerating = false;
 
   @override
   void initState() {
@@ -103,32 +114,80 @@ class _PlanSetupScreenState extends State<PlanSetupScreen> {
                 ),
               ],
               const SizedBox(height: SsSpacing.space6),
-              Row(
-                children: [
-                  if (state.currentStep > 0)
-                    SsButton(
-                      key: const Key('plan-setup-back'),
-                      variant: SsButtonVariant.tertiary,
-                      onPressed: widget.controller.back,
-                      label: l10n.planSetupBack,
+              if (_isGenerating)
+                Row(
+                  key: const Key('plan-setup-generating'),
+                  children: [
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
-                  const Spacer(),
-                  SsButton(
-                    key: const Key('plan-setup-next'),
-                    onPressed: state.hasHardConflict
-                        ? null
-                        : () => widget.controller.next(),
-                    label: state.currentStep == 4
-                        ? l10n.planSetupFinish
-                        : l10n.planSetupNext,
-                  ),
-                ],
-              ),
+                    const SizedBox(width: SsSpacing.space3),
+                    Expanded(
+                      child: Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          l10n.planSetupGenerating,
+                          style: typography.bodyMedium.copyWith(
+                            color: colors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Row(
+                  children: [
+                    if (state.currentStep > 0)
+                      SsButton(
+                        key: const Key('plan-setup-back'),
+                        variant: SsButtonVariant.tertiary,
+                        onPressed: widget.controller.back,
+                        label: l10n.planSetupBack,
+                      ),
+                    const Spacer(),
+                    SsButton(
+                      key: const Key('plan-setup-next'),
+                      onPressed: state.hasHardConflict ? null : _advance,
+                      label: state.currentStep == 4
+                          ? l10n.planSetupFinish
+                          : l10n.planSetupNext,
+                    ),
+                  ],
+                ),
             ],
           ],
         ),
       ),
     );
+  }
+
+  /// Advances the wizard and, on the LAST step, runs the generation.
+  ///
+  /// The generation is triggered from the controller's post-`next()` state,
+  /// not from the tap: `next()` refuses to advance while a hard conflict
+  /// stands, so an unfinished request can never reach the generator.
+  Future<void> _advance() async {
+    final wasFinalStep = widget.controller.state.currentStep == 4;
+    await widget.controller.next();
+    if (!mounted || !wasFinalStep) return;
+    final state = widget.controller.state;
+    final request = state.request;
+    final onGenerate = widget.onGenerate;
+    if (onGenerate == null ||
+        request == null ||
+        state.currentStep != 5 ||
+        state.hasHardConflict) {
+      return;
+    }
+    setState(() => _isGenerating = true);
+    try {
+      await onGenerate(request);
+    } finally {
+      if (mounted) setState(() => _isGenerating = false);
+    }
   }
 
   Widget _stepBody(BuildContext context, PlanSetupState state) {

@@ -122,10 +122,20 @@ def build_community_router(settings) -> APIRouter | None:
       exercised through this factory by the tilos-zóna suite, so this
       round leaves their existing all-or-nothing-with-
       ``community_enabled`` behaviour as measured.
-    * ``community_media_enabled`` — already self-gated inside
-      ``services/media_upload_service.py`` (checked at every call site);
-      no aggregated router exposes a dedicated media-upload HTTP surface
-      yet, so there is nothing to conditionally mount here.
+    * ``community_media_enabled`` — gates the whole ``media`` router
+      (WP-H5), and gates it behind a THREE-way AND:
+      ``community_enabled AND community_writes_enabled AND
+      community_media_enabled``. The third conjunct is not decoration —
+      ``docs/security/community-threat-model.md`` §6 states it
+      ("a media upload is egy write művelet, tehát mindkettő kell"), and
+      the router's read endpoints serve bytes that only its write
+      endpoint can produce, so splitting reads from writes here would
+      register routes that can only ever 404. Like ``reactions``, this
+      is conditional registration rather than the ``_reads_only``
+      filter. The service layer's own
+      ``settings.community_media_enabled`` check
+      (``services/media_upload_service.py``, ADR 0410 D3) stays as the
+      defense-in-depth second line.
     * ``community_leaderboard_enabled`` — gates the whole ``leaderboards``
       router (an all-or-nothing competitive surface, not a read/write
       split).
@@ -160,6 +170,7 @@ def build_community_router(settings) -> APIRouter | None:
     from .routers.comments import router as comments_router
     from .routers.feed import router as feed_router
     from .routers.leaderboards import router as leaderboards_router
+    from .routers.media import router as media_router
     from .routers.moderation import router as moderation_router
     from .routers.notifications import router as notifications_router
     from .routers.posts import router as posts_router
@@ -192,6 +203,14 @@ def build_community_router(settings) -> APIRouter | None:
     aggregate.include_router(feed_router)
     if settings.community_leaderboard_enabled:
         aggregate.include_router(leaderboards_router)
+    # WP-H5 — the media surface. Three-way AND (see the docstring): the
+    # upload endpoint is a write, so `community_writes_enabled` is
+    # required alongside the dedicated media flag. With either off the
+    # routes are absent from the table (D1 registration-level gate), so
+    # a caller gets a plain 404 rather than a 403 that would confirm the
+    # feature exists behind a flag.
+    if writes_on and settings.community_media_enabled:
+        aggregate.include_router(media_router)
     aggregate.include_router(moderation_router)
     # A `notifications` NEM áll a `community_writes_enabled` kapu alatt: az
     # olvasottra-jelölés és a beállítás-írás nem tagja az ADR 0395 §6

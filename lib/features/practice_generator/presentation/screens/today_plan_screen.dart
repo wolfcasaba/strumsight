@@ -21,6 +21,7 @@ class TodayPlanScreen extends StatelessWidget {
     this.onSkip,
     this.onShorten,
     this.onPause,
+    this.onAdjustPlan,
     super.key,
   });
 
@@ -39,6 +40,14 @@ class TodayPlanScreen extends StatelessWidget {
   final ValueChanged<PracticeBlock>? onSkip;
   final VoidCallback? onShorten;
   final VoidCallback? onPause;
+
+  /// Asks the planner to revise the plan around the days the learner missed.
+  ///
+  /// The host runs the revision use case and, when the change set needs an
+  /// explicit decision, opens the change-review screen with the produced
+  /// proposal. `null` hides the control entirely — a visible button that
+  /// cannot revise anything would be a dead control.
+  final VoidCallback? onAdjustPlan;
 
   @override
   Widget build(BuildContext context) {
@@ -67,6 +76,18 @@ class TodayPlanScreen extends StatelessWidget {
         // (l. a router redirect-őrét) — egy ilyen gomb visszadobná a
         // felhasználót ugyanide, azaz halott vezérlő lenne.
         actions: <Widget>[
+          // A változás-áttekintés MOST már kap belépési pontot: a
+          // `onAdjustPlan` a hívónál ELŐÁLLÍTJA a `PlanRevisionProposal`-t,
+          // és azzal nyitja meg az útvonalat — így az `extra` megvan, és a
+          // redirect-őr nem dob vissza ide. A gomb csak akkor látszik, ha
+          // van mivel revideálni.
+          if (onAdjustPlan != null)
+            IconButton(
+              key: const Key('today-plan-adjust'),
+              onPressed: onAdjustPlan,
+              icon: const Icon(Icons.tune_outlined),
+              tooltip: l10n.planAdjustAction,
+            ),
           IconButton(
             key: const Key('today-plan-open-weekly'),
             onPressed: () => context.push(AppRoutes.practiceGeneratorWeekly),

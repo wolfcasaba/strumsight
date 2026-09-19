@@ -5,6 +5,7 @@ import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/foundation/app_result.dart';
 import '../../domain/model/adaptive_practice_plan.dart';
 import '../../domain/model/practice_generation_request.dart';
+import '../../domain/service/plan_validator.dart' show PlanValidationContext;
 import '../service/generation_orchestrator.dart';
 
 /// Assembles the [GenerationPlanInput] a completed Setup-wizard [draft]
@@ -60,4 +61,50 @@ final class StartPlanGeneration {
     }
     return orchestrator.generate(input);
   }
+
+  /// Generates the plan the learner must PREVIEW before anything is
+  /// persisted (SDD Ch8 §18: `Draft preview → User confirmation → Persist
+  /// active revision`).
+  ///
+  /// Returns the draft plan together with the [PlanValidationContext] it was
+  /// assembled against. The two belong together — the preview screen
+  /// revalidates every manual edit against exactly that context — and the
+  /// context is created inside [buildInput], so returning the plan alone
+  /// would force the caller to rebuild (and therefore re-randomise) it.
+  Future<AppResult<PreparedPracticePlanDraft>> prepareDraft(
+    PracticeGenerationRequest draft,
+  ) async {
+    final GenerationPlanInput input;
+    try {
+      input = buildInput(draft);
+    } on Object catch (error, stackTrace) {
+      return Failure<PreparedPracticePlanDraft>(
+        UnknownFailure(cause: error, stackTrace: stackTrace),
+      );
+    }
+    final result = await orchestrator.generateDraft(input);
+    return switch (result) {
+      Success<AdaptivePracticePlan>(:final value) =>
+        Success<PreparedPracticePlanDraft>(
+          PreparedPracticePlanDraft(
+            plan: value,
+            validationContext: input.validationContext,
+          ),
+        ),
+      Failure<AdaptivePracticePlan>(:final error) =>
+        Failure<PreparedPracticePlanDraft>(error),
+    };
+  }
+}
+
+/// A generated, NOT-yet-activated plan plus the context it was validated
+/// against — the exact pair the preview screen needs.
+final class PreparedPracticePlanDraft {
+  const PreparedPracticePlanDraft({
+    required this.plan,
+    required this.validationContext,
+  });
+
+  final AdaptivePracticePlan plan;
+  final PlanValidationContext validationContext;
 }
