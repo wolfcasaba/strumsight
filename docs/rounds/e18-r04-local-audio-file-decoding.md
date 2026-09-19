@@ -5,7 +5,7 @@
 - **Kör-azonosító:** `E18-R04`
 - **Branch:** `<motor>/e18-r04-local-audio-file-decoding`
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0538` — a szám ELŐZETES; a foglaló a kör indulásakor adja a véglegeset.
+- **Előre kiosztott ADR:** `ADR 0603` — a szám ELŐZETES; a foglaló a kör indulásakor adja a véglegeset.
 - **Fejezet-terv:** [`docs/plans/chapter-18-composer-and-chords-from-audio.md`](../plans/chapter-18-composer-and-chords-from-audio.md)
 
 **Visszakeresett előzmény:** [ADR 0536](../adr/0536-chords-from-audio-source-boundary.md)
@@ -30,7 +30,7 @@ schema_version = 1
 risk = "normal"
 allowed_paths = [
   "docs/research/chapter-18-local-audio-decoding.md",
-  "docs/adr/0538-local-audio-decoding-choice.md",
+  "docs/adr/0603-local-audio-decoding-choice.md",
   "tool/audio_decode_spike/pubspec.yaml",
   "tool/audio_decode_spike/bin/run_spike.dart",
   "tool/audio_decode_spike/lib/audio_decode_spike.dart",
@@ -68,7 +68,7 @@ Lezáró jelzés nélkül a kör bukott futásnak számít.
 
 **Mért döntés** arról, hogyan dekódoljunk MP3/M4A(AAC)/OGG fájlt az eszközön a
 `FileAnalysisInput` útjához — ízlés helyett méret, licenc, karbantartottság és
-kompatibilitás alapján. A kör kimenete **ADR 0538 + kutatási jegyzőkönyv +
+kompatibilitás alapján. A kör kimenete **ADR 0603 + kutatási jegyzőkönyv +
 futtatható spike**; production kód NEM születik.
 
 ## 2. Jelenlegi állapot — mért tények (`main @ 1ae9e55`)
@@ -114,14 +114,14 @@ failure-kódok, milyen korlátok).
 | Útvonal | Miért |
 |---|---|
 | `docs/research/chapter-18-local-audio-decoding.md` | a jegyzőkönyv: opciók × kritériumok, mért cellákkal |
-| `docs/adr/0538-local-audio-decoding-choice.md` | a döntés |
+| `docs/adr/0603-local-audio-decoding-choice.md` | a döntés |
 | `tool/audio_decode_spike/**` (4 fájl) | különálló Dart csomag; a fő fa pubspecje érintetlen |
 | `test/fixtures/audio_decode/README.md` | mit kell a HELYI (nem commitolt) próbafájlnak tartalmaznia |
 | `docs/rounds/e18-r04-local-audio-file-decoding.md` | a brief saját státusz- és §0.0-revíziója |
 
 **Tilos zóna:** `lib/**`, `pubspec.yaml`, `pubspec.lock`, `android/**`, `ios/**`.
 
-## 5. Kötött döntések (a kör MENETÉRE, ADR 0538)
+## 5. Kötött döntések (a kör MENETÉRE, ADR 0603)
 
 ### D1 — Legalább három opció, azonos kritériumokkal
 
@@ -203,7 +203,7 @@ open_decisions:
 | A3 | A spike LEGALÁBB egy valódi helyi fájlt dekódol, és kiírja a minta-számot / frekvenciát / csatornaszámot | a `run_spike.dart` TÉNYLEGES kimenete a §10-ben |
 | A4 | A méret-döntés a 6.1 küszöb-mátrix szerint dől el | az ADR döntési szakasza |
 | A5 | A fő fa függőségi gráfja VÁLTOZATLAN: a diff nem érinti a `pubspec.yaml`/`pubspec.lock` fájlt, és a win32 major nem mozdul | `git diff --stat` + a §7 gate |
-| A6 | Az ADR megnevezi a KÖVETKEZŐ kör bekötési seamjét, a failure-kódokat és a korlátokat | ADR 0538 |
+| A6 | Az ADR megnevezi a KÖVETKEZŐ kör bekötési seamjét, a failure-kódokat és a korlátokat | ADR 0603 |
 | A7 | A repóba NEM kerül hangfájl | `git diff --stat` (nulla bináris) |
 
 **NEM elfogadható gyengítés:**
@@ -263,7 +263,7 @@ gh workflow run build-apk.yml --ref <kör-branch>
 3. Licenc- és karbantartottság-cellák, forrás-URL-lel (A2).
 4. A spike megírása és VALÓDI fájlon futtatása (D3, A3).
 5. Méret-mérés a CI-ban, a 6.1 mátrix kitöltése.
-6. ADR 0538: döntés + a következő kör bekötési vázlata (D5, A6).
+6. ADR 0603: döntés + a következő kör bekötési vázlata (D5, A6).
 7. `tools/round-gate.sh` csonkítatlan kimenettel.
 
 ## 9. Kockázatok

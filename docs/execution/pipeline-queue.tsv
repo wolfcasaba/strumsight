@@ -851,6 +851,6 @@ E17-R15	docs/rounds/e17-r15-live-signal-quality-reasons.md	sonnet-impl	0586	done
 # `claude/song-editor-chord-audio-tbkokz` ágon (ADR 0585, brief §0). A sor `hold`:
 # a pipeline NEM dispatch-eli; CI + review + merge után → `done`.
 E18-R01	docs/rounds/e18-r01-song-editor-chord-audition.md	sonnet-impl	0585	hold
-E18-R02	docs/rounds/e18-r02-recording-to-song-draft.md	sonnet-impl	0537	hold
+E18-R02	docs/rounds/e18-r02-recording-to-song-draft.md	sonnet-impl	0602	hold
 E18-R03	docs/rounds/e18-r03-listen-mode-external-source.md	sonnet-impl	0536	hold
-E18-R04	docs/rounds/e18-r04-local-audio-file-decoding.md	sonnet-impl	0538	hold
+E18-R04	docs/rounds/e18-r04-local-audio-file-decoding.md	sonnet-impl	0603	hold

@@ -5,7 +5,7 @@
 - **Kör-azonosító:** `E18-R05`
 - **Branch:** `<motor>/e18-r05-decoder-attack-window`
 - **Brief szerzője:** Claude (Fable) · Implementáció: Codex vagy M3
-- **Előre kiosztott ADR:** `ADR 0540` — a szám ELŐZETES; a foglaló a kör indulásakor adja a véglegeset.
+- **Előre kiosztott ADR:** `ADR 0604` — a szám ELŐZETES; a foglaló a kör indulásakor adja a véglegeset.
 - **Előzmény:** [ADR 0539](../adr/0539-live-recognition-stability-stabilized-hero-and-onset-guard.md) D4 (a dekóder attack-ablaka NEM változott az E18-R01 javító körben), a kutatási jegyzet §4 protokollja: [`docs/research/chord-recognition-stability-and-engines-2026-09.md`](../research/chord-recognition-stability-and-engines-2026-09.md), a DSP-igazság: [`docs/rag/chunks/016-pitch-chord-sota.md`](../rag/chunks/016-pitch-chord-sota.md) „AS BUILT round 138" + az E18-R01 megjegyzés.
 
 **Visszakeresett előzmény:** a tünet („leütött C → egy keretre más akkord → vissza
@@ -25,7 +25,7 @@ alapmérés** nélkül (§7 „0. lépés"). Két kimenete lehet:
 
 1. Az E18-R01 döntési-rétegű javításai után a tünet a Live-on **már nem
    látható** (`flipRate` ≈ 0 ismételt pengetésnél) → a kör **lezárul kód
-   nélkül**: az ADR 0540 rögzíti a mért alapértéket és azt, hogy a
+   nélkül**: az ADR 0604 rögzíti a mért alapértéket és azt, hogy a
    dekóder-oldali eltolás NEM szükséges. Ez is teljes értékű kimenet.
 2. A tünet a stabilizált hős MÖGÖTT (a nyers `frame.current`-ben, a
    diagnosztika-panelen) továbbra is mérhető → a kör a §5 szerint megy tovább.
@@ -44,7 +44,7 @@ allowed_paths = [
   "test/fixtures/audio/live_repeated_strums/README.md",
   "test/fixtures/audio/live_repeated_strums/manifest.json",
   "docs/rag/chunks/016-pitch-chord-sota.md",
-  "docs/adr/0540-decoder-onset-window-on-sustain.md",
+  "docs/adr/0604-decoder-onset-window-on-sustain.md",
   "docs/research/chord-recognition-stability-and-engines-2026-09.md",
   "docs/rounds/e18-r05-decoder-attack-window-real-guitar-ab.md",
 ]
@@ -79,7 +79,7 @@ Lezáró jelzés nélkül a kör bukott futásnak számít.
 tolni az attack-tranziensről a korai sustain-re — és ha igen, az eltolt
 ablak MÉRTEN kevesebb téves váltást ad ismételt pengetésnél, miközben a
 valódi akkordváltás megerősítési késése nem romlik 450 ms fölé. A kimenet:
-**ADR 0540 + fixture-alapú A/B + randomizált property + valós gitáros
+**ADR 0604 + fixture-alapú A/B + randomizált property + valós gitáros
 jegyzőkönyv**; a konstans CSAK a hármas mérce zöldjével mozdul.
 
 ## 2. Jelenlegi állapot — mért tények (`3521c210`)
@@ -129,7 +129,7 @@ commitban · a valós gitáros jegyzőkönyv a §10-ben.
 | `test/property/viterbi_onset_window_property_test.dart` | ÚJ — randomizált property (`PROPERTY_SEED`), A4 |
 | `test/fixtures/audio/live_repeated_strums/README.md`, `manifest.json` | a fixture leírása és a mért címkék; a WAV-ok NEM commitolódnak (D4) |
 | `docs/rag/chunks/016-pitch-chord-sota.md` | a DSP-igazság — ugyanabban a commitban, mint a konstans |
-| `docs/adr/0540-decoder-onset-window-on-sustain.md` | a döntés (akkor is, ha „nem változtatunk") |
+| `docs/adr/0604-decoder-onset-window-on-sustain.md` | a döntés (akkor is, ha „nem változtatunk") |
 | `docs/research/chord-recognition-stability-and-engines-2026-09.md` | §4 mért eredményei |
 | `docs/rounds/e18-r05-decoder-attack-window-real-guitar-ab.md` | státusz és §0.0-revízió |
 
@@ -144,7 +144,7 @@ commitban · a valós gitáros jegyzőkönyv a §10-ben.
 > **KÖTELEZŐ pre-flight:** `tools/gateguard-scan.py --brief docs/rounds/e18-r05-decoder-attack-window-real-guitar-ab.md`
 > (0 = indítható). A lista nem tartalmaz védett útvonalat.
 
-## 5. Kötött döntések (ADR 0540)
+## 5. Kötött döntések (ADR 0604)
 
 ### D1 — Egy változó mozdul: az onset-boost ablak ALAKJA
 
@@ -298,7 +298,7 @@ protokoll, mint a 0. lépésben; A és B nyers `flipRate`-je egymás mellett a
 3. A/B keret: a dekóder profil-paraméterezése (D1) TESZT-oldali injektálással; A és B fixture-cellák (A1–A3).
 4. Property (A4) `PROPERTY_SEED`-del; a §7.1 vacuous-őr.
 5. Rács a §6.1 szerint, OD-02 kiválasztás; konstans + RAG-chunk EGY commitban (A5).
-6. ADR 0540 (akkor is, ha A marad).
+6. ADR 0604 (akkor is, ha A marad).
 7. `tools/round-gate.sh` csonkítatlan kimenettel; CI dispatch az orchestrátortól.
 8. §7 „5." lépés — valós gitáros A/B, §10 jegyzőkönyv (A6).
 

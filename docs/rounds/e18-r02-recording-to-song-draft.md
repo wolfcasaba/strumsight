@@ -5,7 +5,7 @@
 - **Kör-azonosító:** `E18-R02`
 - **Branch:** `<motor>/e18-r02-recording-to-song-draft`
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0537` — a szám ELŐZETES; a foglaló a kör indulásakor adja a véglegeset.
+- **Előre kiosztott ADR:** `ADR 0602` — a szám ELŐZETES; a foglaló a kör indulásakor adja a véglegeset.
 - **Fejezet-terv:** [`docs/plans/chapter-18-composer-and-chords-from-audio.md`](../plans/chapter-18-composer-and-chords-from-audio.md)
 
 **Visszakeresett előzmény:** [ADR 0284](../adr/0284-import-preview-is-not-a-commit.md) D1
@@ -45,7 +45,7 @@ allowed_paths = [
   "test/core/screen_size_guard_test.dart",
   "test/features/songs/song_builder_audition_test.dart",
   "test/features/songs/song_tap_tempo_test.dart",
-  "docs/adr/0537-recording-to-song-draft-quantisation.md",
+  "docs/adr/0602-recording-to-song-draft-quantisation.md",
   "docs/rounds/e18-r02-recording-to-song-draft.md",
 ]
 native_gate = false
@@ -147,7 +147,7 @@ Csak az `ai-router` blokk listája módosítható. Bármi más → MEGÁLLÁS é
 | `lib/l10n/base/app_{en,hu}.arb` | az ÚJ kulcsok forrás-szegmense |
 | `lib/l10n/app_{en,hu}.arb` | a `tool/gen_l10n_segments.dart` által GENERÁLT aggregátum — kézzel ne írd, regeneráld |
 | `test/...` | a kör saját mércéi (3 új fájl) + a pin-őrök (lásd alább) |
-| `docs/adr/0537-...` | a §5 döntéseinek rögzítése |
+| `docs/adr/0602-...` | a §5 döntéseinek rögzítése |
 
 **A pin-őrök jogosultsága (S11):** a fenti listán szereplő, a briefen KÍVÜL élő
 pin-tesztek (`test/app/navigation/**`, `test/app/offline_network_guard_test.dart`,
@@ -164,7 +164,7 @@ TILOS** — ha egy cella ezen túl válik pirossá, az a kör BLOKKOLÓ lelete.
 **Tilos zóna:** `lib/features/analyze/engine/**`, `lib/features/audio_analysis/**`,
 `lib/core/audio/**`, `lib/features/song_trainer/**`, `lib/app/routing/**`.
 
-## 5. Kötött architekturális döntések (ADR 0537)
+## 5. Kötött architekturális döntések (ADR 0602)
 
 ### D1 — A vázlatépítő TISZTA függvény
 
@@ -337,7 +337,7 @@ dart run tool/gen_l10n_segments.dart
 5. Az Analyze eredmény-sáv művelete + ARB-kulcsok + aggregátum-regenerálás.
 6. A §6.4 falszifikációs próba lefuttatása és dokumentálása.
 7. `tools/round-gate.sh` csonkítatlan kimenettel.
-8. ADR 0537 megírása a §5 döntéseiből.
+8. ADR 0602 megírása a §5 döntéseiből.
 
 ## 9. Kockázatok
 
