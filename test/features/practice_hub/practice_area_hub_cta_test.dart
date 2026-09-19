@@ -158,6 +158,12 @@ void main() {
         overrides: [_configOverride(practiceGeneratorEnabled: true)],
       );
 
+      // A hub az E18-vonal három új gyorseszközével hosszabb lett, így a
+      // tervező-belépő a 600 px-es teszt-felület alá esik: a koppintás
+      // enélkül elvétené (warnIfMissed), és a cella a görgethetőséget
+      // mérné a navigáció helyett.
+      await tester.ensureVisible(find.byKey(_planBuilderKey));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(_planBuilderKey));
       await tester.pumpAndSettle();
 
@@ -171,6 +177,12 @@ void main() {
         overrides: [_configOverride(practiceGeneratorEnabled: true)],
       );
 
+      // A hub az E18-vonal három új gyorseszközével hosszabb lett, így a
+      // tervező-belépő a 600 px-es teszt-felület alá esik: a koppintás
+      // enélkül elvétené (warnIfMissed), és a cella a görgethetőséget
+      // mérné a navigáció helyett.
+      await tester.ensureVisible(find.byKey(_todayPlanKey));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(_todayPlanKey));
       await tester.pumpAndSettle();
 

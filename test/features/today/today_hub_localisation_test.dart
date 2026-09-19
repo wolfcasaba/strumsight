@@ -106,7 +106,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byType(TextButton));
+      // Az E18-vonal két új kártyája (pengetés-kihívás, adatvédelmi ígéret)
+      // a Vision-kártyát a teszt-felület alá tolja, ezért előbb láthatóvá
+      // kell tenni — enélkül a koppintás elvétené (warnIfMissed).
+      final visionCta = find.byType(TextButton);
+      await tester.ensureVisible(visionCta);
+      await tester.pumpAndSettle();
+      await tester.tap(visionCta);
       await tester.pumpAndSettle();
 
       expect(find.text('vision-setup-probe'), findsOneWidget);

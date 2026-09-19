@@ -155,9 +155,17 @@ void main() {
       router.go(AppRoutes.practiceHub);
       await tester.pumpAndSettle();
 
-      await tester.tap(
-        find.widgetWithText(OutlinedButton, l10n.chordLibraryTitle),
+      // A gyorseszköz-sor az E18-vonal három új belépőjével a teszt-felület
+      // alá nyúlik, ezért előbb láthatóvá kell tenni — enélkül a koppintás
+      // elvétené a gombot (warnIfMissed), és a cella a görgethetőséget mérné
+      // a vissza-navigáció helyett.
+      final chordLibrary = find.widgetWithText(
+        OutlinedButton,
+        l10n.chordLibraryTitle,
       );
+      await tester.ensureVisible(chordLibrary);
+      await tester.pumpAndSettle();
+      await tester.tap(chordLibrary);
       await tester.pumpAndSettle();
       expect(find.byType(ChordLibraryScreen), findsOneWidget);
 
