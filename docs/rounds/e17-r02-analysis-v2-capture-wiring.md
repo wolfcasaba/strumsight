@@ -484,3 +484,16 @@ fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
 ```
 
 ## 11. Review — a Claude tölti ki
+
+Teljes jelentés: [`docs/reviews/e17-r02-review.md`](../reviews/e17-r02-review.md).
+Read-only review izolált `/tmp` klónban (`--no-local`), eldobható valódi-sértés
+próbákkal, a `sdd-round-review` skill szerint.
+
+| Kör | Verdikt | Leletek |
+|---|---|---|
+| 1. (`387ff542`) | CHANGES REQUESTED | **MAJOR-1** — az A2 cella többet ígért, mint amit mért: a review saját próbája (`ref.watch` → `ref.read` a processing-route-builderben, ami a képernyőt az első build állapotán ragasztja) mind a 7 cellán ZÖLDEN ment át. **MINOR-1** — eldobott Future `unawaited` nélkül. NOTE-1/2 rögzítve. |
+| 2. (`19ece76b`, javító kör, ugyanaz a motor) | **APPROVED** | MAJOR-1 ZÁRVA: az A2 a `cancel()` után a `AnalysisCancelled` törzs TARTALMÁT is méri; a review a `watch` → `read` próbát megismételte → **`+4 -1`, az A2 PIROS**, rontás nélkül `+7 zöld`. MINOR-1 ZÁRVA. |
+
+A kör acceptance-e így mind a hét cellán MÉRT, és mindegyikhez tartozik egy
+bizonyítottan pirosra váltó rontás (a brief §6.1 két próbája + a review
+harmadik, `watch` → `read` próbája).
