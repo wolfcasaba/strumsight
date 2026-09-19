@@ -340,31 +340,37 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
           : _TunerFeedback(state: state, cents: displayCents, l10n: l10n),
       // Which string is being tuned (round 84): the selected tuning's chips;
       // the nearest one lights copper, green once in tune.
-      timeline: _StringChips(
-        strings: tuning.strings,
-        active:
-            pinned ??
-            (reading.hasSignal
-                ? GuitarStrings.nearest(
-                    reading.frequencyHz,
-                    a4: a4,
-                    strings: tuning.strings,
-                  )
-                : null),
-        pinned: pinned,
-        inTune: displayInTune,
-        onTap: (s) => ref.read(pinnedStringProvider.notifier).toggle(s),
-      ),
-      // Tune by EAR (round 94): with a target pinned, sound its reference
-      // tone. Works with zero mic signal — that's the point.
-      bottomAction: Column(
+      timeline: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          _StringChips(
+            strings: tuning.strings,
+            active:
+                pinned ??
+                (reading.hasSignal
+                    ? GuitarStrings.nearest(
+                        reading.frequencyHz,
+                        a4: a4,
+                        strings: tuning.strings,
+                      )
+                    : null),
+            pinned: pinned,
+            inTune: displayInTune,
+            onTap: (s) => ref.read(pinnedStringProvider.notifier).toggle(s),
+          ),
           // The chain hand-off: tuning is step 1, and the ONLY thing that
           // ends it is the player saying so. Nothing here guesses that six
           // strings are in tune — an in-tune lock on one string is not
           // evidence about the other five (Ch14 §9).
+          //
+          // It lives in the SCROLLING region, not in the pinned bottom slot:
+          // that slot exists so Pause/Finish can never fall below a fold
+          // (ADR 0276 D4), and a hand-off CTA growing inside it pushed the
+          // whole stage 24 px past a 360x640 viewport at `textScale 2.0` in
+          // Hungarian (measured, `e14_r39_narrow_viewport_matrix_test.dart`).
+          // Rendered last, it still sits directly above the transport.
           if (inTuneStep && tenMinuteFlow != null) ...[
+            const SizedBox(height: 12),
             Text(
               l10n.tunerTenMinuteStepLabel(
                 tenMinuteFlow.stepNumber,
@@ -382,8 +388,14 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
               onPressed: () => _continueTenMinuteFlow(context),
               child: Text(l10n.tunerTenMinuteContinueCta),
             ),
-            const SizedBox(height: 12),
           ],
+        ],
+      ),
+      // Tune by EAR (round 94): with a target pinned, sound its reference
+      // tone. Works with zero mic signal — that's the point.
+      bottomAction: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
           if (pinned != null)
             IconButton(
               tooltip: l10n.tunerPlayReference,

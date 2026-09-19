@@ -390,16 +390,41 @@ def _resolve_production_default(key: str, raw_value: str, *, path: Path) -> bool
     )
 
 
+# A capability flag is a `final bool` (or `final bool?`) field — the SAME
+# parse `tool/check_feature_flags.dart` and `test/app/config/
+# feature_flags_test.dart` perform over this file. E14-R24/R33 (ADR 0537,
+# ADR 0541) added two NON-bool fields to the same constructor
+# (`strumModelRolloutStage`, `chordModelRolloutStage`: a
+# `RecognitionRolloutStage` enum, with its own rollout rows), and a rollout
+# STAGE has no "production default true/false" to classify. They are
+# therefore not capabilities for this reader, and are skipped BEFORE the
+# fail-closed shape check — which stays fail-closed for every bool field.
+_BOOL_FIELD_DECLARATION = re.compile(
+    r"^\s*final bool\??\s+(?P<key>[a-zA-Z_][a-zA-Z0-9_]*)\s*(?:;|=)", re.M
+)
+
+
+def _bool_field_names(text: str) -> set[str]:
+    return {match.group("key") for match in _BOOL_FIELD_DECLARATION.finditer(text)}
+
+
 def load_feature_flags_production_defaults(path: Path) -> dict[str, bool | None]:
     try:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError as error:
         raise VerifyError(f"feature-flags source not found: {path}") from error
 
+    bool_fields = _bool_field_names(text)
+    if not bool_fields:
+        raise VerifyError(
+            f"{path}: no `final bool` field declarations found — the capability "
+            "parse would silently classify nothing"
+        )
     fields = _extract_for_environment_field_assignments(text, path=path)
     return {
         key: _resolve_production_default(key, raw_value, path=path)
         for key, raw_value in fields.items()
+        if key in bool_fields
     }
 
 

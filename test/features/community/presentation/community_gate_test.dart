@@ -194,9 +194,13 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      // Audit H22 — the AppBar names the area, so the state title is
-      // rendered exactly once (in the body); the CTA is unique too.
-      expect(find.text('Create your Community profile'), findsOneWidget);
+      // Audit H22 — every OTHER state got a dedicated short AppBar string
+      // so the header names the area instead of echoing the body. The
+      // `profileMissing` state is the documented exception
+      // (`_appBarTitle`): it is the one state whose old title was TRUE, and
+      // it is pinned by the `e13_r33_gate_compact` golden, so the title
+      // legitimately appears in BOTH the bar and the body here.
+      expect(find.text('Create your Community profile'), findsNWidgets(2));
       expect(find.text('Create profile'), findsOneWidget);
     });
 
@@ -212,12 +216,20 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // The header names the AREA/STATE with its own DEDICATED short string
+      // (`_appBarTitle`), never by echoing the body headline: the logged-out
+      // gate has `communityGateAppBarLoggedOutTitle` for exactly this.
       expect(
         find.descendant(
           of: find.byType(AppBar),
-          matching: find.text(l10n.communityGateAppBarTitle),
+          matching: find.text(l10n.communityGateAppBarLoggedOutTitle),
         ),
         findsOneWidget,
+      );
+      expect(
+        l10n.communityGateAppBarLoggedOutTitle,
+        isNot(l10n.communityGateLoggedOutTitle),
+        reason: 'a dedicated bar string, not the body headline',
       );
       expect(find.text(l10n.communityGateLoggedOutTitle), findsOneWidget);
       expect(

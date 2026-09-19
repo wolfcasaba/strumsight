@@ -502,7 +502,14 @@ void main() {
       addTearDown(tester.view.platformDispatcher.clearTextScaleFactorTestValue);
 
       await pumpSetup(tester);
-      final profileId = find.text(ScoringProfile.legacyLearnParity.id);
+      // E14 audit H14/U3 removed the CAUSE rather than capping it: the
+      // readout renders a localized phrase, not the raw slug, and a phrase
+      // is allowed to wrap inside a `Flexible`. The cell keeps measuring the
+      // same thing — the value stays inside the content column and the form
+      // does not overflow at 200 % — against the copy that actually ships.
+      final profileId = find.text(
+        practiceScoringProfileLabel(l10n(), ScoringProfile.legacyLearnParity),
+      );
       await tester.scrollUntilVisible(
         profileId,
         300,
@@ -524,8 +531,8 @@ void main() {
         tester.renderObject<RenderBox>(profileId).size.width,
         lessThanOrEqualTo(_phoneContentWidth),
         reason:
-            'the profile id must stay inside the content column and '
-            'ellipsise instead of pushing the Row past its constraints',
+            'the profile value must stay inside the content column and '
+            'wrap instead of pushing the Row past its constraints',
       );
     },
   );

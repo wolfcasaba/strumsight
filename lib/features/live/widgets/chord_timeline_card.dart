@@ -208,15 +208,23 @@ class _ConfidenceBar extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          width: 96,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: confidence.clamp(0.0, 1.0),
-              minHeight: 6,
-              backgroundColor: track,
-              valueColor: AlwaysStoppedAnimation<Color>(color),
+        // The RAMP is decoration; the percentage is the information. At
+        // `textScale 2.0` the number alone takes ~79 px of the card's 178 px
+        // row, so a hard 96 px bar overflowed it by 4.8 px (measured,
+        // `live_stage_spacing_test.dart`). `Flexible` keeps the 96 px
+        // natural width whenever it fits and yields it — never the number —
+        // when it does not.
+        Flexible(
+          child: SizedBox(
+            width: 96,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: confidence.clamp(0.0, 1.0),
+                minHeight: 6,
+                backgroundColor: track,
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+              ),
             ),
           ),
         ),

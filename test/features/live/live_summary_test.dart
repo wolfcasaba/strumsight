@@ -19,6 +19,7 @@ import 'package:strumsight/features/today/screens/today_hub_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/main.dart';
 
+import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
 import '../../support/preference_store.dart';
 
@@ -35,6 +36,11 @@ Future<_LiveHarness> _pumpLive(WidgetTester tester) async {
   final container = ProviderContainer(
     overrides: [
       ...preferenceOverrides(),
+      // E14: the transport is fail-closed on the microphone permission
+      // (`micGranted` defaults to FALSE until the platform answers, ADR
+      // 0547 / the permission-truthfulness cells), so a Live harness has to
+      // say what the permission IS — the real gateway has no platform here.
+      ...fakeAudioOverrides(),
       strumEngineProvider.overrideWithValue(engine),
     ],
   );

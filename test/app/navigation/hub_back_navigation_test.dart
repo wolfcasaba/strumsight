@@ -270,6 +270,19 @@ const Map<String, Set<String>> _goExceptions = <String, Set<String>>{
   // `PopScope` confirmation owns the exit; it is not a "menu item".
   'lib/features/practice/presentation/screens/practice_setup_screen.dart':
       <String>{'AppRoutes.practiceSession'},
+  // E14-R36 (ADR 0546) — the ten-minute chain. A chain STEP is a primary
+  // destination, not a menu item: the chain owns the whole session and its
+  // own "Leave the chain" action is the exit, so each step REPLACES the
+  // previous one. Pushing instead would stack tune→play→review under each
+  // other and make back-stepping re-enter a step the chain already advanced
+  // past. `primaryCtaLocation` is the Today hub's single primary CTA, i.e.
+  // the hub's own primary destination, which is what `go` is for.
+  'lib/features/today/screens/today_hub_screen.dart': <String>{
+    'primaryCtaLocation',
+    'location',
+  },
+  // The same chain, handed off from the Tuner's tune step.
+  'lib/features/tuner/screens/tuner_screen.dart': <String>{'location'},
   // The challenge's exit, the Live Stage's `entryLocation` pattern exactly:
   // `_leave` pops when it CAN (`context.canPop()` guards the line above it),
   // and this branch only fires with an empty stack — where a push would

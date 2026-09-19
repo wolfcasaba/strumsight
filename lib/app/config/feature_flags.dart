@@ -462,6 +462,18 @@ final class FeatureFlags {
     recognitionRecoveryEnabled: true,
     // OFF by design — cost without a visible surface (ADR 0271).
     recognitionShadowModeEnabled: recognitionShadowModeEnabled,
+    // E14 (ADR 0537/0541/0542/0552): the recognition shadow/preprocessing
+    // bands and the beta-telemetry consent gate are rollout surfaces with
+    // their own gates — neither overlay opens them, so they pass through
+    // UNTOUCHED. Leaving them out made the copy fall back to the
+    // constructor's `false`/`off`, silently dropping the resolved value.
+    recognitionChordShadowModeEnabled: recognitionChordShadowModeEnabled,
+    recognitionPreprocessingEnabled: recognitionPreprocessingEnabled,
+    recognitionFieldSessionTaggingEnabled:
+        recognitionFieldSessionTaggingEnabled,
+    betaTelemetryEnabled: betaTelemetryEnabled,
+    strumModelRolloutStage: strumModelRolloutStage,
+    chordModelRolloutStage: chordModelRolloutStage,
     newLiveStageEnabled: true,
     // Define-driven kill switch (ADR 0395) — passed through untouched.
     communityEnabled: communityEnabled,
@@ -524,6 +536,18 @@ final class FeatureFlags {
     analysisTutorIntegrationEnabled: analysisTutorIntegrationEnabled,
     recognitionRecoveryEnabled: recognitionRecoveryEnabled,
     recognitionShadowModeEnabled: recognitionShadowModeEnabled,
+    // E14 (ADR 0537/0541/0542/0552): the recognition shadow/preprocessing
+    // bands and the beta-telemetry consent gate are rollout surfaces with
+    // their own gates — neither overlay opens them, so they pass through
+    // UNTOUCHED. Leaving them out made the copy fall back to the
+    // constructor's `false`/`off`, silently dropping the resolved value.
+    recognitionChordShadowModeEnabled: recognitionChordShadowModeEnabled,
+    recognitionPreprocessingEnabled: recognitionPreprocessingEnabled,
+    recognitionFieldSessionTaggingEnabled:
+        recognitionFieldSessionTaggingEnabled,
+    betaTelemetryEnabled: betaTelemetryEnabled,
+    strumModelRolloutStage: strumModelRolloutStage,
+    chordModelRolloutStage: chordModelRolloutStage,
     newLiveStageEnabled: newLiveStageEnabled,
     communityEnabled: communityEnabled,
     communityWritesEnabled: communityWritesEnabled,

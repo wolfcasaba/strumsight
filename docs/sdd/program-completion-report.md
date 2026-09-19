@@ -105,10 +105,10 @@ szóval.
 | Ch11 | Epic 10: Offline AI | E10 | 0 | 0 | 0 | 32 | nyitva (hold: a TELJES sáv, mind a 32 kör) | — |
 | Ch12 | Release Roadmap, Sprint Planning & Final Integration | E12 | 36 | 0 | 0 | 0 | kör-munka: 36/36 queue-sor done (a záró E12-R36-tal együtt); **EMBERI KAPUK NYITOTT** (ld. §5) — a sáv kör-munkája teljes, a KIADÁS nem | `docs/release/program-baseline.md` |
 | Ch13 | UI/UX Design System & Screen Specification | E13 | 36 | 0 | 0 | 0 | queue-szinten lezárva (36/36 done) | — |
-| Ch14 | Recognition Accuracy & Useful UI Recovery | E14 | 37 | 0 | 0 | 5 | nyitva (hold: R20/R22/R29 tanítóadat- és eszközfüggő, R35 GA-döntés, R40 field study emberekkel; a §7 kapuk NEM mértek zöldre — docs/release/ch14-production-gate.md) | — |
+| Ch14 | Recognition Accuracy & Useful UI Recovery | E14 | 37 | 0 | 0 | 0 | nyitva (a queue-ban 37 done sor; R20/R22/R29/R35/R40 BLOCKED, ezért NEM dispatch-elhető sor, hanem komment a `pipeline-queue.tsv`-ben — a bemenetük nem létezik; a §7 kapuk NEM mértek zöldre — docs/release/ch14-production-gate.md) | — |
 | — | Ch15 UI-migráció (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E15 | 14 | 0 | 0 | 0 | nyitva (pending: R09–R13 hátravan — AI-tutor/analysis/vision/onboarding/community migráció, backend mounting, release evidence; R08 gamification merge-elve) | — |
 | — | Ch16 kompozíció és rollout (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E16 | 6 | 0 | 0 | 0 | nyitva (pending: mind az 5 kör — kompozíció, progress-projekció, capability rollout, live backend E2E, teljes-app verifikáció) | — |
-| — | Ch17 teljes bekötés (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E17 | 2 | 4 | 0 | 8 | nyitva (E17-R01 done; R02–R05 és R07 pending — a mesterséges sorosítás feloldva, PR #593; R06 és R08–R14 hold — a 23 sehonnan sem hivatkozott képernyő bekötése, `docs/plans/chapter-17-full-wiring.md`) | — |
+| — | Ch17 teljes bekötés (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E17 | 3 | 4 | 0 | 8 | nyitva (E17-R01 done; R02–R05 és R07 pending — a mesterséges sorosítás feloldva, PR #593; R06 és R08–R14 hold — a 23 sehonnan sem hivatkozott képernyő bekötése, `docs/plans/chapter-17-full-wiring.md`) | — |
 | — | Ch18 komponálás és akkordok hangból (nincs SDD-fejezetfájl a `docs/sdd/` alatt) | E18 | 0 | 0 | 0 | 4 | nyitva (hold: E18-R01 a `claude/song-editor-chord-audio-tbkokz` ágon implementálva, CI + review után merge; R02–R04 briefek előre megírva, `docs/plans/chapter-18-composer-and-chords-from-audio.md`) | — |
 | — | governance (pszeudoepic) | E99 | 18 | 0 | 0 | 2 | nyitva (hold: E99-R21, E99-R23) | — |
 

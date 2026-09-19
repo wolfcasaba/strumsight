@@ -296,7 +296,15 @@ void main() {
       );
 
       // The editor's last block scrolls fully clear of the action bar.
+      // `ListView` lays its children out lazily, and the bottom action bar
+      // shortens the viewport, so the last block has no ELEMENT until it is
+      // scrolled towards — `ensureVisible` alone would throw `No element`.
       final attach = find.byKey(const Key('song-editor-attach-backing'));
+      await tester.scrollUntilVisible(
+        attach,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.ensureVisible(attach);
       await tester.pumpAndSettle();
       expect(

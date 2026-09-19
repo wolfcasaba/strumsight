@@ -111,14 +111,31 @@ class LiveReasonSourceScope(unittest.TestCase):
             self.assertIn(test, self.text, test)
 
     def test_the_contract_consumes_the_merged_six_element_enum(self) -> None:
-        """A §5 a merge-elt szótárat fogyasztja, nem mint egy másodikat épít."""
+        """A §5 a merge-elt szótárat fogyasztja, nem mint egy másodikat épít.
+
+        2026-09-19 (integráció): az E17-R15 (ADR 0535 D1) a merge-elt hatos
+        szótár EGYETLEN `signalQuality` elemét hat TIPIZÁLT okra bontotta
+        (`signalTooQuiet`, `signalTooLoud`, `signalClipping`, `signalTooNoisy`,
+        `signalSpeechLike`, `signalUnstable`), tehát a szótár mérete 6 -> 11.
+        Amit ez a cella mér, az VÁLTOZATLAN: EGY kanonikus szótár van (nem
+        születik rivális taxonómia), a hatos mag megmaradt benne, és a §5
+        kimerítő, `default:` nélküli fogyasztást ír elő. A méret ezért
+        `>= 6`-ra és a MAG jelenlétére van kötve, nem egy befagyasztott
+        darabszámra, amit egy későbbi, ADR-rel fedezett bontás jogosan mozdít.
+        """
         merged = re.search(
             r"(?ms)^enum RecognitionRejectReason \{(.*?)^\}",
             DECISION.read_text(encoding="utf-8"),
         )
         self.assertIsNotNone(merged, "a merge-elt enum eltűnt a fából")
         elements = re.findall(r"^  ([a-z][A-Za-z]*)[,;]$", merged.group(1), re.MULTILINE)
-        self.assertEqual(len(elements), 6, elements)
+        self.assertGreaterEqual(len(elements), 6, elements)
+        # A hatos mag: az ADR 0505 D3/D6 szótárának minden eleme, a
+        # `signalQuality` kivételével, amit az ADR 0535 D1 bontott szét.
+        for core in ("lowConfidence", "unstable", "noChord", "modelUnavailable", "timeout"):
+            self.assertIn(core, elements)
+        signal = [e for e in elements if e.startswith("signal")]
+        self.assertTrue(signal, "a jel-minőségi ág eltűnt a szótárból")
 
         section = SECTION_5.search(self.text)
         self.assertIsNotNone(section, "a brief §5 szakasza nem található")

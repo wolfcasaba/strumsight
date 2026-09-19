@@ -27,7 +27,18 @@ class PracticeLogController extends Notifier<List<PracticeEntry>> {
 
   /// Append one practice moment and persist. Best-effort: an entry is never lost
   /// from this session's in-memory state even if the disk write fails.
+  ///
+  /// A DISPOSED notifier is a no-op rather than a throw. The Live screen
+  /// records the finished session from `dispose`, deferred one microtask
+  /// (Riverpod forbids writing a provider inside a widget life-cycle), so the
+  /// write lands AFTER the element is gone — and if the whole container went
+  /// with it (app teardown, or a widget test that unmounts the scope), there
+  /// is no state left to append to and no session left to persist for. This
+  /// is exactly the `ref.mounted`-after-an-async-gap check Riverpod's own
+  /// `UnmountedRefException` message prescribes; without it the deferred
+  /// write threw into whatever ran next.
   Future<void> record(PracticeEntry entry) async {
+    if (!ref.mounted) return;
     final next = [...state, entry];
     // Bound the document — drop the oldest once over the cap.
     state = next.length > _cap ? next.sublist(next.length - _cap) : next;
