@@ -1,5 +1,48 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E14-R05 KÉSZ — Live signal-quality analyzer: a Live út megmondja, MIÉRT nem megbízható a mérés — PR [#574](https://github.com/wolfcasaba/strumsight/pull/574), squash `bec95352` (2026-09-04)
+
+A Live oldalon eddig EGYETLEN minőségi jel volt, egy skálázott RMS
+(`live_pipeline.dart:277`). Mostantól nyolc állapotú, hiszterézissel debounce-olt
+minőségi pillanatkép él a `SignalQualitySnapshot`-ban (az E14-R04 szerződése).
+**ADR [0507](docs/adr/0507-live-signal-quality-analyzer-reuse-route-and-hysteresis.md)**
+(a Claude írta a pre-flightban; a `docs/adr/**` a kör tilos zónája volt).
+
+| Réteg | Mit ad |
+|---|---|
+| `live_signal_quality_analyzer.dart` | streaming elemző: blokk-akkumulátor, gördülő előzmény, állapotgép (`good`/`tooQuiet`/`tooLoud`/`clipping`/`tooNoisy`/`speechLike`/`unstable`/`unknown`), hiszterézis |
+| `live_quality_thresholds.dart` | verziózott Live-küszöbök EGY helyen (D3) — a képletek közösek a batch-csel, csak az ütem és a granularitás Live-specifikus |
+| `live_pipeline.dart` | +14 sor: `SignalQualitySnapshot get signalQuality` a `runtimeInfo` mintájára — a `LiveFrame` és az `inputLevel` **érintetlen** (D10) |
+| `docs/rag/chunks/live-signal-quality.md` | minden hangolt paraméter forrása + a CPU-mérés nyers kimenete (HORIZON-szabály) |
+
+**A kör NEM írt új DSP-matekot** (D1): a `peakDbfs`/`rmsDbfs`/
+`clippedSampleRatio`/`tonalness` a meglévő `SignalQualityMath`-ból jön, az
+`audio_analysis` **nyilvános barreljén** át — az az export az E14-R05/H3
+önjavító körrel (PR #571) landolt a kör indulása ELŐTT, ezért az `allowed_paths`
+változatlan maradt. A `signal_quality_math.dart` és a `QualityThresholds`
+**bájtra változatlan** (ADR 0224 §3).
+
+**Mért evidencia:** CPU-overhead **1,0%** (304 → 307 ms, median/3; a keret 5%);
+a §7.1 falszifikáció `enterFrames=exitFrames=1` mellett PIROS (39 váltás),
+visszaállítva ZÖLD; a reviewer eldobható próbatesztje szerint a Live
+zajszint-percentilis **bitre azonos** a `SignalQualityMath.noiseFloorDbfsForFrames`
+referenciával. Review: `docs/reviews/e14-r05-review.md` — **APPROVED**, 0
+BLOCKER/MAJOR, 2 MINOR + 2 NOTE. Új lecke: [L632](docs/LESSONS.md#l632).
+
+**Nyitott, tudatosan vállalt kompromisszum (MINOR 1):** a CPU-keret miatt a
+metrikák `statsStride: 64` ütemben frissülnek, így egy új minőségi probléma
+3,5–6 s alatt jelenik meg. Ma **egyetlen fogyasztó sem olvassa** a snapshotot; a
+snapshotot UI-ba kötő körnek valós eszközön (AOT) mért profil alapján kell
+újratárgyalnia az ütemet.
+
+**Kapu:** célzott `tools/round-gate.sh` zöld, `full-gate.yml` `33886844400`
+**success** és `router-ci.yml` `33886846848` **success** a merge SHA-n
+(`fbbc8c44`). `risk = "high"` (nyers mikrofon-PCM) — a mérce az ADR 0224 §1/§4
+határa: nyers audio nem kerül logba/hálózatra/tárolóba, és az elemző nem
+osztályoz hangforrást vagy személyt.
+
+**Következő kör:** a `docs/execution/pipeline-queue.tsv` következő `pending` sora.
+
 ## ✅ E14-R08 KÉSZ — Csoportosított felismerési evaluation harness: a szivárgás HIBA, a párosítás maximális, a definíció a számmal utazik — PR [#573](https://github.com/wolfcasaba/strumsight/pull/573), squash `59372c9c` (2026-09-04)
 
 A felismerési mérés többé nem egyetlen accuracy-szám, és nem szivároghat.
