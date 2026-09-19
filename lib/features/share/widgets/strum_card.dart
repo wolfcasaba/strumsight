@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/design_system/public.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../analyze/public.dart';
 import '../../../core/music/strum.dart';
 import '../share_content.dart';
@@ -43,6 +44,7 @@ class StrumCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final chords = ShareContent.chords(result, capo: capo);
     final dirs = ShareContent.strumDirections(result);
     // Locked to no text scaling: this is a fixed-pixel exportable graphic
@@ -74,7 +76,7 @@ class StrumCard extends StatelessWidget {
                   start: 0.05,
                   end: 0.3,
                   child: Text(
-                    'Chord & strum-direction detector',
+                    l10n.shareCardStrumSubtitle,
                     style: TextStyle(
                       fontSize: 11.5,
                       color: _ink.withValues(alpha: 0.6),
@@ -89,7 +91,7 @@ class StrumCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _label('TITLE'),
+                        _label(l10n.shareCardTitleLabel),
                         const SizedBox(height: 4),
                         Text(
                           title!.trim(),
@@ -106,13 +108,17 @@ class StrumCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                SsRevealSlot(start: 0.15, end: 0.4, child: _label('CHORDS')),
+                SsRevealSlot(
+                  start: 0.15,
+                  end: 0.4,
+                  child: _label(l10n.shareCardChordsLabel),
+                ),
                 const SizedBox(height: 6),
                 SsRevealSlot(
                   start: 0.2,
                   end: 0.45,
                   child: Text(
-                    chords.isEmpty ? 'My riff' : chords,
+                    chords.isEmpty ? l10n.shareCardMyRiffFallback : chords,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -128,14 +134,18 @@ class StrumCard extends StatelessWidget {
                 SsRevealSlot(
                   start: 0.3,
                   end: 0.55,
-                  child: _label('YOUR STRUM PATTERN'),
+                  child: _label(l10n.shareCardStrumPatternLabel),
                 ),
                 const SizedBox(height: 8),
-                _StrumArrows(dirs: dirs, truncated: result.strums.length > 16),
+                _StrumArrows(
+                  dirs: dirs,
+                  truncated: result.strums.length > 16,
+                  fallbackText: l10n.shareCardNoStrumsPlaceholder,
+                ),
                 const Spacer(),
-                SsRevealSlot(start: 0.55, end: 0.85, child: _stats()),
+                SsRevealSlot(start: 0.55, end: 0.85, child: _stats(l10n)),
                 const SizedBox(height: 14),
-                SsRevealSlot(start: 0.7, end: 1, child: _footer()),
+                SsRevealSlot(start: 0.7, end: 1, child: _footer(l10n)),
               ],
             ),
           ),
@@ -179,12 +189,13 @@ class StrumCard extends StatelessWidget {
     ),
   );
 
-  Widget _stats() {
+  Widget _stats(AppLocalizations l10n) {
     final chips = <Widget>[
-      if (result.bpm > 0) _chip('${result.bpm.round()}', 'BPM'),
-      _chip('${result.downCount}', 'DOWN ↓'),
-      _chip('${result.upCount}', 'UP ↑'),
-      _chip(_dur(result.durationSec), 'LENGTH'),
+      if (result.bpm > 0)
+        _chip('${result.bpm.round()}', l10n.shareCardBpmLabel),
+      _chip('${result.downCount}', l10n.shareCardDownLabel),
+      _chip('${result.upCount}', l10n.shareCardUpLabel),
+      _chip(_dur(result.durationSec), l10n.shareCardLengthLabel),
     ];
     return Row(
       children: [
@@ -227,7 +238,7 @@ class StrumCard extends StatelessWidget {
     ),
   );
 
-  Widget _footer() => Row(
+  Widget _footer(AppLocalizations l10n) => Row(
     children: [
       const Text(
         '↓↑',
@@ -240,7 +251,7 @@ class StrumCard extends StatelessWidget {
       const SizedBox(width: 7),
       Expanded(
         child: Text(
-          'The only app that sees your down/up strokes',
+          l10n.shareCardMoatLine,
           style: TextStyle(fontSize: 10, color: _ink.withValues(alpha: 0.7)),
         ),
       ),
@@ -260,10 +271,15 @@ class StrumCard extends StatelessWidget {
 /// reveal each arrow lands in order inside the [arrowWindowStart]–
 /// [arrowWindowEnd] slice of the card's progress.
 class _StrumArrows extends StatelessWidget {
-  const _StrumArrows({required this.dirs, required this.truncated});
+  const _StrumArrows({
+    required this.dirs,
+    required this.truncated,
+    required this.fallbackText,
+  });
 
   final List<StrumDirection> dirs;
   final bool truncated;
+  final String fallbackText;
 
   /// The slice of the card's reveal the arrows land in (after the pattern
   /// label, before the stats).
@@ -277,7 +293,7 @@ class _StrumArrows extends StatelessWidget {
         start: arrowWindowStart,
         end: arrowWindowEnd,
         child: Text(
-          'No strums detected',
+          fallbackText,
           style: TextStyle(
             fontSize: 12,
             color: const Color(0xFFE9E5DE).withValues(alpha: 0.5),

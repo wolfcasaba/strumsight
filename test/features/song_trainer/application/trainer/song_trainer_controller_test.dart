@@ -12,6 +12,9 @@ import 'package:strumsight/features/song_trainer/application/trainer/song_transp
 import 'package:strumsight/features/song_trainer/application/trainer/song_transport_clock.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_transport_state.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/transport_effect.dart';
+import 'package:strumsight/features/song_trainer/application/trainer/song_resume_repository.dart';
+import 'package:strumsight/features/song_trainer/data/local/key_value_song_resume_repository.dart';
+import 'package:strumsight/features/song_trainer/data/playback/backing_audio_player.dart';
 import 'package:strumsight/features/song_trainer/data/playback/fake_backing_audio_player.dart';
 import 'package:strumsight/features/song_trainer/domain/models/loop_config.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_asset_reference.dart';
@@ -34,6 +37,7 @@ import '../../../../support/fake_practice_observation_gateway.dart';
 import '../../../../support/fake_practice_session_clock.dart';
 import '../../../../support/fake_practice_session_recorder.dart';
 import '../../../../support/fake_practice_tick_source.dart';
+import '../../../../support/preference_store.dart';
 
 void main() {
   test(
@@ -163,6 +167,9 @@ void main() {
       var microphoneProviderReads = 0;
       final container = ProviderContainer(
         overrides: [
+          // The resume repository is persisted since R8, so every container
+          // that builds the trainer controller needs the preference store.
+          ...preferenceOverrides(),
           songTransportProvider.overrideWithValue(transport),
           practiceMicrophonePermissionProvider.overrideWith((ref) {
             microphoneProviderReads++;
@@ -187,6 +194,139 @@ void main() {
       expect(microphoneProviderReads, 0);
     },
   );
+
+  // Javító sáv 2026-09-06 (R8 → R13, audit §5.2 "sebesség-slider").
+  //
+  // R8 shipped the slider for playback-only sessions and refused a scored
+  // one, because the Practice target is compiled once, at the setup speed.
+  // R13 gave the engine a boundary operation that re-times that target, so
+  // the refusal is gone; these cells pin what replaced it.
+  group('a scored session changes speed at a boundary', () {
+    test('E1 — a paused session re-times targets and audio', () async {
+      final harness = _Harness.scored();
+      addTearDown(harness.dispose);
+      await _driveScoredToRunning(harness);
+      final before = harness.practice.state.target!;
+      await harness.controller.pause();
+
+      final applied = await harness.controller.setPlaybackRate(0.5);
+
+      expect(applied.isSuccess, isTrue);
+      expect(harness.controller.canChangeBackingRate, isTrue);
+      final authored = harness.controller.compilation.definition!.defaultTempo;
+      // (a) the judged timeline is rescheduled to the new rate. The pause
+      // lands on the count-in bar boundary, so that is the pivot: the past
+      // keeps its placement and the rest doubles in length.
+      final config = harness.practice.state.config!;
+      expect(config.effectiveTempo.bpm, authored.bpm * 0.5);
+      expect(harness.practice.state.target!.tempo.bpm, authored.bpm * 0.5);
+      final pivot = before.countInDuration;
+      expect(
+        harness.practice.state.target!.totalDuration,
+        pivot + (before.totalDuration - pivot) * 2,
+      );
+      // (c) the audio the user hears agrees with the target clock.
+      expect(harness.transport.state.speed, 0.5);
+      expect(harness.player.lastRate, 0.5);
+      expect(harness.controller.state.playbackRate, 0.5);
+      expect(harness.practice.state.status, PracticeSessionStatus.paused);
+    });
+
+    test('E2 — a running session pauses, re-times and resumes', () async {
+      final harness = _Harness.scored();
+      addTearDown(harness.dispose);
+      await _driveScoredToRunning(harness);
+      expect(harness.controller.canChangeBackingRate, isTrue);
+
+      final applied = await harness.controller.setPlaybackRate(0.75);
+
+      expect(applied.isSuccess, isTrue);
+      // The change is not deferred away: it lands, and the session re-enters
+      // through its one-bar resume count-in — already at the new tempo.
+      expect(harness.practice.state.status, PracticeSessionStatus.countIn);
+      expect(harness.controller.state.status, SongTrainerStatus.countIn);
+      final authored = harness.controller.compilation.definition!.defaultTempo;
+      expect(harness.practice.state.target!.tempo.bpm, authored.bpm * 0.75);
+      expect(harness.transport.state.speed, 0.75);
+      expect(harness.player.lastRate, 0.75);
+      expect(harness.controller.state.playbackRate, 0.75);
+    });
+
+    test('E3 — an unsupported rate is a typed failure', () async {
+      final harness = _Harness.scored();
+      addTearDown(harness.dispose);
+      await _driveScoredToRunning(harness);
+
+      final applied = await harness.controller.setPlaybackRate(4);
+
+      expect(applied.isFailure, isTrue);
+      expect(
+        applied.failureOrNull!.code,
+        BackingAudioPlayerFailureCode.unsupportedRate,
+      );
+      expect(harness.controller.state.playbackRate, 1);
+      expect(harness.transport.state.speed, 1);
+      expect(harness.practice.state.status, PracticeSessionStatus.running);
+    });
+
+    test('E4 — a session with no timeline to re-time says so', () async {
+      final harness = _Harness.scored();
+      addTearDown(harness.dispose);
+
+      final applied = await harness.controller.setPlaybackRate(0.75);
+
+      expect(harness.controller.canChangeBackingRate, isFalse);
+      expect(applied.isFailure, isTrue);
+      expect(
+        applied.failureOrNull!.code,
+        SongTrainerRateFailureCode.notRescalable,
+      );
+      expect(harness.controller.state.playbackRate, 1);
+      expect(harness.transport.state.speed, 1);
+    });
+
+    test('E5 — a drag applies the value it ended on', () async {
+      final harness = _Harness.scored();
+      addTearDown(harness.dispose);
+      await _driveScoredToRunning(harness);
+
+      // `Slider.onChanged` fires once per notch: three overlapping calls.
+      final first = harness.controller.setPlaybackRate(0.9);
+      final second = harness.controller.setPlaybackRate(0.8);
+      final third = harness.controller.setPlaybackRate(0.7);
+
+      expect((await first).isSuccess, isTrue);
+      expect((await second).isSuccess, isTrue);
+      expect((await third).isSuccess, isTrue);
+      final authored = harness.controller.compilation.definition!.defaultTempo;
+      expect(harness.controller.state.playbackRate, 0.7);
+      expect(harness.practice.state.target!.tempo.bpm, authored.bpm * 0.7);
+      expect(harness.transport.state.speed, 0.7);
+      expect(harness.player.lastRate, 0.7);
+    });
+  });
+
+  test('a pause leaves a checkpoint the next session restores', () async {
+    final store = InMemoryKeyValueStore();
+    final first = _Harness.scored(
+      resumeRepository: KeyValueSongResumeRepository(keyValueStore: store),
+    );
+    addTearDown(first.dispose);
+    await first.controller.prepare(backingAsset: _asset);
+    await first.controller.start();
+    await first.controller.seek(const Duration(milliseconds: 250));
+    expect(first.controller.state.attemptId, 1);
+    await first.controller.pause();
+
+    // A brand-new controller over the SAME store == the next app start.
+    final second = _Harness.scored(
+      resumeRepository: KeyValueSongResumeRepository(keyValueStore: store),
+    );
+    addTearDown(second.dispose);
+    await second.controller.prepare(backingAsset: _asset);
+
+    expect(second.controller.state.attemptId, 1);
+  });
 }
 
 final SongAssetReference _asset = SongAssetReference(
@@ -223,6 +363,7 @@ final class _Harness {
     int countInBars = 1,
     MicrophonePermissionState permissionState =
         MicrophonePermissionState.granted,
+    SongResumeRepository? resumeRepository,
   }) {
     final compilation = _scoredCompilation(countInBars: countInBars);
     final player = FakeBackingAudioPlayer();
@@ -251,6 +392,7 @@ final class _Harness {
         transport: transport,
         compilation: compilation,
         practiceSession: practice,
+        resumeRepository: resumeRepository,
       ),
       practice: practice,
       transport: transport,
@@ -341,6 +483,17 @@ TrainerConfig _config({required TrainerMode mode, int countInBars = 1}) {
     capo: 0,
     capoReminder: false,
   );
+}
+
+Future<void> _driveScoredToRunning(_Harness harness) async {
+  await harness.controller.prepare(backingAsset: _asset);
+  await harness.controller.start();
+  harness.practiceClock.advance(
+    harness.practice.state.target!.countInDuration +
+        const Duration(milliseconds: 1),
+  );
+  harness.practiceTick.emitTick();
+  await _settle();
 }
 
 Future<void> _settle() async {

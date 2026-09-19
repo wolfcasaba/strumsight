@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart' show DateFormat;
 
 import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../practice/public.dart';
 import '../domain/metric_version_segment.dart';
 import '../domain/progress_overview_projection.dart';
 import '../domain/progress_trend.dart';
@@ -34,60 +36,135 @@ final class ProgressDashboardScreen extends StatelessWidget {
     return ProgressThemeScope(
       child: Scaffold(
         appBar: AppBar(title: Text(l10n.progressV2DashboardTitle)),
-        body: SafeArea(
-          child: projection.isNewUser
-              ? _NewUserState(l10n: l10n, onGetStarted: onGetStarted)
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (projection.isOffline) ...[
-                        SsStatusBadge(
-                          l10n: l10n,
-                          kind: SsStatusBadgeKind.offline,
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      SsSection(
-                        title: l10n.progressV2TrendSectionTitle,
-                        child: _TrendSection(
-                          l10n: l10n,
-                          trend: projection.trend,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      SsSection(
-                        title: l10n.progressV2SkillsSectionTitle,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            for (final entry in projection.milestones)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: _MilestoneRow(
-                                  l10n: l10n,
-                                  entry: entry,
-                                  onTap: () =>
-                                      onOpenSkillDetail(entry.milestone.id),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      if (projection.metricSegments.length > 1) ...[
-                        const SizedBox(height: 16),
-                        SsSection(
-                          title: l10n.progressV2MetricHistorySectionTitle,
-                          child: _MetricHistorySection(
-                            l10n: l10n,
-                            segments: projection.metricSegments,
-                          ),
-                        ),
-                      ],
-                    ],
+        body: SafeArea(child: _body(l10n)),
+      ),
+    );
+  }
+
+  /// The three mutually exclusive bodies, in order of what the app actually
+  /// KNOWS: an unreadable history first (M9 — it is not a fact about the
+  /// user), then the honest new-user state, then the dashboard itself.
+  Widget _body(AppLocalizations l10n) {
+    if (projection.isUnavailable) {
+      return _HistoryUnavailableState(l10n: l10n);
+    }
+    if (projection.isNewUser) {
+      return _NewUserState(l10n: l10n, onGetStarted: onGetStarted);
+    }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (projection.isOffline) ...[
+            SsStatusBadge(l10n: l10n, kind: SsStatusBadgeKind.offline),
+            const SizedBox(height: 12),
+          ],
+          SsSection(
+            title: l10n.progressV2TrendSectionTitle,
+            child: _TrendSection(l10n: l10n, trend: projection.trend),
+          ),
+          const SizedBox(height: 16),
+          SsSection(
+            title: l10n.progressV2SkillsSectionTitle,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final entry in projection.milestones)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _MilestoneRow(
+                      l10n: l10n,
+                      entry: entry,
+                      onTap: () => onOpenSkillDetail(entry.milestone.id),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (projection.metricSegments.length > 1) ...[
+            const SizedBox(height: 16),
+            SsSection(
+              title: l10n.progressV2MetricHistorySectionTitle,
+              child: _MetricHistorySection(
+                l10n: l10n,
+                segments: projection.metricSegments,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The practice history could not be READ (M9, re-audit 2026-09-08).
+///
+/// Deliberately not [SsEmptyState]: an empty state is a statement about the
+/// user ("nothing here yet"), and this is a statement about the app ("the
+/// read failed"). Mirrors the R19 `_PlanUnreadableNotice` on the Today Hub —
+/// error container, the same two sentences, and the single honest next step:
+/// retry the read.
+///
+/// A [Consumer] rather than a caller-supplied callback because the screen's
+/// only caller is a frozen router builder this round; it also keeps the
+/// retry pointed at the exact provider the failure came from. It is built
+/// ONLY in this state, so every fixture that pumps this screen without a
+/// `ProviderScope` (the E13-R31 goldens) keeps working untouched.
+class _HistoryUnavailableState extends StatelessWidget {
+  const _HistoryUnavailableState({required this.l10n});
+
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final onContainer = theme.colorScheme.onErrorContainer;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Container(
+        key: const Key('progress-dashboard-history-unavailable'),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.errorContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.error_outline, size: 18, color: onContainer),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.progressV2HistoryUnavailableTitle,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: onContainer,
+                    ),
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              l10n.progressV2HistoryUnavailableMessage,
+              style: theme.textTheme.bodySmall?.copyWith(color: onContainer),
+            ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Consumer(
+                builder: (context, ref, _) => TextButton(
+                  key: const Key('progress-dashboard-history-retry'),
+                  onPressed: () =>
+                      ref.invalidate(practiceHistoryV2ListProvider),
+                  child: Text(l10n.progressV2HistoryUnavailableRetry),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

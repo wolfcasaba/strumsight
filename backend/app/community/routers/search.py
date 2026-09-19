@@ -66,6 +66,8 @@ from collections.abc import Iterator
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from ...client_ip import client_ip_for_throttle
+from ...config import Settings
 from ...deps import CurrentUser
 from ...ratelimit import RateLimiter
 from ..policies.handle_policy import normalize as _normalize_handle
@@ -109,15 +111,29 @@ def _session_factory(request: Request) -> Iterator[Session]:
 
 
 def _client_key(request: Request) -> str:
-    """Client key for rate limiting — direct socket peer.
+    """Client key for rate limiting — the reverse-proxy-aware
+    client identity.
 
-    Same E09-R03 §F1 anti-bypass precedent: do NOT trust a
-    caller-supplied ``X-Forwarded-For`` until the deployment
-    documents a trusted-proxy chain (none exists today).
+    Delegates to :func:`app.client_ip.client_ip_for_throttle`
+    (R14) so this router shares ONE trusted-proxy rule with the
+    login/register throttles and ``handles.py``.
+
+    The E09-R03 §F1 anti-bypass precedent is preserved, not
+    dropped: a caller-supplied ``X-Forwarded-For`` is honoured
+    ONLY when the direct socket peer is one of the explicitly
+    configured ``Settings.trusted_proxy_ips`` (default: empty),
+    so an unconfigured deployment keeps the exact socket-peer
+    behaviour this function had before R16. The trusted-proxy
+    chain the old docstring said did not exist is now documented
+    in ``docs/operations/backend-live-deploy.md`` §5.1 and
+    ``app/client_ip.py``.
+
+    What R16 fixes: behind Caddy every caller arrives from the
+    same docker-bridge address, so the 60/min search budget was
+    shared by ALL callers of the deploy.
     """
-    if request.client is not None:
-        return request.client.host
-    return "unknown"
+    settings: Settings = request.app.state.settings
+    return client_ip_for_throttle(request, settings)
 
 
 def _caller_profile_pk(db: Session, user_id: int) -> int:

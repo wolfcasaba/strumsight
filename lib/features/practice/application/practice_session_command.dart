@@ -94,6 +94,26 @@ final class ChangeTempoBeforeAttempt extends PracticeSessionCommand {
   final Tempo tempo;
 }
 
+/// User changed the speed while a scored session is already under way.
+///
+/// Accepted from `ready` and `paused` only — the two statuses at which no
+/// attempt is in flight. The reducer does NOT clear the target the way
+/// [ChangeTempoBeforeAttempt] does: it re-times the compiled target onto the
+/// new tempo about the bar boundary the session sits on (see
+/// `rescalePracticeTarget`), so the part already played — and every verdict
+/// recorded against it — keeps its original placement while the remaining
+/// targets move to the new tempo. `config.effectiveTempo`, `timelineBase`,
+/// `activeBase` and `pausedAtTimeline` are re-anchored in the same step, so
+/// the target clock and the audio the user hears cannot drift apart.
+///
+/// The status does NOT change; a paused session stays paused and re-enters
+/// through its normal one-bar `ResumePractice` count-in — at the new tempo.
+final class RescheduleTempo extends PracticeSessionCommand {
+  const RescheduleTempo(this.tempo);
+
+  final Tempo tempo;
+}
+
 /// User accepted an adaptive suggestion (e.g. "Slow down a notch"). Same
 /// effect as [ChangeTempoBeforeAttempt] — kept distinct so the reducer can
 /// route to the right logging path later.

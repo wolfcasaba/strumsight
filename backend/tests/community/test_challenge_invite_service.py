@@ -35,17 +35,14 @@ import threading
 import uuid
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import pytest
-from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from alembic import command
 from app.community.models.challenge import (
     CHALLENGE_INVITE_STATE_ACCEPTED,
     CHALLENGE_INVITE_STATE_CANCELLED,
@@ -70,17 +67,7 @@ from app.community.services.challenge_invite_service import (
 from app.config import Settings
 from app.database import enable_sqlite_foreign_keys, get_db
 from app.security import create_access_token, hash_password
-
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]
-_ALEMBIC_INI = _BACKEND_ROOT / "alembic.ini"
-_ALEMBIC_DIR = _BACKEND_ROOT / "alembic"
-
-
-def _alembic_config() -> Config:
-    cfg = Config(str(_ALEMBIC_INI))
-    cfg.set_main_option("script_location", str(_ALEMBIC_DIR))
-    return cfg
-
+from tests.migration_template import apply_head_schema
 
 # ---------------------------------------------------------------------------
 # Fixtures — engine + session factory + app + client (the Kör 11
@@ -95,8 +82,7 @@ def session_factory(tmp_path, monkeypatch) -> Iterator[sessionmaker[Session]]:
     db_url = f"sqlite:///{db_path}"
     monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", db_url)
 
-    cfg = _alembic_config()
-    command.upgrade(cfg, "head")
+    apply_head_schema(db_path)
     engine = create_engine(
         db_url,
         connect_args={"check_same_thread": False},
@@ -950,7 +936,15 @@ def test_a5_real_violation_probe_unconditional_update_breaks_race(
     db_a = session_factory()
     db_b = session_factory()
     barrier = threading.Barrier(2)
-    barrier_timeout = 30.0
+    # MEASURED (round 25): in THIS probe only one branch can ever reach the
+    # seam — `_accept_no_check` deliberately bypasses
+    # `_before_transition_seam` — so the rendezvous never completes and the
+    # wait always runs to the timeout before raising `BrokenBarrierError`.
+    # That dead wait was the slowest single cell left in the backend gate
+    # (30 s). Five seconds is still orders of magnitude more than the sibling
+    # thread needs to reach the seam, so a rendezvous that CAN happen still
+    # happens, and every assertion below is unchanged.
+    barrier_timeout = 5.0
     results: list[str | Exception] = []
 
     def accept_thread() -> None:

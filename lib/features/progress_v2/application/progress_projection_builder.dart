@@ -2,6 +2,7 @@ import '../../gamification/public.dart';
 import '../../practice/public.dart';
 import '../domain/metric_version_segment.dart';
 import '../domain/progress_overview_projection.dart';
+import '../domain/progress_practice_history.dart';
 import '../domain/progress_trend.dart';
 import '../domain/skill_detail_projection.dart';
 
@@ -58,6 +59,17 @@ ProgressOverviewProjection buildProgressOverviewProjection({
     milestones: milestones,
     trend: ProgressTrend(points: trendPoints),
     metricSegments: metricSegments,
+    // M9 (re-audit 2026-09-08): the READ FAILURE travels on the history
+    // argument itself. `progressPracticeHistoryProvider` hands over a
+    // [ProgressPracticeHistory] — a real `List<PracticeHistoryEntry>` that
+    // additionally knows whether the read failed — and the router's builder
+    // call is a pure `practiceHistory:` pass-through, so this is the only
+    // channel the failure can reach the projection on without editing
+    // `lib/app/routing/app_router.dart` (frozen this round). A plain list
+    // keeps its old meaning: "this IS the history".
+    isUnavailable:
+        practiceHistory is ProgressPracticeHistory &&
+        practiceHistory.isUnavailable,
   );
 }
 

@@ -116,19 +116,22 @@ class PracticeSetupScreen extends ConsumerWidget {
     return _SetupForm(definition: definition, controller: controller);
   }
 
-  /// Setup is now PUSHED from the Practice hub (E17-nav fix), so the honest
-  /// "back" is a pop — it returns to whichever hub actually opened this
-  /// screen and keeps the rest of the history. `go` stays as the fallback
-  /// for the entry points that still land here with an empty stack (a
-  /// `/practice/setup` deep link, or `onException`'s reset).
+  /// R30 (re-audit #2 MI-E) — leaves Setup.
+  ///
+  /// The back control was ALWAYS a stack-replacing `go` to the hub: reached
+  /// from a pushed page it threw that page away, so the learner lost their
+  /// place in whatever list they came from. Popping is what "back" means
+  /// whenever there is a stack. The hub stays the fallback — and today it
+  /// is still the only branch the shipped callers take, because both of
+  /// them navigate here with a `go` (the definition id is read from the
+  /// route information that `go` sets synchronously).
   void _backToHub(BuildContext context) {
-    // Pushed from the hub (E18-R01 F4) → pop back to it; a deep link with
-    // nothing underneath still lands on the hub.
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go(AppRoutes.practiceHub);
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      return;
     }
+    GoRouter.maybeOf(context)?.go(AppRoutes.practiceHub);
   }
 }
 
@@ -431,6 +434,22 @@ class _ScoringProfileReadout extends StatelessWidget {
   final String label;
   final String profileId;
 
+  /// The profile id is the row's only INFLEXIBLE child, and a `Row`
+  /// measures such a child with an unbounded main-axis constraint. At
+  /// `textScale 2.0` the id — a non-localised 17-character slug — alone
+  /// measured wider than the 372px content column, so the `RenderFlex`
+  /// overflowed by 43px, identically in both locales (the id never
+  /// translates). The cap therefore has to arrive from OUTSIDE the row,
+  /// which is what the [LayoutBuilder] provides: the id can never claim
+  /// more than the column it lives in, and ellipsises instead.
+  ///
+  /// Deliberately NOT `Flexible` on the id: that makes both children
+  /// flexible, so the row would split its width evenly and at
+  /// `textScale 1.0` the id would jump from the right edge to the
+  /// mid-point (and ellipsise there) — moving pixels in the pinned
+  /// `e13_r21_practice_setup_compact` golden. The [ConstrainedBox] is
+  /// inert at 1.0: the id fits far inside the column, so both children
+  /// keep the exact widths and offsets that golden recorded.
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(

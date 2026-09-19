@@ -138,7 +138,7 @@ class RewardSummarySheet extends StatelessWidget {
                   child: TextButton(
                     key: const Key('reward-summary-dismiss'),
                     onPressed: () => Navigator.of(context).maybePop(),
-                    child: const Text('Dismiss'),
+                    child: Text(l10n.rewardSummaryDismiss),
                   ),
                 ),
               ],
@@ -158,9 +158,10 @@ class _SummaryEventTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Semantics(
       container: true,
-      label: '${event.titleKey}. ${event.bodyKey}',
+      label: l10n.rewardSummaryEntrySemantics(event.titleKey, event.bodyKey),
       child: ExcludeSemantics(
         child: SsSurface(
           elevation: SsElevation.raised,
@@ -206,7 +207,7 @@ class _SummaryEventTile extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '${event.earnedXp} XP',
+                  l10n.rewardSummaryEventXp(event.earnedXp),
                   key: const Key('reward-summary-event-xp'),
                   style: theme.textTheme.labelLarge?.copyWith(
                     color: theme.colorScheme.primary,

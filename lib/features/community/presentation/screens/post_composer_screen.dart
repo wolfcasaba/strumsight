@@ -21,20 +21,31 @@
 /// 5. The status banner — explicit visible state per
 ///    [PostComposerStatus].
 ///
-/// **Strings:** most composer labels are kept in this file as
-/// constants — a future i18n round migrates the remainder to the
-/// ARB catalogue in lockstep with the screen. The public-audience
-/// confirmation sheet is the exception: it reads
-/// ``communityPublicConfirm*`` from [AppLocalizations], same as the
-/// sibling confirmation in ``edit_profile_screen.dart``, because
-/// this round already added those ARB keys to
-/// ``lib/l10n/features/community_{en,hu}.arb``.
+/// **Strings (R20, audit M8):** every user-facing label on this
+/// screen now comes from [AppLocalizations]
+/// (``communityComposer*`` in
+/// ``lib/l10n/features/community_{en,hu}.arb``). Until this round
+/// the labels were Hungarian ``const`` literals in this file, so an
+/// English build rendered a Hungarian composer — measured on the
+/// shipped development APK, where ``communityWritesEnabled`` is on.
 ///
-/// **Média placeholder (brief §3 / Kör 18):** the composer ships a
-/// stub "Attach media" placeholder button that does NOT upload
-/// anything yet — it is the explicit Kör 12 boundary. The button is
-/// wired to surface a non-fatal snackbar so the user sees the
-/// affordance and knows it is "later" rather than broken.
+/// **Média csatolása (javító sáv R27).** A "Attach media" gomb R21 óta
+/// a ``communityMediaEnabled`` flag mögött áll; R12 és R27 között
+/// csak egy őszinte „később" snackbart mutatott, mert nem volt mit
+/// hívnia. R27 óta VAN: a gomb képet választ, azonnal feltölti
+/// (``POST /community/media``), és a keletkező azonosítót a
+/// piszkozatba teszi, tehát egy app-újraindítás után is megvan.
+///
+/// A gomb HELYE és megjelenése bájtra változatlan — a golden-képek
+/// (``e13_r33``) a flaggel BEKAPCSOLVA készültek, és csatolmány nélkül
+/// a képernyő pontosan ugyanaz marad: a csatolmány-lista, a hiba- és a
+/// korlát-üzenet KIZÁRÓLAG akkor jelenik meg, ha van mit mutatniuk.
+///
+/// A ``communityMediaEnabled`` a szállított buildekben továbbra is
+/// KIKAPCSOLT (``feature_flags.dart``; a nyitott R-SEC-01 /
+/// R-PRIV-01 tételek közül a threat model A6.2.5 CSAM-hash és
+/// moderátori SLA fele szervezeti döntés, nem kód) — a teljes út
+/// viszont kész és a flaggel bekapcsolva tesztelt.
 library;
 
 import 'package:flutter/material.dart';
@@ -42,42 +53,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:strumsight/core/design_system/public.dart';
 
+import '../../../../app/config/app_config.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/post_composer_controller.dart';
+import '../../domain/entities/community_media.dart';
 import '../../domain/entities/community_post.dart';
 import '../../domain/entities/share_artifact.dart';
 import '../../domain/policies/community_audience.dart';
+import '../widgets/community_media_tile.dart';
 import '../widgets/community_theme_scope.dart';
-
-/// Composer-screen labels. Kept here (not in the ARB) because the
-/// l10n catalogue for the composer is a future round's scope; a
-/// later round moves these to ``lib/l10n/features/community_en.arb``
-/// in lockstep with the screen.
-abstract final class _ComposerLabels {
-  static const String title = 'Új poszt';
-  static const String bodyLabel = 'Szöveg';
-  static const String bodyHint = 'Mit szeretnél megosztani?';
-  static const String attachMedia = 'Média csatolása';
-  static const String mediaLater = 'A média csatolása később érhető el.';
-  static const String audienceLabel = 'Kik láthatják';
-  static const String previewLabel = 'Megosztott mezők';
-  static const String publish = 'Közzététel';
-  static const String submitting = 'Közzététel…';
-  static const String success = 'Sikeresen közzétéve.';
-  static const String failure = 'A poszt nem került elküldésre — próbáld újra.';
-  static const String discard = 'Elvetés';
-
-  static const String audiencePublic = 'Nyilvános';
-  static const String audienceFollowers = 'Követők';
-  static const String audiencePrivate = 'Privát';
-
-  static const String previewChordTimeline = 'Akkord-idővonal';
-  static const String previewStrumPattern = 'Strumminta';
-  static const String previewTempo = 'Tempó';
-  static const String previewStreakDays = 'Aktív napok';
-  static const String previewBestScore = 'Legjobb pontszám';
-}
 
 /// The composer route. The entry-point that pushes this route
 /// supplies the [ShareArtifact.toJson] of the artifact the user is
@@ -108,14 +93,18 @@ class _PostComposerScreenState extends ConsumerState<PostComposerScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(postComposerControllerProvider);
+    final l10n = AppLocalizations.of(context);
+    final mediaEnabled = ref.watch(
+      appConfigProvider.select((cfg) => cfg.flags.communityMediaEnabled),
+    );
 
     return CommunityThemeScope(
       child: Scaffold(
         appBar: AppBar(
-          title: const Text(_ComposerLabels.title),
+          title: Text(l10n.communityComposerTitle),
           actions: <Widget>[
             IconButton(
-              tooltip: _ComposerLabels.discard,
+              tooltip: l10n.communityComposerDiscard,
               icon: const Icon(Icons.delete_outline),
               onPressed: state.value?.isSubmitting ?? false
                   ? null
@@ -160,6 +149,8 @@ class _PostComposerScreenState extends ConsumerState<PostComposerScreen> {
             onSubmit: () =>
                 ref.read(postComposerControllerProvider.notifier).submit(),
             onAttachMediaPressed: _onAttachMediaPressed,
+            onRemoveMediaPressed: _onRemoveMediaPressed,
+            mediaEnabled: mediaEnabled,
           ),
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) => Center(child: Text(error.toString())),
@@ -169,16 +160,117 @@ class _PostComposerScreenState extends ConsumerState<PostComposerScreen> {
   }
 
   void _onAttachMediaPressed() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(_ComposerLabels.mediaLater),
-        duration: Duration(seconds: 2),
+    ref.read(postComposerControllerProvider.notifier).attachMedia();
+  }
+
+  void _onRemoveMediaPressed(String mediaPublicId) {
+    ref
+        .read(postComposerControllerProvider.notifier)
+        .removeMedia(mediaPublicId);
+  }
+}
+
+enum _PreviewFlag { chordTimeline, strumPattern, tempo, streakDays, bestScore }
+
+/// Egy megjelenítendő csatolmány: az azonosító mindig megvan, a leíró nem.
+typedef _AttachmentEntry = ({
+  String publicId,
+  CommunityMediaAttachment? descriptor,
+});
+
+/// A szerkesztőben MEGJELENÍTENDŐ csatolmányok, stabil sorrendben.
+///
+/// Két forrásból áll össze, és a sorrend nem esetleges:
+///
+/// 1. a [PostComposerState.mediaIds] — ezek mennek ki a poszttal,
+///    csatolási sorrendben. Egy VISSZATÖLTÖTT piszkozatnál csak az
+///    azonosító van meg (a szervernek nincs „leíró egy azonosítóhoz"
+///    végpontja), ilyenkor a `descriptor` `null`, és a csempe egy
+///    semleges „csatolva" arcot rajzol — kitalált `ready` állapot
+///    helyett;
+/// 2. utánuk azok a leírók, amelyek NEM kerültek a listába: az
+///    elutasított feltöltések. Ezeket meg KELL mutatni, különben a
+///    felhasználó annyit lát, hogy „nem történt semmi", és nem tudja
+///    meg, miért.
+List<_AttachmentEntry> _attachmentTiles(PostComposerState state) {
+  final entries = <_AttachmentEntry>[
+    for (final id in state.mediaIds)
+      (publicId: id, descriptor: state.mediaDescriptors[id]),
+  ];
+  final attached = state.mediaIds.toSet();
+  for (final descriptor in state.mediaDescriptors.values) {
+    if (attached.contains(descriptor.publicId)) continue;
+    entries.add((publicId: descriptor.publicId, descriptor: descriptor));
+  }
+  return entries;
+}
+
+/// Egy csatolmány sora a szerkesztőben.
+class _AttachedMedia extends StatelessWidget {
+  const _AttachedMedia({required this.entry, required this.onRemove});
+
+  final _AttachmentEntry entry;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final descriptor = entry.descriptor;
+    if (descriptor == null) {
+      return _RestoredAttachment(publicId: entry.publicId, onRemove: onRemove);
+    }
+    return CommunityMediaTile(
+      key: Key('composer-media-${entry.publicId}'),
+      media: descriptor,
+      onRemove: onRemove,
+    );
+  }
+}
+
+/// Egy visszatöltött piszkozat csatolmánya, leíró nélkül.
+///
+/// SZÁNDÉKOSAN semleges: nem állítja, hogy kész, és nem rajzol
+/// képet — a kliens ebben a pillanatban csak annyit tud, hogy a
+/// poszthoz tartozik egy azonosító.
+class _RestoredAttachment extends StatelessWidget {
+  const _RestoredAttachment({required this.publicId, required this.onRemove});
+
+  final String publicId;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return ListTile(
+      key: Key('composer-media-restored-$publicId'),
+      leading: const Icon(Icons.attachment),
+      title: Text(l10n.communityComposerMediaSectionLabel),
+      trailing: IconButton(
+        tooltip: l10n.communityMediaRemove,
+        icon: const Icon(Icons.close),
+        onPressed: onRemove,
       ),
     );
   }
 }
 
-enum _PreviewFlag { chordTimeline, strumPattern, tempo, streakDays, bestScore }
+/// Egy soros üzenet a csatolás körül (hiba vagy korlát).
+class _MediaNotice extends StatelessWidget {
+  const _MediaNotice({super.key, required this.text, required this.isError});
+
+  final String text;
+  final bool isError;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Text(
+      text,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: isError ? theme.colorScheme.error : null,
+      ),
+    );
+  }
+}
 
 class _ComposerBody extends StatelessWidget {
   const _ComposerBody({
@@ -189,6 +281,8 @@ class _ComposerBody extends StatelessWidget {
     required this.onToggleField,
     required this.onSubmit,
     required this.onAttachMediaPressed,
+    required this.onRemoveMediaPressed,
+    required this.mediaEnabled,
   });
 
   final PostComposerState state;
@@ -198,6 +292,15 @@ class _ComposerBody extends StatelessWidget {
   final void Function(_PreviewFlag flag, bool value) onToggleField;
   final VoidCallback onSubmit;
   final VoidCallback onAttachMediaPressed;
+  final ValueChanged<String> onRemoveMediaPressed;
+
+  /// ``communityMediaEnabled`` (R21, audit MI5). Rendering the
+  /// attach-media affordance while the flag is off would promise a
+  /// capability the build does not have — the server would answer the
+  /// framework's bare 404, since the media router is not even mounted —
+  /// so the whole affordance is dropped instead of merely being
+  /// disabled.
+  final bool mediaEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -217,6 +320,7 @@ class _ComposerBody extends StatelessWidget {
       );
     }
 
+    final l10n = AppLocalizations.of(context);
     final canSubmit =
         !state.isSubmitting &&
         state.status != PostComposerStatus.submitting &&
@@ -225,6 +329,13 @@ class _ComposerBody extends StatelessWidget {
         state.status == PostComposerStatus.submitting ||
         state.status == PostComposerStatus.success ||
         state.status == PostComposerStatus.failure;
+    // A média-blokk három feltétele, KISZÁMÍTVA — a `canSubmit` mintája.
+    // A widget-fában maradó, összetett kifejezés csak nehezebben
+    // olvasható, és a `_attachmentTiles` kétszeri hívását is hozná.
+    final atMediaLimit = state.mediaIds.length >= kCommunityMaxMediaPerPost;
+    final canAttachMedia =
+        !state.isSubmitting && !state.isAttachingMedia && !atMediaLimit;
+    final attachments = _attachmentTiles(state);
 
     return SafeArea(
       child: Column(
@@ -236,7 +347,15 @@ class _ComposerBody extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  const _SectionLabel(label: _ComposerLabels.bodyLabel),
+                  // Klub-kontextus (E17-R11). A sáv CSAK akkor jelenik meg,
+                  // ha a szerkesztőt egy klubból nyitották: a poszt akkor
+                  // nem a globális feedbe, hanem a klubéba megy, és ezt a
+                  // felhasználónak látnia kell, mielőtt közzétesz.
+                  if (state.clubId != null) ...<Widget>[
+                    _ClubTargetBanner(label: l10n.communityComposerClubTarget),
+                    const SizedBox(height: 16),
+                  ],
+                  _SectionLabel(label: l10n.communityComposerBodyLabel),
                   const SizedBox(height: 8),
                   TextField(
                     controller: bodyController,
@@ -244,21 +363,63 @@ class _ComposerBody extends StatelessWidget {
                     minLines: 4,
                     maxLines: 8,
                     maxLength: kCommunityPostBodyMaxLength,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      hintText: _ComposerLabels.bodyHint,
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
+                      hintText: l10n.communityComposerBodyHint,
                     ),
                     onChanged: onBodyChanged,
                   ),
-                  const SizedBox(height: 16),
-                  SsButton(
-                    variant: SsButtonVariant.secondary,
-                    icon: Icons.attach_file,
-                    label: _ComposerLabels.attachMedia,
-                    onPressed: state.isSubmitting ? null : onAttachMediaPressed,
-                  ),
+                  if (mediaEnabled) ...<Widget>[
+                    const SizedBox(height: 16),
+                    SsButton(
+                      key: const Key('composer-attach-media'),
+                      variant: SsButtonVariant.secondary,
+                      icon: Icons.attach_file,
+                      label: l10n.communityComposerAttachMedia,
+                      // A korlát ELÉRÉSEKOR tiltott, nem rejtett: egy
+                      // eltűnő gomb azt sugallná, hogy a csatolás
+                      // elromlott, holott csak betelt a négy hely.
+                      onPressed: canAttachMedia ? onAttachMediaPressed : null,
+                    ),
+                    // MINDEN további média-widget FELTÉTELES: csatolmány,
+                    // hiba és korlát nélkül a képernyő bájtra ugyanaz,
+                    // mint R21 óta (a golden-képek e13_r33 a flaggel
+                    // BEKAPCSOLVA készültek).
+                    if (state.mediaError != null) ...<Widget>[
+                      const SizedBox(height: 8),
+                      _MediaNotice(
+                        key: const Key('composer-media-error'),
+                        text: l10n.communityComposerMediaUploadFailed,
+                        isError: true,
+                      ),
+                    ],
+                    if (atMediaLimit) ...<Widget>[
+                      const SizedBox(height: 8),
+                      _MediaNotice(
+                        key: const Key('composer-media-limit'),
+                        text: l10n.communityComposerMediaLimitReached,
+                        isError: false,
+                      ),
+                    ],
+                    if (attachments.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 16),
+                      _SectionLabel(
+                        label: l10n.communityComposerMediaSectionLabel,
+                      ),
+                      const SizedBox(height: 8),
+                      for (final entry in attachments) ...<Widget>[
+                        _AttachedMedia(
+                          entry: entry,
+                          onRemove: state.isSubmitting
+                              ? null
+                              : () => onRemoveMediaPressed(entry.publicId),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                    ],
+                  ],
                   const SizedBox(height: 24),
-                  const _SectionLabel(label: _ComposerLabels.audienceLabel),
+                  _SectionLabel(label: l10n.communityComposerAudienceLabel),
                   const SizedBox(height: 8),
                   _AudienceSelector(
                     audience: state.audience,
@@ -266,7 +427,7 @@ class _ComposerBody extends StatelessWidget {
                     onChanged: onAudienceChanged,
                   ),
                   const SizedBox(height: 24),
-                  const _SectionLabel(label: _ComposerLabels.previewLabel),
+                  _SectionLabel(label: l10n.communityComposerPreviewLabel),
                   const SizedBox(height: 8),
                   _SharePreviewPanel(
                     preview: state.sharePreview,
@@ -284,7 +445,45 @@ class _ComposerBody extends StatelessWidget {
             child: SsButton(
               onPressed: canSubmit ? onSubmit : null,
               loading: state.status == PostComposerStatus.submitting,
-              label: _ComposerLabels.publish,
+              label: l10n.communityComposerPublish,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A klub-célt kimondó sáv a szerkesztő tetején.
+///
+/// Külön widget, hogy a `Key` stabil azonosítót adjon a widget-tesztnek
+/// (a felirat fordítás-függő, a kulcs nem).
+class _ClubTargetBanner extends StatelessWidget {
+  const _ClubTargetBanner({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const Key('composer-club-target'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(
+            Icons.groups_outlined,
+            color: theme.colorScheme.onSecondaryContainer,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(color: theme.colorScheme.onSecondaryContainer),
             ),
           ),
         ],
@@ -317,6 +516,7 @@ class _AudienceSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return SsChoice<CommunityAudience>(
       style: SsChoiceStyle.chip,
       value: audience,
@@ -324,7 +524,7 @@ class _AudienceSelector extends StatelessWidget {
         for (final value in CommunityAudience.values)
           SsChoiceOption<CommunityAudience>(
             value: value,
-            label: _audienceLabel(value),
+            label: _audienceLabel(l10n, value),
           ),
       ],
       onChanged: enabled ? (value) => _onSelected(context, value) : null,
@@ -350,14 +550,14 @@ class _AudienceSelector extends StatelessWidget {
     );
   }
 
-  String _audienceLabel(CommunityAudience value) {
+  String _audienceLabel(AppLocalizations l10n, CommunityAudience value) {
     switch (value) {
       case CommunityAudience.public:
-        return _ComposerLabels.audiencePublic;
+        return l10n.communityComposerAudiencePublic;
       case CommunityAudience.followers:
-        return _ComposerLabels.audienceFollowers;
+        return l10n.communityComposerAudienceFollowers;
       case CommunityAudience.private:
-        return _ComposerLabels.audiencePrivate;
+        return l10n.communityComposerAudiencePrivate;
     }
   }
 }
@@ -375,38 +575,39 @@ class _SharePreviewPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       children: <Widget>[
         SsSwitchRow(
-          label: _ComposerLabels.previewChordTimeline,
+          label: l10n.communityComposerPreviewChordTimeline,
           value: preview.includeChordTimeline,
           onChanged: enabled
               ? (v) => onToggleField(_PreviewFlag.chordTimeline, v)
               : null,
         ),
         SsSwitchRow(
-          label: _ComposerLabels.previewStrumPattern,
+          label: l10n.communityComposerPreviewStrumPattern,
           value: preview.includeStrumPattern,
           onChanged: enabled
               ? (v) => onToggleField(_PreviewFlag.strumPattern, v)
               : null,
         ),
         SsSwitchRow(
-          label: _ComposerLabels.previewTempo,
+          label: l10n.communityComposerPreviewTempo,
           value: preview.includeTempo,
           onChanged: enabled
               ? (v) => onToggleField(_PreviewFlag.tempo, v)
               : null,
         ),
         SsSwitchRow(
-          label: _ComposerLabels.previewStreakDays,
+          label: l10n.communityComposerPreviewStreakDays,
           value: preview.includeStreakDays,
           onChanged: enabled
               ? (v) => onToggleField(_PreviewFlag.streakDays, v)
               : null,
         ),
         SsSwitchRow(
-          label: _ComposerLabels.previewBestScore,
+          label: l10n.communityComposerPreviewBestScore,
           value: preview.includeBestScore,
           onChanged: enabled
               ? (v) => onToggleField(_PreviewFlag.bestScore, v)
@@ -426,25 +627,26 @@ class _StatusBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     late final Color background;
     late final String text;
     switch (status) {
       case PostComposerStatus.submitting:
         background = theme.colorScheme.secondaryContainer;
-        text = _ComposerLabels.submitting;
+        text = l10n.communityComposerSubmitting;
       case PostComposerStatus.success:
         background = theme.colorScheme.tertiaryContainer;
-        text = _ComposerLabels.success;
+        text = l10n.communityComposerSuccess;
       case PostComposerStatus.failure:
         background = theme.colorScheme.errorContainer;
-        // AppFailure does not carry a user-facing message — the
-        // composer maps the failure code via the ARB in a future
-        // round. For now the screen surfaces a generic banner; the
-        // structured `error.code` is logged for diagnostics.
+        // AppFailure does not carry a user-facing message — the banner
+        // is the localized generic copy, and the structured
+        // `error.code` is appended (also localized, so the parentheses
+        // stay part of the translated sentence) for diagnostics.
         final failureCode = error?.code;
         text = failureCode != null
-            ? '${_ComposerLabels.failure} ($failureCode)'
-            : _ComposerLabels.failure;
+            ? l10n.communityComposerFailureWithCode(failureCode)
+            : l10n.communityComposerFailure;
       case PostComposerStatus.editing:
         return const SizedBox.shrink();
     }

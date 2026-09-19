@@ -221,6 +221,25 @@ final class TutorOrchestrator {
   Stream<TutorState> get states => _states.stream;
   Stream<TutorEffect> get effects => _effects.stream;
 
+  /// A new orchestrator sharing this one's collaborators but resolving its
+  /// gateway through [gatewayForAttempt].
+  ///
+  /// The boot layer builds ONE orchestrator with the local stub; the
+  /// presentation layer needs the same context/knowledge/prompt pipeline
+  /// with a gateway chosen per attempt from the live consent and account
+  /// state. Copying the collaborators keeps that a pure re-composition —
+  /// the field itself stays `final`, so nothing can swap a gateway factory
+  /// under a turn that is already running.
+  TutorOrchestrator withGatewayFactory(
+    TutorModelGateway Function(int repairCount) gatewayForAttempt,
+  ) => TutorOrchestrator(
+    contextAssembler: contextAssembler,
+    knowledgeRetriever: knowledgeRetriever,
+    promptBuilder: promptBuilder,
+    gatewayForAttempt: gatewayForAttempt,
+    outputValidator: outputValidator,
+  );
+
   Future<TutorTransition> dispatch(TutorInput input) async {
     if (_disposed) {
       return TutorTransition(state: _state, isRejected: true);
@@ -231,6 +250,14 @@ final class TutorOrchestrator {
     }
     if (input is SendTutorMessage) {
       _request = input.request;
+      // A NEW turn asks a NEW question, so the prompt built for the previous
+      // one must not be reused (E-R29a, re-audit B1). `_startModel`'s
+      // `_prompt ??=` exists for the ONE bounded repair attempt — re-sending
+      // the IDENTICAL prompt is what makes it a repair rather than a second
+      // question — but the cache outlived its turn: every question after the
+      // first reached the model as the FIRST question's prompt, so the
+      // student got an answer to something they had already asked.
+      _prompt = null;
     }
     _state = transition.state;
     _states.add(_state);

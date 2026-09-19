@@ -20,6 +20,12 @@
 /// at least one character — fewer network slots consumed on
 /// the rapid typing that the §9 DoS surface identifies.
 ///
+/// **Localization (R20, audit M9):** every label on this screen
+/// reads from [AppLocalizations] (``communitySearch*`` in
+/// ``lib/l10n/features/community_{en,hu}.arb``). Until this round
+/// the screen carried English string literals, so a Hungarian
+/// build rendered an English search surface.
+///
 /// **Result → profile navigation:** the brief does not pin a
 /// destination route for a tapped result; the canonical
 /// ``CommunityProfile`` view is the Kör 5 fetchById surface,
@@ -42,6 +48,7 @@ import 'package:strumsight/core/design_system/public.dart';
 import '../../../../app/routing/app_route.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/storage/key_value_store.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../data/local/recent_search_store.dart';
 import '../../data/repositories/profile_repository_impl.dart';
 import '../../domain/entities/community_profile.dart';
@@ -236,17 +243,19 @@ class _CommunitySearchScreenState extends ConsumerState<CommunitySearchScreen> {
   }
 
   String _storageFailureMessage(AppFailure failure) {
-    return 'Could not update recent searches';
+    return AppLocalizations.of(context).communitySearchRecentStorageError;
   }
 
   String _formatFailure(AppFailure failure) {
-    if (failure is NetworkFailure) return 'Network error';
-    return 'Server error';
+    final l10n = AppLocalizations.of(context);
+    if (failure is NetworkFailure) return l10n.communitySearchNetworkError;
+    return l10n.communitySearchServerError;
   }
 
   @override
   Widget build(BuildContext context) {
     final hasQuery = _activeQuery.isNotEmpty;
+    final l10n = AppLocalizations.of(context);
     return CommunityThemeScope(
       child: Scaffold(
         appBar: AppBar(
@@ -255,8 +264,8 @@ class _CommunitySearchScreenState extends ConsumerState<CommunitySearchScreen> {
             focusNode: _focusNode,
             autocorrect: false,
             textInputAction: TextInputAction.search,
-            decoration: const InputDecoration(
-              hintText: 'Search by handle',
+            decoration: InputDecoration(
+              hintText: l10n.communitySearchHint,
               border: InputBorder.none,
             ),
             onChanged: _onQueryChanged,
@@ -266,7 +275,7 @@ class _CommunitySearchScreenState extends ConsumerState<CommunitySearchScreen> {
             if (_controller.text.isNotEmpty)
               IconButton(
                 icon: const Icon(Icons.clear),
-                tooltip: 'Clear',
+                tooltip: l10n.communitySearchClear,
                 onPressed: () {
                   _controller.clear();
                   _onQueryChanged('');
@@ -320,10 +329,11 @@ class _RecentList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     if (recent.isEmpty) {
-      return const _EmptyState(
+      return _EmptyState(
         icon: Icons.search,
-        message: 'Type a handle prefix to discover players.',
+        message: l10n.communitySearchEmptyHint,
       );
     }
     return Column(
@@ -335,13 +345,13 @@ class _RecentList extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Recent searches',
+                l10n.communitySearchRecentTitle,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               SsButton(
                 variant: SsButtonVariant.tertiary,
                 onPressed: onClear,
-                label: 'Clear all',
+                label: l10n.communitySearchClearAll,
               ),
             ],
           ),
@@ -357,7 +367,7 @@ class _RecentList extends StatelessWidget {
                 title: Text(query),
                 trailing: IconButton(
                   icon: const Icon(Icons.close),
-                  tooltip: 'Remove',
+                  tooltip: l10n.communitySearchRemoveRecent,
                   onPressed: () => onRemove(query),
                 ),
                 onTap: () => onTap(query),
@@ -378,9 +388,9 @@ class _ResultsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return const _EmptyState(
+      return _EmptyState(
         icon: Icons.person_search,
-        message: 'No matches.',
+        message: AppLocalizations.of(context).communitySearchNoMatches,
       );
     }
     return ListView.separated(
@@ -440,7 +450,10 @@ class _ErrorState extends StatelessWidget {
           const SizedBox(height: 8),
           Text(message),
           const SizedBox(height: 8),
-          SsButton(onPressed: onRetry, label: 'Retry'),
+          SsButton(
+            onPressed: onRetry,
+            label: AppLocalizations.of(context).communitySearchRetry,
+          ),
         ],
       ),
     );

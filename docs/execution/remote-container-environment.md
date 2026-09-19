@@ -118,6 +118,27 @@ A teszt azt várja, hogy a driver a state-dir ellenőrzésnél haljon meg; itt m
 elmozdul** (a driver tovább jut), de attól még nem lesz zöld — a `gh pr list`
 403-a állítja meg. Ne vedd regressziónak, és NE gyengítsd a tesztet miatta.
 
+## 5b. Feloldás a hálózati policy engedélyezésével (2026-09-06)
+
+A §1 első blokkolója NEM örök: a Flutter SDK azért nem telepíthető, mert a
+konténer proxyja `policy denial` 403-mal utasítja el a CONNECT-et
+(`storage.googleapis.com`, `pub.dev`, `dl.google.com`, `services.gradle.org`,
+`repo.maven.apache.org` — mind mérve 2026-09-06 22:01 UTC). Ezt a felhasználó
+a Claude Code környezet **Network access** beállításában oldja fel („Full
+access" vagy allowlist a fenti hostokkal + `*.blob.core.windows.net` a teljes
+CI-naplókhoz). Utána a telepítés egy parancs, a CI-vel azonos verzióval:
+
+```bash
+bash tools/remote/install-flutter.sh          # --check: csak a hálózatot méri
+```
+
+A script a `build-apk.yml` `flutter-version` pinjét olvassa, `/opt/flutter`-be
+tesz, szimlinket rak a `.mcp.json` dart-szerverének útjára
+(`/home/ubuntu/flutter/bin/dart`), és lefuttatja a `flutter pub get`-et. A
+környezet setup-parancsaként megadva minden új session ezzel indul. **Amit ez
+sem ad:** emulátor vagy fizikai eszköz (a konténerben nincs KVM/USB) — a
+futó app mérése továbbra is a felhasználó boxán (§6) történik.
+
 ## 6. A HÍD a felhasználó boxához — `env_012yGf199STmScPWnikMieeY`
 
 **Mérve 2026-08-25.** A remote konténer NEM zsákutca: van egy `bridge` típusú

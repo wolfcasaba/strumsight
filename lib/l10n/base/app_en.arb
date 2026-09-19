@@ -3240,7 +3240,6 @@
   "@practicePlanStatusNoActiveLabel": {},
   "practicePlanStatusPlannedLabel": "Planned session",
   "@practicePlanStatusPlannedLabel": {},
-
   "todayHubTitle": "Today",
   "todayHubNewUserTitle": "Let's get started",
   "todayHubNewUserMessage": "Your first practice session takes just a few minutes.",
@@ -3253,14 +3252,13 @@
   "todayHubNoPlanMessage": "No plan yet — head to Practice to get started.",
   "todayHubViewProgressCta": "View progress",
   "todayHubVisionCardTitle": "Vision practice",
-  "todayHubVisionCardMessage": "Use your camera for guided finger-placement feedback.",
+  "todayHubVisionCardMessage": "Use your camera to check your framing and lighting before you play.",
   "todayHubVisionUnavailableReason": "Vision practice needs a supported device and isn't available in this build yet.",
   "todayHubPrivacyTitle": "Private by design",
   "todayHubPrivacyNoAccount": "No account needed",
   "todayHubPrivacyOffline": "Works fully offline",
   "todayHubPrivacyNoAds": "No ads, no subscription",
   "todayHubPrivacyAudioLocal": "Your audio never leaves the phone",
-
   "practiceAreaHubRecommendedTitle": "Recommended for you",
   "practiceAreaHubRecommendedMessage": "Jump into a practice session picked for where you are right now.",
   "practiceAreaHubRecommendedCta": "Start recommended practice",
@@ -3279,7 +3277,6 @@
   "@practiceAreaHubCategoryComingSoonHint": {
     "description": "Screen-reader hint announced with a disabled practice-category chip, spelling out WHY it cannot be activated (the tooltip is sighted-only feedback)."
   },
-
   "profileHubTitle": "Profile",
   "profileHubLocalOnlyTitle": "Local profile",
   "profileHubLocalOnlyMessage": "You're using StrumSight without an account — everything stays on this device.",
@@ -3292,7 +3289,6 @@
   "profileHubCommunityDisabledReason": "Community features aren't available in this build yet.",
   "profileHubCommunityEnabledMessage": "Connect with other players and share your progress.",
   "profileHubAchievementsSectionTitle": "Achievements",
-
   "libraryV2Title": "Library",
   "libraryV2SearchLabel": "Search your library",
   "libraryV2FilterAll": "All",
@@ -3429,7 +3425,6 @@
     "description": "Feed-card / bookmark-row action that opens the post's comment thread."
   },
   "communityHubLeaderboard": "Leaderboard",
-
   "songLibraryEmptyPracticeHint": "Up/down strumming drills live in the Practice hub — the library is for whole songs.",
   "songLibraryRestoreSeeds": "Restore the practice songs",
   "songLibraryRestoreSeedsDone": "{count} practice song(s) restored.",
@@ -3458,5 +3453,30 @@
   "songImportAudioAnalyzing": "Detecting chords and strums\u2026",
   "songImportAudioSaving": "Creating the draft song\u2026",
   "songEditorDraftBannerTitle": "Draft \u2014 review it before you practise",
-  "songEditorDraftBannerBody": "This song was derived from an audio file on your device. The chords, the strums and the tempo are estimates, not a transcription: check them and fix what is wrong."
+  "songEditorDraftBannerBody": "This song was derived from an audio file on your device. The chords, the strums and the tempo are estimates, not a transcription: check them and fix what is wrong.",
+  "authEmailTakenHint": "Already have an account? Switch to sign-in below.",
+  "setlistRunnerTitle": "Run a setlist",
+  "setlistRunnerBody": "Play a set in order — each song opens in the Song Trainer, and the set moves on when you finish it.",
+  "songTrainerLaunchFailed": "Couldn't start the session — the song changed since setup. Open it again.",
+  "tutorPlanPreviewEntryTitle": "Suggest a practice plan",
+  "tutorPlanPreviewEntryBody": "Turn your goals into a draft practice plan you can review, edit and activate.",
+  "planSetupGenerationFailed": "The plan could not be generated. Your answers are saved — try Finish again.",
+  "todayPlanActionFailed": "That change could not be saved. The plan is unchanged.",
+  "todayPlanSwapNoAlternative": "No same-skill alternative for today's exercise.",
+  "@todayPlanSwapNoAlternative": {},
+  "practicePlanStatusBadgeSemantic": "Status",
+  "@practicePlanStatusBadgeSemantic": {
+    "description": "Semantic label (a11y) for the status icon rendered next to a day-status label on the today plan screen."
+  },
+  "tutorPlanCatalogEmpty": "No exercises are available on this device yet, so no practice plan can be built.",
+  "tutorPlanDraftRationale": "Built from the exercises available on this device, for the practice length you chose.",
+  "tutorPlanDraftTitle": "{minutes}-minute practice plan",
+  "@tutorPlanDraftTitle": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "tutorPlanNotBuildable": "This practice plan cannot be prepared right now."
 }

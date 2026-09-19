@@ -22,6 +22,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/core/logging/app_logger.dart';
 import 'package:strumsight/core/network/api_client.dart';
 import 'package:strumsight/core/network/dio_factory.dart';
@@ -38,12 +39,16 @@ import 'package:strumsight/features/ai_tutor/application/prompts/tutor_prompt_bu
 import 'package:strumsight/features/ai_tutor/data/knowledge/knowledge_index.dart';
 import 'package:strumsight/features/ai_tutor/data/knowledge/knowledge_retriever.dart';
 import 'package:strumsight/features/ai_tutor/data/model_gateway/fake_tutor_model_gateway.dart';
+import 'package:strumsight/features/ai_tutor/data/model_gateway/local_tutor_model_gateway_stub.dart';
+import 'package:strumsight/features/ai_tutor/data/model_gateway/remote_tutor_model_gateway.dart';
 import 'package:strumsight/features/ai_tutor/data/model_gateway/tutor_model_gateway.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_consent.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_ids.dart';
 import 'package:strumsight/features/ai_tutor/domain/models/tutor_response_mode.dart';
 import 'package:strumsight/features/ai_tutor/domain/tools/tutor_tool.dart';
 import 'package:strumsight/features/ai_tutor/domain/tools/tutor_tool_request.dart';
+import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_gateway_providers.dart';
+import 'package:strumsight/features/ai_tutor/presentation/providers/tutor_providers.dart';
 import 'package:strumsight/features/analyze/model/analyze_result.dart';
 import 'package:strumsight/features/auth/data/token_store.dart';
 import 'package:strumsight/features/auth/providers/auth_providers.dart';
@@ -339,23 +344,25 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // MAJOR-3 (E12-R17 javító kör #1) — the machine guard against the measured
-  // gap: reduceTutorTurn's consent gate is sound, but the ONLY production
+  // MAJOR-3 (E12-R17 javító kör #1, CLOSED on the request-builder side in
+  // R9) — the machine guard against the measured gap: reduceTutorTurn's
+  // consent gate was always sound, but the ONLY production
   // TutorTurnRequest builder (`_previewTurnRequest`,
-  // lib/features/ai_tutor/presentation/providers/tutor_providers.dart:433,438)
-  // hardcodes `consent: const TutorConsent(modelUseGranted: true)` instead of
-  // reading `tutorConsentControllerProvider`. Today that is a latent gap, not
-  // a leak, because nothing in lib/** also constructs an
-  // HttpTutorStreamTransport (`wired: false` in the inventory). This group
-  // pins BOTH measured facts and proves the guard's own logic turns red for
-  // exactly the regression a future round could introduce (wiring the cloud
-  // transport without also fixing the request builder) — lib/** itself is
-  // out of scope for this round (§2), so the guard cannot be exercised by
-  // actually flipping production code; it is exercised as a pure function
-  // fed synthetic booleans, plus a real-tree cell that measures today's
-  // actual values.
+  // lib/features/ai_tutor/presentation/providers/tutor_providers.dart)
+  // used to hardcode `consent: const TutorConsent(modelUseGranted: true)`
+  // instead of reading `tutorConsentControllerProvider` — a revocation was
+  // a value nothing in lib/** ever read back into a turn.
+  //
+  // R9 removed the hardcode: `buildTutorTurnRequest` takes the consent as a
+  // parameter and `tutorChatControllerProvider` feeds it the LIVE provider
+  // value on every send. The cloud transport is still unwired
+  // (`wired: false` in the inventory, no HttpTutorStreamTransport
+  // construction site in lib/**), so both axes are pinned below: the guard's
+  // pure logic (fed synthetic booleans, including the regression it exists
+  // to catch), a real-tree cell measuring today's actual values, and two
+  // cells exercising the production producer itself.
   group('MAJOR-3 guard — the tutor cloud gateway must not become reachable '
-      'while the production request-builder still hardcodes '
+      'while the production request-builder hardcodes '
       'modelUseGranted: true', () {
     test('pure guard: wiring the cloud gateway while the hardcode is still '
         'present is UNSOUND (the exact MAJOR-3 regression)', () {
@@ -390,10 +397,10 @@ void main() {
       );
     });
 
-    test('real tree: HttpTutorStreamTransport has no construction site outside '
-        'its own declaring file, and _previewTurnRequest still hardcodes '
-        'modelUseGranted: true — both measured facts are pinned so either '
-        'silently changing trips this cell', () {
+    test('real tree: the cloud transport IS constructed now, and the '
+        'production request builder no longer hardcodes modelUseGranted: '
+        'true — both measured facts are pinned so either silently changing '
+        'trips this cell', () {
       final repository = Directory.current;
       final libDir = Directory('${repository.path}/lib');
       final declaringFile = _posixPath(
@@ -418,16 +425,28 @@ void main() {
         r'consent:\s*const\s+TutorConsent\(modelUseGranted:\s*true\)',
       ).hasMatch(providersSource);
 
-      // Pin today's exact measured state (E12-R17 javító kör #1 §2 —
-      // fixing THIS gap is explicitly out of scope; the pin is what makes
-      // a silent regression loud instead of invisible).
-      expect(gatewayConstructedElsewhere, isFalse);
-      expect(hardcodesGrantedTrue, isTrue);
+      // MAJOR-3 is CLOSED (R9/1 + R9/2), and the ORDER it demanded was
+      // honoured: the hardcode went first, the cloud transport second. The
+      // transport now HAS a production construction site
+      // (tutor_gateway_providers.dart — `wired: true` in the inventory), and
+      // the only production request builder reads the live consent
+      // provider. Re-introducing the hardcode while the transport is wired
+      // is exactly the unsound state the pure guard above rejects, and this
+      // cell measures both axes on the real tree.
+      expect(gatewayConstructedElsewhere, isTrue);
+      expect(hardcodesGrantedTrue, isFalse);
+      expect(
+        providersSource.contains('ref.read(tutorConsentControllerProvider)'),
+        isTrue,
+        reason:
+            'the production turn-request producer must read the live '
+            'consent provider on every send — a snapshot taken at '
+            'controller-build time would not see a mid-session revocation',
+      );
 
       // ...and feeding those exact measured values through the pure guard
-      // must be sound today, and would stop being sound the moment
-      // gatewayConstructedElsewhere flips to true without
-      // hardcodesGrantedTrue also flipping to false.
+      // must be sound: the gateway is wired AND the hardcode is gone, which
+      // is the one combination of those two that is safe.
       expect(
         tutorTurnConsentWiringIsSound(
           cloudGatewayHasConstructionSite: gatewayConstructedElsewhere,
@@ -435,6 +454,113 @@ void main() {
         ),
         isTrue,
       );
+    });
+
+    test('production producer: revoked model-use consent yields a typed '
+        'failure and NO request object at all', () {
+      final refused = buildTutorTurnRequest(
+        message: 'How can I improve my rhythm?',
+        consent: const TutorConsent(),
+      );
+
+      expect(refused, isA<Failure<TutorTurnRequest>>());
+      expect(refused.failureOrNull?.code, tutorModelUseConsentMissingCode);
+      expect(refused.valueOrNull, isNull);
+    });
+
+    test('production producer: granted model-use consent builds a request '
+        'that carries the student\'s ACTUAL consent value', () {
+      final granted = buildTutorTurnRequest(
+        message: 'How can I improve my rhythm?',
+        consent: const TutorConsent(modelUseGranted: true),
+      );
+
+      expect(granted, isA<Success<TutorTurnRequest>>());
+      expect(granted.valueOrNull?.consent.modelUseGranted, isTrue);
+      expect(granted.valueOrNull?.consent.persistentStorageGranted, isFalse);
+    });
+  });
+
+  // The second half of the same gate (R9/2). The request builder decides
+  // whether a turn exists at all; the selector decides which gateway runs
+  // it. Both must refuse the cloud independently — either one alone would
+  // leave a revoked student one refactor away from the network.
+  //
+  // R24 adds the build-level condition the 2026-09-07 re-audit found
+  // missing (MAJOR M2): `FeatureFlags.aiTutorCloudEnabled`. Consent is the
+  // student's decision; the flag is the ROLLOUT decision, and the shipped
+  // development build resolves it to false (`docs/release/ga-scope.md`:
+  // postponed behind the open `R-PRIV-01` blocker).
+  group('A3\' (R9/2, R24) — gateway selection never returns the cloud '
+      'gateway without model-use consent AND the build\'s cloud flag AND '
+      'an enabled account layer', () {
+    test('consent + cloud flag + account + a client is the ONLY combination '
+        'that selects the cloud gateway', () {
+      final gateway = selectTutorModelGateway(
+        consent: const TutorConsent(modelUseGranted: true),
+        cloudEnabled: true,
+        accountEnabled: true,
+        streamClient: Dio(),
+      );
+
+      expect(gateway, isA<RemoteTutorModelGateway>());
+    });
+
+    test('revoked model-use consent selects the local stub even when a '
+        'client and an account layer are both available', () {
+      final gateway = selectTutorModelGateway(
+        consent: const TutorConsent(
+          persistentStorageGranted: true,
+          evaluationWithRedactionGranted: true,
+        ),
+        cloudEnabled: true,
+        accountEnabled: true,
+        streamClient: Dio(),
+      );
+
+      expect(gateway, isA<LocalTutorModelGatewayStub>());
+    });
+
+    test('a build whose cloud tutor is not rolled out selects the local '
+        'stub even with consent granted', () {
+      final gateway = selectTutorModelGateway(
+        consent: const TutorConsent(modelUseGranted: true),
+        cloudEnabled: false,
+        accountEnabled: true,
+        streamClient: Dio(),
+      );
+
+      expect(
+        gateway,
+        isA<LocalTutorModelGatewayStub>(),
+        reason:
+            'consent authorizes a capability the build ships; it cannot '
+            'open one the rollout has not released',
+      );
+    });
+
+    test('an account-disabled build selects the local stub even with '
+        'consent granted', () {
+      final gateway = selectTutorModelGateway(
+        consent: const TutorConsent(modelUseGranted: true),
+        cloudEnabled: true,
+        accountEnabled: false,
+        streamClient: Dio(),
+      );
+
+      expect(gateway, isA<LocalTutorModelGatewayStub>());
+    });
+
+    test('no stream client selects the local stub — never a half-built '
+        'cloud gateway', () {
+      final gateway = selectTutorModelGateway(
+        consent: const TutorConsent(modelUseGranted: true),
+        cloudEnabled: true,
+        accountEnabled: true,
+        streamClient: null,
+      );
+
+      expect(gateway, isA<LocalTutorModelGatewayStub>());
     });
   });
 }

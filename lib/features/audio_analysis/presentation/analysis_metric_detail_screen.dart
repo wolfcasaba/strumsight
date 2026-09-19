@@ -1,11 +1,48 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
+import '../../../app/routing/app_route.dart';
 import 'controllers/overview_view_model.dart';
+import 'insight_action_route.dart';
 import 'widgets/insight_card.dart';
 import 'widgets/metric_card.dart';
+
+/// R30 (re-audit #2 B2) — leaves the detail screen.
+///
+/// The empty state's "Close" used to be a bare `maybePop`, and the screen
+/// was reached with a stack-replacing `go`: there was nothing to pop, so the
+/// only control on that state did NOTHING. The overview now pushes this
+/// screen, so the pop is real; the analysis home is the fallback for a
+/// detail page reached with no stack under it.
+///
+/// R35 (run 562 lelet): the `canPop`/`pop` pair is the ROUTER's, not the
+/// nearest `Navigator`'s. This route is registered ABOVE the
+/// `StatefulShellRoute`, so the `go` fallback below rebuilds the shell
+/// while this page is still animating out — the one production path left
+/// that can reparent a live `StatefulNavigationShell` (two shells in the
+/// tree at once means a duplicated `GlobalKey`). `GoRouter.canPop()` reads
+/// go_router's OWN match list, shell-branch stacks included, so the
+/// fallback is taken only when go_router itself agrees nothing sits under
+/// this page; and `GoRouter.pop()` keeps that match list in step, which a
+/// raw `Navigator.pop()` on a go_router page does not.
+void _closeMetricDetail(BuildContext context) {
+  final router = GoRouter.maybeOf(context);
+  if (router == null) {
+    // Pumped as a bare `home:` (widget tests, golden fixtures): there is
+    // no shell to reparent and no router stack to keep in step, so the
+    // local navigator is the only exit that exists.
+    Navigator.of(context).maybePop();
+    return;
+  }
+  if (router.canPop()) {
+    router.pop();
+    return;
+  }
+  router.go(AppRoutes.analysisHome);
+}
 
 /// Single-metric detail screen — lists every metric card the document
 /// publishes, plus (when reached via the overview's "Részletek" entry
@@ -51,7 +88,7 @@ class AnalysisMetricDetailScreen extends StatelessWidget {
                 title: l10n.analysisOverviewUnavailable,
                 message: l10n.analysisOverviewNotApplicable,
                 actionLabel: l10n.commonClose,
-                onAction: () => Navigator.of(context).maybePop(),
+                onAction: () => _closeMetricDetail(context),
               )
             : ListView(
                 padding: const EdgeInsets.all(SsSpacing.space4),
@@ -78,7 +115,12 @@ class AnalysisMetricDetailScreen extends StatelessWidget {
                       ),
                     ),
                     for (final insight in insights) ...<Widget>[
-                      InsightCard(card: insight),
+                      // R22 (audit MI3) — same live CTA as the overview.
+                      InsightCard(
+                        card: insight,
+                        onAction: (action) =>
+                            context.push(insightActionRoute(action)),
+                      ),
                       const SizedBox(height: SsSpacing.space2),
                     ],
                   ],

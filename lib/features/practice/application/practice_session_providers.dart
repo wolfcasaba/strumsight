@@ -34,8 +34,6 @@ import '../../../core/foundation/app_result.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/logging/logger_provider.dart';
 import '../../../core/platform/microphone_permission.dart';
-import '../../gamification/public.dart' show activityEventIngestorProvider;
-import '../../streak/public.dart' show streakProvider;
 import '../data/local_practice_history_repository.dart';
 import '../data/practice_history_recorder.dart';
 import '../data/practice_observation_gateway_provider.dart';
@@ -43,16 +41,12 @@ import '../data/practice_session_result_history_mapper.dart';
 import '../domain/model/compiled_practice_target.dart';
 import '../domain/model/practice_definition.dart';
 import '../domain/model/practice_session_config.dart';
-import '../domain/repository/practice_history_repository.dart';
 import '../domain/repository/practice_session_recorder.dart';
 import '../domain/service/practice_target_compiler.dart';
 import 'practice_observation_gateway.dart';
-import 'practice_reward_providers.dart';
-import 'practice_reward_recorder.dart';
+import 'practice_result_target.dart';
+import 'practice_session_after_record.dart';
 import 'practice_session_clock.dart';
-import 'practice_session_recording.dart'
-    show practiceSessionEligibilityProvider;
-import 'practice_streak_recorder.dart';
 import 'practice_session_controller.dart';
 import 'practice_tick_source.dart';
 
@@ -68,33 +62,25 @@ final practiceTickSourceProvider = Provider<PracticeTickSource>(
   (_) => TimerPracticeTickSource(),
 );
 
-/// Default persistence boundary. Kör 18 ships the real recorder backed by
-/// the versioned [PracticeHistoryRepository]; the controller's finish path
-/// reads through this provider.
+/// The Kör 18 persistence boundary — **no longer on the live path** (R21,
+/// audit MI10). It is kept as the B2 write-then-drop guard and is read by
+/// `test/features/practice/data/practice_history_recorder_test.dart`; `lib/`
+/// has no other reader.
 ///
-/// The recorder is wired with **placeholder** mode/source/definition codes
-/// today — the controller does not surface the session's
-/// `PracticeSessionConfig`, so the real metadata plumbing belongs to R19.
-/// Until then, the persistence layer MUST NOT write records the serializer
-/// would reject on read (a write-then-drop trap, see brief B2): the provider
-/// resolves to a [NoopPracticeSessionRecorder] whenever the wired codes are
-/// still the placeholders, so a production record() returns `Success` without
-/// writing anything that would be discarded by the reader.
-/// **NOT the path the controller takes.** MEASURED (E18-R20): nothing reads this
-/// provider. `practiceSessionControllerProvider`'s family builds its own
-/// `PracticeHistoryRecorder` inline, from `inputs.definition`, with the real mode,
-/// source and id — so the live recorder never sees the placeholder metadata this
-/// provider's gate is about, and the gate below has never fired in production.
+/// The session that actually runs builds its recorder inside
+/// [practiceSessionControllerProvider] from the session's own
+/// `PracticeDefinition` — REAL mode/source/definition codes, wrapped in
+/// `PracticeSessionRecorderWithHooks`. So the "placeholder metadata" the
+/// branch below guards against is a property of THIS provider only; do not
+/// read it as a statement about what a finished practice session persists.
 ///
-/// It is kept rather than deleted because its predicate
-/// ([isPlaceholderPracticeMetadata]) is where the write-then-drop trap is written
-/// down, and the live path's own guard is stated in terms of it
-/// (`test/features/practice/practice_recorder_live_path_test.dart`: the typed `mode`
-/// and `source` fields make the placeholder unreachable, and no shipped definition
-/// carries the placeholder id). What was corrected is the CLAIM: the B2 cell over in
-/// `practice_history_recorder_test.dart` described this provider as "the production
-/// path the controller takes on every finish", which would have let everyone after it
-/// believe the live path was covered when it was not.
+/// The guard itself: the recorder here is wired with **placeholder**
+/// mode/source/definition codes, and the persistence layer MUST NOT write
+/// records the serializer would reject on read (the B2 write-then-drop
+/// trap). The provider therefore resolves to a
+/// [NoopPracticeSessionRecorder] whenever the wired codes are still the
+/// placeholders, so a `record()` returns `Success` without writing anything
+/// the reader would discard.
 final practiceSessionRecorderProvider = Provider<PracticeSessionRecorder>((
   ref,
 ) {
@@ -110,11 +96,12 @@ final practiceSessionRecorderProvider = Provider<PracticeSessionRecorder>((
     sourceCode: sourceCode,
     definitionId: definitionId,
   )) {
-    // R19: real session metadata plumbing — when the controller exposes
-    // `PracticeSessionConfig`, this branch disappears and the real recorder
-    // writes loadable records. Today, the real recorder would emit records
-    // the reader drops (unknown enum code → JsonRecordException), so we
-    // intentionally return the no-op recorder instead.
+    // Always taken today: the three codes above ARE the placeholders, so
+    // this provider is a no-op recorder in every configuration. The live
+    // path never gets here — it builds its recorder from the session's own
+    // `PracticeDefinition` (see `practiceSessionControllerProvider`). The
+    // real recorder here would emit records the reader drops (unknown enum
+    // code → JsonRecordException), so the no-op is the honest answer.
     return const NoopPracticeSessionRecorder();
   }
   return PracticeHistoryRecorder(
@@ -264,39 +251,31 @@ final practiceSessionControllerProvider = Provider.autoDispose
           (cfg) => cfg.flags.practiceDetailedHistoryEnabled,
         ),
       );
-      final historyRecorder = PracticeHistoryRecorder(
-        repository: repository,
-        mapperFactory: () => PracticeSessionResultHistoryMapper(
-          now: DateTime.now,
-          detailEnabled: detailed,
-          modeCode: inputs.definition.mode.code,
-          sourceCode: inputs.definition.source.code,
-          definitionId: inputs.definition.id,
-          displayTitle: inputs.definition.displayTitle ?? '',
-          skillTags: inputs.definition.skillTags,
-        ),
-      );
       final logger = ref.watch(practiceSessionLoggerProvider);
-      // Learner-loop round 4: a saved, eligible session credits the streak
-      // the Today/Profile hubs read (the V1 log is NOT mirrored — the
-      // aggregated feed already unions V2 history with it).
-      final streakRecorder = StreakCreditingPracticeSessionRecorder(
-        inner: historyRecorder,
-        streak: ref.watch(streakProvider.notifier),
-        eligibility: ref.watch(practiceSessionEligibilityProvider),
-        now: DateTime.now,
+      // Javító sáv 2026-09-06: the durable write is unchanged; the hooks
+      // (history-view refresh, streak credit, XP) run only after it
+      // succeeded, and never fail the session
+      // (`practice_session_after_record.dart`).
+      final recorder = PracticeSessionRecorderWithHooks(
+        inner: PracticeHistoryRecorder(
+          repository: repository,
+          mapperFactory: () => PracticeSessionResultHistoryMapper(
+            now: DateTime.now,
+            detailEnabled: detailed,
+            modeCode: inputs.definition.mode.code,
+            sourceCode: inputs.definition.source.code,
+            definitionId: inputs.definition.id,
+            displayTitle: inputs.definition.displayTitle ?? '',
+            skillTags: inputs.definition.skillTags,
+          ),
+        ),
+        definition: inputs.definition,
+        hooks: ref.watch(practiceSessionRecordedHooksProvider),
         logger: logger,
-      );
-      // Learner-loop XP round: the saved session is fed to the shared reward
-      // pipeline (adapter → outbox → ledger) AFTER the history save, so the
-      // result screen's reward card reads a real ledger entry.
-      final recorder = RewardingPracticeSessionRecorder(
-        inner: streakRecorder,
-        adapter: ref.watch(practiceGamificationAdapterProvider),
-        ingestor: ref.watch(activityEventIngestorProvider),
-        definitionId: inputs.definition.id,
-        now: DateTime.now,
-        logger: logger,
+        onRecordFailed: (result) {
+          if (!ref.mounted) return;
+          ref.read(practiceResultTargetProvider.notifier).recordFailed();
+        },
       );
       final clock = ref.watch(practiceSessionClockProvider);
       final tickSource = ref.watch(practiceTickSourceProvider);

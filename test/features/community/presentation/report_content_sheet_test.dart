@@ -20,6 +20,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/features/community/presentation/dialogs/report_content_sheet.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
@@ -27,7 +28,16 @@ import 'package:strumsight/l10n/app_localizations.dart';
 /// Recording fake — captures every repository call so the test can
 /// assert the wire shape.
 class _RecordingReportRepository implements ReportRepository {
-  _RecordingReportRepository({this.submitShouldFail = false});
+  _RecordingReportRepository({
+    this.submitShouldFail = false,
+    this.submitFailure,
+  });
+
+  /// R33 — the WIRED repository throws an [AppFailure] value, which is a
+  /// sealed class and NOT an `Exception`. Before R33 the sheet caught
+  /// only `on Exception`, so every real submit failure would have flown
+  /// straight past the handler and taken the sheet down.
+  final AppFailure? submitFailure;
 
   final List<
     ({
@@ -69,6 +79,8 @@ class _RecordingReportRepository implements ReportRepository {
       category: category,
       idempotencyKey: idempotencyKey,
     ));
+    final failure = submitFailure;
+    if (failure != null) throw failure;
     if (submitShouldFail) {
       throw Exception('repository offline');
     }
@@ -405,6 +417,56 @@ void main() {
     // Thanks phase NOT shown — we're still in compose phase.
     expect(find.text('Report received — thank you'), findsNothing);
     // And the error message is surfaced via the ScaffoldMessenger.
+    expect(
+      find.text("We couldn't submit that report. Please try again."),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('R33 — an AppFailure value is caught, not thrown through', (
+    tester,
+  ) async {
+    final repo = _RecordingReportRepository(
+      submitFailure: const NetworkFailure(
+        code: FailureCode.networkUnavailable,
+        retryable: true,
+      ),
+    );
+    await tester.pumpWidget(_harness(repository: repo));
+    await _openSheet(tester);
+
+    await tester.tap(find.byKey(const Key('report-category-spam')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('report-submit')));
+    await tester.pumpAndSettle();
+
+    // No thanks view for a report that never landed…
+    expect(find.text('Report received — thank you'), findsNothing);
+    // …and a transport failure gets the transport copy, not the generic
+    // "we couldn't submit" one.
+    expect(find.text('No network connection'), findsOneWidget);
+  });
+
+  testWidgets('R33 — a server-side failure keeps the generic copy', (
+    tester,
+  ) async {
+    // The shared Dio mapper folds 429 into the SAME `network.server` code
+    // as every 5xx, so the client cannot tell a report throttle from an
+    // outage — naming one would be a cause we did not measure.
+    final repo = _RecordingReportRepository(
+      submitFailure: const NetworkFailure(
+        code: FailureCode.networkServer,
+        retryable: true,
+      ),
+    );
+    await tester.pumpWidget(_harness(repository: repo));
+    await _openSheet(tester);
+
+    await tester.tap(find.byKey(const Key('report-category-spam')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('report-submit')));
+    await tester.pumpAndSettle();
+
     expect(
       find.text("We couldn't submit that report. Please try again."),
       findsOneWidget,

@@ -62,6 +62,23 @@ import '../widgets/tutor_banners.dart';
 import '../widgets/tutor_composer.dart';
 import '../widgets/tutor_message_bubble.dart';
 import 'practice_plan_preview_screen.dart';
+import '../widgets/tutor_source_sheet.dart';
+
+/// The Chat's way back (2026-09-07 audit).
+///
+/// The screen is reached two ways: PUSHED from the Tutor Home (a route to
+/// pop back to) and via a `/tutor/chat` deep link, which leaves nothing to
+/// pop. There the bare `maybePop` this button used to call silently
+/// no-ops — a back arrow that does nothing at all. The fallback goes to
+/// the Tutor Home, which is registered under the very same `aiTutorEnabled`
+/// gate as this screen, so it can never point at an unregistered path.
+Future<void> _leaveChat(BuildContext context) async {
+  final navigator = Navigator.of(context);
+  final router = GoRouter.maybeOf(context);
+  final popped = await navigator.maybePop();
+  if (popped || router == null) return;
+  router.go(AppRoutes.tutorHome);
+}
 
 class TutorChatScreen extends ConsumerStatefulWidget {
   const TutorChatScreen({super.key});
@@ -252,7 +269,7 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.of(context).maybePop(),
+            onPressed: () => _leaveChat(context),
           ),
           title: Text(l10n.aiTutorChatTitle),
           actions: <Widget>[
@@ -344,6 +361,30 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
   }
 }
 
+/// Where the consent banner's call to action goes (2026-09-08 re-audit,
+/// MAJOR M3).
+///
+/// [TutorBanner] has always rendered a "Grant consent" button for
+/// [TutorBannerKind.consent], but the chat screen never passed
+/// `onConsent` — so that [TextButton] was built with a null `onPressed`
+/// and was PERMANENTLY DISABLED. The student was told, on the one screen
+/// where it matters, that model use is not granted, and given a greyed-out
+/// button as the way to fix it.
+///
+/// The destination is the app's single consent surface, the Tutor Privacy
+/// screen, whose `tutorConsentAxisModelUse` switch is the only thing in
+/// `lib/**` that calls `TutorConsentController.grantModelUse` — the banner
+/// deliberately does NOT grant consent by itself: ADR 0132 §1/§3 requires
+/// the student to read the axis and decide, not to tap a chat banner.
+///
+/// `push`, not `go`: the student returns to the conversation they were
+/// already in. The route is registered under the very same `aiTutorEnabled`
+/// gate as this screen (`app_router.dart`), so it can never be an
+/// unregistered path.
+void _openConsent(BuildContext context) {
+  GoRouter.maybeOf(context)?.push(AppRoutes.tutorPrivacy);
+}
+
 class _BannerSlot extends StatelessWidget {
   const _BannerSlot({required this.kind, required this.controller});
 
@@ -352,7 +393,11 @@ class _BannerSlot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TutorBanner(kind: kind, onRetry: controller.retry);
+    return TutorBanner(
+      kind: kind,
+      onRetry: controller.retry,
+      onConsent: () => _openConsent(context),
+    );
   }
 }
 
@@ -437,6 +482,16 @@ class _ChatBubble extends StatelessWidget {
     return TutorMessageBubble(
       message: message,
       onPracticePlanTap: onPracticePlanTap,
+      // M13 (R33) — the rendered source line is what opens the evidence
+      // sheet. `showTutorSourceSheet` had no `lib/**` caller before
+      // this: the citation was drawn and could not be inspected.
+      onSourceTap: (block) => showTutorSourceSheet(
+        context,
+        TutorSourceSheet.forSourceBlock(
+          title: block.title,
+          reference: block.reference,
+        ),
+      ),
     );
   }
 }

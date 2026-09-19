@@ -19,6 +19,11 @@ void main() {
   const fragments = <(String label, String enPath, String huPath)>[
     ('base/app', 'lib/l10n/base/app_en.arb', 'lib/l10n/base/app_hu.arb'),
     (
+      'features/analysis',
+      'lib/l10n/features/analysis_en.arb',
+      'lib/l10n/features/analysis_hu.arb',
+    ),
+    (
       'features/community',
       'lib/l10n/features/community_en.arb',
       'lib/l10n/features/community_hu.arb',
@@ -37,6 +42,31 @@ void main() {
       'features/onboarding',
       'lib/l10n/features/onboarding_en.arb',
       'lib/l10n/features/onboarding_hu.arb',
+    ),
+    (
+      'features/practice',
+      'lib/l10n/features/practice_en.arb',
+      'lib/l10n/features/practice_hu.arb',
+    ),
+    (
+      'features/progress',
+      'lib/l10n/features/progress_en.arb',
+      'lib/l10n/features/progress_hu.arb',
+    ),
+    (
+      'features/shell',
+      'lib/l10n/features/shell_en.arb',
+      'lib/l10n/features/shell_hu.arb',
+    ),
+    (
+      'features/song_trainer',
+      'lib/l10n/features/song_trainer_en.arb',
+      'lib/l10n/features/song_trainer_hu.arb',
+    ),
+    (
+      'features/today',
+      'lib/l10n/features/today_en.arb',
+      'lib/l10n/features/today_hu.arb',
     ),
     (
       'features/tuner',

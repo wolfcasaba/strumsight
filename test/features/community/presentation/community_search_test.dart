@@ -180,6 +180,7 @@ CommunityProfile _profile(String suffix) => CommunityProfile(
 Widget _harness({
   required CommunityProfileRepository repo,
   RecentSearchStore? store,
+  Locale locale = const Locale('en'),
 }) {
   return ProviderScope(
     overrides: [communityProfileRepositoryProvider.overrideWithValue(repo)],
@@ -191,10 +192,18 @@ Widget _harness({
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: AppLocalizations.supportedLocales,
+      locale: locale,
       home: CommunitySearchScreen(recentSearchStore: store),
     ),
   );
 }
+
+/// R20 (audit M9) — the screen's copy now comes from the ARB catalogue, so
+/// the cells below assert on the CATALOGUE, not on the English literals the
+/// screen used to hardcode.
+AppLocalizations _en() => lookupAppLocalizations(const Locale('en'));
+
+AppLocalizations _hu() => lookupAppLocalizations(const Locale('hu'));
 
 void main() {
   testWidgets(
@@ -253,16 +262,13 @@ void main() {
       await tester.pumpWidget(_harness(repo: repo, store: store));
       await tester.pumpAndSettle();
 
-      expect(find.text('Clear all'), findsOneWidget);
+      expect(find.text(_en().communitySearchClearAll), findsOneWidget);
 
-      await tester.tap(find.text('Clear all'));
+      await tester.tap(find.text(_en().communitySearchClearAll));
       await tester.pumpAndSettle();
 
       // Empty-state copy shows up; recent list rows are gone.
-      expect(
-        find.text('Type a handle prefix to discover players.'),
-        findsOneWidget,
-      );
+      expect(find.text(_en().communitySearchEmptyHint), findsOneWidget);
       expect(find.text('alice'), findsNothing);
       expect(find.text('bob'), findsNothing);
 
@@ -287,10 +293,7 @@ void main() {
     await tester.pumpWidget(_harness(repo: repo, store: store));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Type a handle prefix to discover players.'),
-      findsOneWidget,
-    );
+    expect(find.text(_en().communitySearchEmptyHint), findsOneWidget);
   });
 
   testWidgets(
@@ -384,7 +387,7 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.search);
       await tester.pumpAndSettle();
 
-      expect(find.text('No matches.'), findsOneWidget);
+      expect(find.text(_en().communitySearchNoMatches), findsOneWidget);
     },
   );
 
@@ -402,8 +405,34 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pumpAndSettle();
 
-    expect(find.text('Network error'), findsOneWidget);
-    expect(find.text('Retry'), findsOneWidget);
+    expect(find.text(_en().communitySearchNetworkError), findsOneWidget);
+    expect(find.text(_en().communitySearchRetry), findsOneWidget);
+  });
+
+  // R20 (audit M9) — the screen was outside l10n entirely: an English
+  // literal per label, so a Hungarian viewer got an English search surface.
+  // The falsification guard (L519): only a still-hardcoded literal can make
+  // the ENGLISH copy visible under a `hu` locale.
+  testWidgets('R20 — the search copy follows the locale, not a literal', (
+    tester,
+  ) async {
+    final store = RecentSearchStore.open(_MemoryKeyValueStore());
+    final repo = _FakeCommunityProfileRepository(
+      (query, _) async => const CommunityPage<CommunityProfile>(
+        items: <CommunityProfile>[],
+        cursor: CursorPage.haltedAfterRequest(),
+      ),
+    );
+
+    await tester.pumpWidget(
+      _harness(repo: repo, store: store, locale: const Locale('hu')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(_hu().communitySearchHint), findsOneWidget);
+    expect(find.text(_hu().communitySearchEmptyHint), findsOneWidget);
+    expect(find.text(_en().communitySearchHint), findsNothing);
+    expect(find.text(_en().communitySearchEmptyHint), findsNothing);
   });
 
   // F1 regression — the real wire-decode path produces DISTINCT

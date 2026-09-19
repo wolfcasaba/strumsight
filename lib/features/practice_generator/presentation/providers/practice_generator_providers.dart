@@ -27,7 +27,7 @@ import 'package:strumsight/features/practice/public.dart'
     show practiceCatalogProvider;
 
 import '../../../../core/foundation/app_result.dart';
-import '../../../../core/i18n/locale_provider.dart';
+import '../../../../core/i18n/effective_locale.dart';
 import '../../../../core/storage/storage_providers.dart';
 import '../../application/controller/active_plan_controller.dart';
 import '../../application/controller/today_plan_controller.dart';
@@ -39,6 +39,8 @@ import '../../application/usecase/propose_today_plan_change.dart';
 import '../../application/usecase/revise_practice_plan.dart';
 import '../../application/usecase/start_plan_generation.dart';
 import '../../data/adapter/practice_engine_catalog_reader.dart';
+import '../../application/port/catch_up_notice_log.dart';
+import '../../data/local/catch_up_notice_store.dart';
 import '../../data/local/generation_draft_repository.dart';
 import '../../data/local/local_practice_evidence_repository.dart';
 import '../../data/local/local_practice_plan_repository.dart';
@@ -223,13 +225,18 @@ final planSetupControllerProvider = Provider<PlanSetupController>((ref) {
     // `locale` constructor parameter is a plain `String` snapshot
     // (`PlanSetupController` lives in the forbidden `presentation/
     // controller/` zone for this round, so it cannot be changed to accept
-    // a locale-reading function the way `clock` does). Watching
-    // `localeProvider` here would rebuild — and so dispose — this whole
-    // provider on every runtime locale change, discarding an in-progress
-    // wizard draft the controller is holding in memory. `ref.read` takes
-    // the locale once, at first build, without subscribing to later
-    // changes.
-    locale: ref.read(localeProvider)?.languageCode ?? 'en',
+    // a locale-reading function the way `clock` does). Watching the locale
+    // here would rebuild — and so dispose — this whole provider on every
+    // runtime locale change, discarding an in-progress wizard draft the
+    // controller is holding in memory. `ref.read` takes the locale once,
+    // at first build, without subscribing to later changes.
+    //
+    // M5 (re-audit 2026-09-08): `effectiveLocaleProvider`, NOT
+    // `localeProvider`. The stored preference is `null` for "follow the
+    // system" — its default — and `?? 'en'` turned that into an ENGLISH
+    // generated plan on a Hungarian phone whose owner never opened the
+    // language setting.
+    locale: ref.read(effectiveLocaleProvider).languageCode,
   );
   ref.onDispose(controller.dispose);
   return controller;
@@ -300,20 +307,6 @@ final revisePracticePlanProvider = Provider<RevisePracticePlan>(
   (ref) => RevisePracticePlan(clock: ref.watch(practiceGeneratorClockProvider)),
 );
 
-/// Learner-initiated rewrites of the active plan (shorten / skip / pause)
-/// — revision ids come from the shared id generator, candidates from the
-/// catalog resolver keyed by the block's persisted exercise id (a
-/// prescription carries the id and provenance, never the candidate).
-final activePlanControllerProvider = Provider<ActivePlanController>((ref) {
-  final generateId = ref.watch(practiceGeneratorIdGeneratorProvider);
-  final resolveCandidate = ref.watch(exerciseCandidateResolverProvider);
-  return ActivePlanController(
-    generateRevisionId: () => RevisionId.generate(generateId),
-    resolveCandidate: (block) =>
-        resolveCandidate(block.prescription.exerciseId),
-  );
-});
-
 final proposeTodayPlanChangeProvider = Provider<ProposeTodayPlanChange>(
   (ref) => ProposeTodayPlanChange(
     activePlanController: ref.watch(activePlanControllerProvider),
@@ -354,10 +347,51 @@ final todayPlanChangeProposalProvider =
 // Screen 5/6 — TodayPlanScreen
 // ---------------------------------------------------------------------------
 
-final todayPlanControllerProvider = Provider<TodayPlanController>(
+/// Where "this plan revision's catch-up explainer was already offered"
+/// lives (ADR 0269 §5 — offered once, never nagged).
+///
+/// The PERSISTENT binding, never the in-memory default that ships with
+/// `TodayPlanController`: an offer that is forgotten on every app start
+/// would put the notice back on the Today screen every single launch,
+/// which is the pressure the ADR's tone rule exists to prevent.
+final catchUpNoticeLogProvider = Provider<CatchUpNoticeLog>(
   (ref) =>
-      TodayPlanController(clock: ref.watch(practiceGeneratorClockProvider)),
+      StoredCatchUpNoticeLog(keyValueStore: ref.watch(keyValueStoreProvider)),
 );
+
+final todayPlanControllerProvider = Provider<TodayPlanController>(
+  (ref) => TodayPlanController(
+    clock: ref.watch(practiceGeneratorClockProvider),
+    catchUpNoticeLog: ref.watch(catchUpNoticeLogProvider),
+  ),
+);
+
+/// The learner-side reschedules (skip / shorten / pause) over the ACTIVE
+/// plan (javító sáv 2026-09-06 — until then the controller had zero callers
+/// in `lib/`, so the Today screen's buttons stayed disabled). The block's
+/// `exerciseId` is the catalog key, resolved through the same fail-loud
+/// resolver the repository uses.
+/// The pool a learner-initiated SWAP draws from: the very catalog snapshot
+/// the generator itself planned with (javító sáv 2026-09-07 — until then
+/// `ActivePlanController` had no swap operation at all, so the Today
+/// screen's Swap button stayed disabled). The same-skill and contract
+/// filters live in `ActivePlanController.swap`, so this provider hands over
+/// the snapshot as-is instead of duplicating that rule here.
+final activePlanAlternativeResolverProvider =
+    Provider<ActivePlanAlternativeResolver>((ref) {
+      final snapshot = ref.watch(practiceCatalogSnapshotProvider);
+      return (_) => snapshot.candidates;
+    });
+
+final activePlanControllerProvider = Provider<ActivePlanController>((ref) {
+  final generateId = ref.watch(practiceGeneratorIdGeneratorProvider);
+  final resolve = ref.watch(exerciseCandidateResolverProvider);
+  return ActivePlanController(
+    generateRevisionId: () => RevisionId.generate(generateId),
+    resolveCandidate: (block) => resolve(block.prescription.exerciseId),
+    resolveAlternatives: ref.watch(activePlanAlternativeResolverProvider),
+  );
+});
 
 // ---------------------------------------------------------------------------
 // Screen 6/6 — WeeklyPlanScreen

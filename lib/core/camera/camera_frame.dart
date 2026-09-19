@@ -20,12 +20,21 @@ final class CameraFrame {
     required this.orientation,
     this.mirror = false,
     this.crop,
+    this.rowStride,
   }) : _bytes = Uint8List.fromList(bytes) {
     if (frameId < 0) {
       throw ArgumentError.value(frameId, 'frameId', 'Must not be negative.');
     }
     if (width <= 0 || height <= 0) {
       throw ArgumentError('Frame dimensions must be positive.');
+    }
+    final stride = rowStride;
+    if (stride != null && stride < width) {
+      throw ArgumentError.value(
+        stride,
+        'rowStride',
+        'Must be at least the frame width.',
+      );
     }
   }
 
@@ -42,7 +51,19 @@ final class CameraFrame {
 
   /// Raw pixel-space crop reported by the platform, or `null` for full frame.
   final CameraCrop? crop;
+
+  /// Bytes per row of the first (luminance) plane, when the platform padded
+  /// it. `null` means the adapter reported no padding.
+  ///
+  /// Android's Y plane routinely has `bytesPerRow > width`. Without this
+  /// number a reader indexes `y * width + x` into a padded buffer and shears
+  /// the image by `rowStride - width` pixels per row — silently, because the
+  /// total byte count still looks large enough. Carry it, never assume it.
+  final int? rowStride;
   bool _isValid = true;
+
+  /// Bytes per row of the luminance plane; [width] when none was reported.
+  int get luminanceRowStride => rowStride ?? width;
 
   /// Whether the borrowed buffer may still be read.
   bool get isValid => _isValid;

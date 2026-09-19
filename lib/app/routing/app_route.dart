@@ -16,6 +16,22 @@ abstract final class AppRoutes {
   static const String progress = '/progress';
   static const String songs = '/songs';
   static const String setlists = '/setlists';
+
+  // Setlist V2 (R10, 2026-09-07 — audit §5.2). The V2 list and its ordered
+  // session had no route at all, so a Setlist V2 could never be played.
+  // They get their OWN paths rather than replacing [setlists] /
+  // [songsSetlists]: those two still render the legacy `SetlistListScreen`
+  // and both mappings are pinned by
+  // `test/app/navigation/legacy_route_redirect_test.dart` and
+  // `test/app/navigation/adaptive_scaffold_test.dart`. `/setlists/v2` is
+  // NOT a redirect source either — `legacyRedirects` is an exact-path map,
+  // so the adaptive shell leaves it alone.
+  static const String setlistsV2 = '/setlists/v2';
+
+  /// The ordered Setlist run. The `SongSetlist` travels as `extra`; the
+  /// route redirects to [setlistsV2] when it is absent, so a deep link
+  /// cannot land on a session with no setlist behind it.
+  static const String setlistSession = '/setlists/v2/session';
   static const String chords = '/chords';
   // The curriculum's down/up rhythm pillar (the Yousician differentiator):
   // the strumming-hand motion plus the notation row.
@@ -27,6 +43,15 @@ abstract final class AppRoutes {
   static const String login = '/login';
   static const String librarySession = '/library/session';
   static const String practiceHub = '/practice';
+
+  /// The full practice catalog list (R18, audit B1/B2). Registered
+  /// independently of `adaptiveShellEnabled`: the shell's own `/practice`
+  /// destination renders the Practice AREA hub, which offers exactly one
+  /// definition (`catalog.first`), so without this route the other nine
+  /// built-in practices had no on-screen entry point at all. An optional
+  /// `?category=<PracticeCategory.code>` query narrows the list to one goal
+  /// category; an unknown code simply means "no filter" (never an error).
+  static const String practiceCatalog = '/practice/catalog';
   static const String practiceSetup = '/practice/setup';
   static const String practiceSession = '/practice/session';
   static const String practiceResult = '/practice/result';
@@ -59,6 +84,7 @@ abstract final class AppRoutes {
   static const String tutorProfile = '/tutor/profile';
   static const String tutorPrivacy = '/tutor/privacy';
   static const String tutorData = '/tutor/data';
+  static const String tutorPlanPreview = '/tutor/plan-preview';
   static const String visionSetup = '/vision/setup';
   static const String visionGuitarGeometry = '/vision/guitar-geometry';
   static const String visionSession = '/vision/session';

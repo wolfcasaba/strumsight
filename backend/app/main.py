@@ -8,6 +8,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from alembic.config import Config as AlembicConfig
 from alembic.migration import MigrationContext
@@ -27,11 +28,39 @@ from .database import Base, create_database_engine, create_session_factory
 from .routers import auth, diagnostics
 from .routers import settings as settings_router
 
+if TYPE_CHECKING:  # pragma: no cover — import cycle guard, runtime uses lazy imports
+    from .tutor.provider_gateway import ProviderGateway
+
 _DEV_SECRET = Settings.model_fields["secret_key"].default
 _DEV_DIAGNOSTICS_TOKEN = Settings.model_fields["diag_token"].default
 _DEV_TUTOR_KEY = Settings.model_fields["tutor_api_key"].default
 _ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
 _logger = logging.getLogger(__name__)
+_APP_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
+
+
+def _configure_app_logging() -> None:
+    """Make `app.*` INFO records actually reach the container's log stream.
+
+    MEASURED (R14): uvicorn's default logging config attaches handlers only
+    to its OWN `uvicorn*` loggers and leaves the root logger without any, so
+    an `app.routers.auth` INFO record propagates to a handler-less root and
+    is dropped — `logging.lastResort` only emits WARNING and above. Without
+    this, the operator-facing `auth.login_failed` diagnostics would be a
+    silent no-op in `docker compose logs api`.
+
+    Deliberately narrow: one stderr handler on the `app` package logger,
+    installed at most once, and the ROOT logger is never touched — a host
+    that configures logging itself (or pytest's `caplog`) keeps working.
+    """
+    package_logger = logging.getLogger(__package__ or "app")
+    if package_logger.handlers:
+        return
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter(_APP_LOG_FORMAT))
+    package_logger.addHandler(handler)
+    package_logger.setLevel(logging.INFO)
+
 
 # ADR 0449 D1/D3: the gate is active only for the two deploy environments —
 # dev/lab keep the create_all-based dev path unblocked (ADR 0060).
@@ -80,6 +109,94 @@ def _guard_prod(settings: Settings) -> None:
             "Production tutor requires a non-empty, non-development API key — "
             "set STRUMSIGHT_TUTOR_API_KEY."
         )
+
+
+#: Provider names `_build_tutor_gateway` knows how to construct. The
+#: allowlist in `Settings.tutor_allowed_providers` is a SEPARATE, narrower
+#: gate — a name here is only "an adapter exists", never "it is permitted".
+#: `minimax` is the product's chosen provider (MiniMax M3 over its
+#: Anthropic-compatible Messages API); `anthropic` and `openai` remain
+#: available alternatives.
+_TUTOR_GATEWAY_PROVIDERS = frozenset({"fake", "openai", "anthropic", "minimax"})
+
+
+def _guard_tutor_provider(settings: Settings) -> None:
+    """Fail closed at boot on an unusable tutor provider configuration.
+
+    Runs in EVERY environment (unlike `_guard_prod`), because a real provider
+    reached with the dev-default key is a broken deploy anywhere — and because
+    an allowlist miss used to surface only as a 500 on the first turn, at which
+    point the operator has already told users the tutor works.
+    """
+    if not settings.tutor_enabled:
+        return
+
+    from .tutor.provider_registry import ProviderNotAllowedError, ProviderRegistry
+
+    provider = settings.tutor_provider
+    if provider not in _TUTOR_GATEWAY_PROVIDERS:
+        raise RuntimeError(
+            f"Unknown STRUMSIGHT_TUTOR_PROVIDER {provider!r} — expected one of "
+            f"{sorted(_TUTOR_GATEWAY_PROVIDERS)}."
+        )
+    try:
+        ProviderRegistry(
+            allowed=settings.tutor_allowed_providers,
+            provider=provider,
+            model=settings.tutor_model,
+        ).resolve()
+    except ProviderNotAllowedError as exc:
+        raise RuntimeError(
+            "STRUMSIGHT_TUTOR_PROVIDER / STRUMSIGHT_TUTOR_MODEL is not in "
+            "STRUMSIGHT_TUTOR_ALLOWED_PROVIDERS — extend the allowlist before "
+            "enabling the tutor."
+        ) from exc
+    if provider == "fake":
+        return
+    if not settings.tutor_api_key.strip() or settings.tutor_api_key == _DEV_TUTOR_KEY:
+        raise RuntimeError(
+            "A real tutor provider requires a non-empty, non-development API "
+            "key — set STRUMSIGHT_TUTOR_API_KEY."
+        )
+
+
+def _build_tutor_gateway(settings: Settings) -> "ProviderGateway":
+    """Construct the configured provider adapter (`_guard_tutor_provider` ran first).
+
+    The fake gateway stays the DEFAULT and the fallback: an unconfigured
+    deploy, and every test that does not opt in, gets the canned reply and
+    never opens a socket.
+    """
+    from .tutor.provider_gateway import (
+        ANTHROPIC_PROFILE,
+        MINIMAX_PROFILE,
+        AnthropicProviderGateway,
+        FakeProviderGateway,
+        OpenAiProviderGateway,
+    )
+
+    # MiniMax speaks the Anthropic Messages API, so it is the SAME adapter
+    # with a different profile (base URL + `Authorization: Bearer` instead of
+    # `x-api-key`) — not a second copy of the streaming and error-mapping
+    # code that would then have to be kept in step.
+    if settings.tutor_provider == "minimax":
+        return AnthropicProviderGateway(
+            max_output_bytes=settings.tutor_max_output_bytes,
+            base_url=settings.tutor_minimax_base_url,
+            profile=MINIMAX_PROFILE,
+        )
+    if settings.tutor_provider == "anthropic":
+        return AnthropicProviderGateway(
+            max_output_bytes=settings.tutor_max_output_bytes,
+            base_url=settings.tutor_anthropic_base_url,
+            profile=ANTHROPIC_PROFILE,
+        )
+    if settings.tutor_provider == "openai":
+        return OpenAiProviderGateway(
+            max_output_bytes=settings.tutor_max_output_bytes,
+            base_url=settings.tutor_openai_base_url,
+        )
+    return FakeProviderGateway()
 
 
 def _readiness_failure(application: FastAPI) -> str | None:
@@ -147,7 +264,9 @@ def _traffic_gate(request: Request) -> None:
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    _configure_app_logging()
     _guard_prod(settings)
+    _guard_tutor_provider(settings)
     engine = create_database_engine(settings.database_url)
     session_factory = create_session_factory(engine)
 
@@ -163,6 +282,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     _logger.exception("Development schema initialization failed")
             yield
         finally:
+            gateway = getattr(application.state, "tutor_gateway", None)
+            if gateway is not None:
+                # `ProviderGateway.aclose` is a no-op on the fake; the real
+                # adapters own an httpx client that must not outlive the app.
+                await gateway.aclose()
             engine.dispose()
 
     app = FastAPI(
@@ -199,7 +323,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.include_router(diagnostics.router, dependencies=_gated)
     if settings.tutor_enabled:
         from .ratelimit import RateLimiter
-        from .tutor.provider_gateway import FakeProviderGateway
         from .tutor.provider_registry import ProviderRegistry
         from .tutor.router import router as tutor_router
         from .tutor.router import set_service
@@ -211,7 +334,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             provider=settings.tutor_provider,
             model=settings.tutor_model,
         )
-        gateway = FakeProviderGateway()
+        gateway = _build_tutor_gateway(settings)
+        app.state.tutor_gateway = gateway
         usage_guard = UsageGuard(
             rate_limiter=RateLimiter(
                 max_attempts=settings.tutor_rate_limit_max,

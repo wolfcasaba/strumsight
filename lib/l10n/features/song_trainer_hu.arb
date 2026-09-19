@@ -1,5 +1,16 @@
 {
   "@@locale": "hu",
   "setlistSessionEntry": "Futtatás sessionként",
-  "setlistSessionChooseMode": "Hogyan futtassuk ezt a szettet?"
+  "setlistSessionChooseMode": "Hogyan futtassuk ezt a szettet?",
+  "songTrainerLoopCounterSemantics": "Ismétlés: {current}/{total}",
+  "@songTrainerLoopCounterSemantics": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "songTrainerLoopAbSet": "A–B",
+  "@songTrainerLoopAbSet": {},
+  "songTrainerLoopAbClear": "A–B törlése",
+  "@songTrainerLoopAbClear": {}
 }

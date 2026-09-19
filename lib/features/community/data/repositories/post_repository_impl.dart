@@ -12,7 +12,9 @@
 ///
 /// **A tíz szerződés-metódus NEM egyforma állapotú, és ezt a kód kimondja:**
 ///
-/// * `createPost` — `POST /community/posts`. Kész.
+/// * `createPost` — `POST /community/posts`. Kész. A klub-kontextusban
+///   indított szerkesztő a szerződésen KÍVÜLI `createClubPost`-ot hívja
+///   (E17-R11) — ugyanaz a végpont, plusz a klub publikus azonosítója.
 /// * `fetchPost` — `GET /community/posts/{id}`. Kész. A 404 és a 403
 ///   egyaránt `null`-t ad: a szerver SZÁNDÉKOSAN egyforma 404-et küld a
 ///   „nincs ilyen poszt" és a „van, de nem látod" ágra (leak-guard,
@@ -77,9 +79,12 @@ import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/foundation/app_result.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../features/auth/public.dart';
+import '../../domain/entities/community_bookmark.dart';
 import '../../domain/entities/community_comment.dart';
+import '../../domain/entities/community_media.dart';
 import '../../domain/entities/community_post.dart';
 import '../../domain/entities/community_reaction.dart';
+import '../../domain/entities/community_report_receipt.dart';
 import '../../domain/entities/moderation_state.dart';
 import '../../domain/policies/community_audience.dart';
 import '../../domain/repositories/community_page.dart';
@@ -196,6 +201,7 @@ final class HttpCommunityPostRepository implements CommunityPostRepository {
     required String? body,
     required Object artifact,
     required String idempotencyKey,
+    List<String> mediaIds = const <String>[],
   }) async {
     final result = await _client.postJson<CommunityPost>(
       '/community/posts',
@@ -211,6 +217,50 @@ final class HttpCommunityPostRepository implements CommunityPostRepository {
         // mert a `parse_share_artifact` diszkriminátort vár. A szerkesztő
         // alapértelmezése épp az üres térkép (`composerSourceArtifactProvider`).
         'artifact': ?_artifactPayload(artifact),
+        // `media_ids` (javító sáv R27): az ÜRES listát sem küldjük ki, a
+        // kulcs hiánya és a `[]` a szerveren ugyanaz, egy fölösleges mező
+        // viszont minden szöveges poszt törzsét megnövelné.
+        'media_ids': ?_mediaIdsPayload(mediaIds),
+        'idempotency_key': idempotencyKey,
+      },
+      decode: decodeCommunityPost,
+    );
+    return switch (result) {
+      Success(:final value) => value,
+      Failure(:final error) => throw error,
+    };
+  }
+
+  /// Klub-poszt írása — `POST /community/posts` a klub PUBLIKUS
+  /// azonosítójával (E17-R11).
+  ///
+  /// SZÁNDÉKOSAN nem része a `CommunityPostRepository` szerződésnek (a
+  /// `listBookmarks` / `clubFeed` precedense): a szerződést tizenkét
+  /// teszt-fake valósítja meg, és egy új absztrakt metódus mindet eltörné,
+  /// miközben az egyetlen hívó a klub-kontextusban indított szerkesztő
+  /// kiürítése (`community_outbox.dart`).
+  ///
+  /// A klubot a PUBLIKUS azonosítója nevezi meg, nem a belső egész:
+  /// a kliens az utóbbit nem ismeri (ADR 0396 §1), és a szerver E17-R11
+  /// óta mindkét cím-formára lefuttatja a tagsági kaput. A nem-tag /
+  /// ismeretlen / törölt klub egyforma 404-et kap — a hívó ezért NEM tud
+  /// (és nem is szabad tudnia) a három eset között különbséget tenni.
+  Future<CommunityPost> createClubPost({
+    required ContentId clubId,
+    required CommunityAudience audience,
+    required String? body,
+    required Object artifact,
+    required String idempotencyKey,
+    List<String> mediaIds = const <String>[],
+  }) async {
+    final result = await _client.postJson<CommunityPost>(
+      '/community/posts',
+      data: <String, Object?>{
+        'audience': audience.wireValue,
+        'body': body,
+        'club_public_id': clubId.value,
+        'artifact': ?_artifactPayload(artifact),
+        'media_ids': ?_mediaIdsPayload(mediaIds),
         'idempotency_key': idempotencyKey,
       },
       decode: decodeCommunityPost,
@@ -334,6 +384,33 @@ final class HttpCommunityPostRepository implements CommunityPostRepository {
     };
   }
 
+  /// A néző mentett bejegyzései — `GET /community/bookmarks` (javító sáv
+  /// R5, 2026-09-06).
+  ///
+  /// SZÁNDÉKOSAN nem része a `CommunityPostRepository` szerződésnek (a
+  /// `clubFeed` precedense): a szerződést tizenkét teszt-fake valósítja
+  /// meg, egy új absztrakt metódus mindet eltörné, miközben a lista
+  /// egyetlen fogyasztója a könyvjelző-képernyő vezérlője. A végpont a
+  /// `limit` nevű lapméretet olvassa (NEM `page_size`-t, mint a komment-
+  /// lista) — egy `page_size` itt némán eldobott paraméter volna.
+  Future<CommunityPage<CommunityBookmark>> listBookmarks({
+    required Object cursor,
+    required int limit,
+  }) async {
+    final result = await _client.getJson<CommunityPage<CommunityBookmark>>(
+      '/community/bookmarks',
+      queryParameters: <String, Object?>{
+        'limit': limit,
+        'cursor': communityCursorQueryValue(cursor),
+      },
+      decode: decodeCommunityBookmarkPage,
+    );
+    return switch (result) {
+      Success(:final value) => value,
+      Failure(:final error) => throw error,
+    };
+  }
+
   // ---- kommentek --------------------------------------------------------
 
   @override
@@ -421,6 +498,93 @@ final class HttpCommunityPostRepository implements CommunityPostRepository {
       Failure(:final error) => throw error,
     };
   }
+
+  /// Média feltöltése — `POST /community/media` (javító sáv R27).
+  ///
+  /// SZÁNDÉKOSAN a szerződésen KÍVÜL, a `createClubPost` precedense
+  /// szerint: a `CommunityPostRepository`-t tizenkét teszt-fake
+  /// valósítja meg, és egy új absztrakt metódus mindet eltörné.
+  ///
+  /// **Az ELUTASÍTÁS nem hiba-ág.** A szerver 201-et ad egy
+  /// `state: rejected` leíróval is (magic-byte, vírusirtó vagy
+  /// átkódolási elutasítás), mert a sor létezik, és az elutasítás
+  /// indoka a felhasználónak szóló információ. A metódus ezért az
+  /// elutasított leírót is VISSZAADJA — a hívó a
+  /// [CommunityMediaAttachment.state] és a `rejectionCode` alapján
+  /// dönt. Kivétel csak a valóban kivételes kimenetekre repül: 413
+  /// (túl nagy), 409 (kvóta), 429 (fojtás), 401/403, hálózat.
+  Future<CommunityMediaAttachment> uploadMedia({
+    required List<int> bytes,
+    String filename = 'upload.bin',
+  }) async {
+    final result = await _client.postMultipartJson<CommunityMediaAttachment>(
+      '/community/media',
+      bytes: bytes,
+      filename: filename,
+      decode: decodeCommunityMedia,
+      conflictCode: FailureCode.communityConflict,
+    );
+    return switch (result) {
+      Success(:final value) => value,
+      Failure(:final error) => throw error,
+    };
+  }
+
+  /// Tartalom-bejelentés — `POST /community/reports` (R33, M10).
+  ///
+  /// SZÁNDÉKOSAN a szerződésen KÍVÜL, a `createClubPost` / `uploadMedia`
+  /// precedense szerint: a `CommunityPostRepository`-t tizenhárom
+  /// teszt-fake valósítja meg — kettő közülük PIXELRE PINELT
+  /// golden-fájlban él (`e13_r33`, `e15_r13`), amiket ez a kör nem
+  /// szerkeszthet —, tehát egy új absztrakt metódus a szerződésen az
+  /// egész golden-sávot eltörné.
+  ///
+  /// A kimenő törzs a `backend/app/community/routers/reports.py` MÉRT
+  /// alakja: `{target_type, target_id, category, idempotency_key}`. Az
+  /// opcionális `extra_metadata` kulcsot NEM küldjük ki: a bejelentő
+  /// szabad szövegét a lap ma nem gyűjti be, egy üres objektum pedig
+  /// csak zajt vinne le az eszközről.
+  ///
+  /// A hibák a szokásos leképezésen mennek: 422 (ismeretlen kategória)
+  /// és 400 validációs hiba, 429 és 5xx `networkServer`, 404 „nincs ilyen
+  /// cél VAGY nincs bejelentői profilod" — a szerver szándékosan nem
+  /// különbözteti meg a kettőt, tehát a kliens sem tehet úgy, mintha
+  /// tudná, melyik történt.
+  Future<CommunityReportReceipt> submitReport({
+    required String targetType,
+    required String targetId,
+    required String category,
+    required String idempotencyKey,
+  }) async {
+    final result = await _client.postJson<CommunityReportReceipt>(
+      '/community/reports',
+      data: <String, Object?>{
+        'target_type': targetType,
+        'target_id': targetId,
+        'category': category,
+        'idempotency_key': idempotencyKey,
+      },
+      decode: decodeCommunityReportReceipt,
+    );
+    return switch (result) {
+      Success(:final value) => value,
+      Failure(:final error) => throw error,
+    };
+  }
+
+  /// Feltöltött média eldobása — `DELETE /community/media/{id}`.
+  ///
+  /// A szerver idempotens: egy már törölt sor újratörlése is 200. A
+  /// nem létező és a NEM A TIÉD egyaránt 404 (leak-guard), tehát a
+  /// hívó a kettő között nem tud — és nem is szabad — különbséget
+  /// tenni; a szerkesztő ezért a 404-et is „eltávolítva"-ként kezeli.
+  Future<void> deleteMedia({required String mediaPublicId}) async {
+    final result = await _client.delete('/community/media/$mediaPublicId');
+    return switch (result) {
+      Success() => null,
+      Failure(:final error) => throw error,
+    };
+  }
 }
 
 /// Az optimista konkurencia-token wire-alakja.
@@ -444,6 +608,23 @@ String _resourceVersionWireValue(Object resourceVersion) {
     'resourceVersion',
     'resource version must be a DateTime or its ISO-8601 wire string',
   );
+}
+
+/// A csatolt médiák wire-alakja, vagy `null`, ha nincs mit küldeni.
+///
+/// A `CreatePostRequest.media_ids` nullable és `max_length`-korlátos. Az
+/// ÜRES listát azért nem küldjük ki, mert a szerveren pontosan ugyanaz,
+/// mint a hiányzó kulcs (`if media_ids:`), a kulcs viszont minden
+/// szöveges poszt törzsében ott ülne. Az üres sztringet KISZŰRJÜK, nem
+/// elnyeljük a listát: egy hibás azonosító a szerveren 400-at ad, ami a
+/// helyes válasz — a néma elhagyás azt jelentené, hogy a felhasználó
+/// csatolmány nélkül lát sikert.
+List<String>? _mediaIdsPayload(List<String> mediaIds) {
+  final cleaned = <String>[
+    for (final id in mediaIds)
+      if (id.isNotEmpty) id,
+  ];
+  return cleaned.isEmpty ? null : cleaned;
 }
 
 /// A poszt-artefaktum wire-alakja, vagy `null`, ha nincs mit küldeni.

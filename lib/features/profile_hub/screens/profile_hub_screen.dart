@@ -7,6 +7,7 @@ import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/public.dart';
+import '../../community/public.dart';
 import '../../progress/public.dart';
 import '../../streak/public.dart';
 
@@ -18,8 +19,8 @@ import '../../streak/public.dart';
 ///
 /// Styled with plain Material widgets (matching `SettingsScreen`), not the
 /// `core/design_system` component library — see `today_hub_screen.dart`'s
-/// doc comment for why those widgets aren't safe under the app's current
-/// root theme.
+/// doc comment. The old "not safe under the app's root theme" reason is
+/// obsolete (R21, audit MI8); the migration itself is still open.
 class ProfileHubScreen extends ConsumerWidget {
   const ProfileHubScreen({super.key});
 
@@ -33,6 +34,18 @@ class ProfileHubScreen extends ConsumerWidget {
         .flags
         .communityEnabled;
     final accountEnabled = ref.watch(accountEnabledProvider);
+    // MI-L (R33) — the MEASURED gate state, not just the build flag.
+    // `.value` is null while the probe is in flight and on a failed
+    // probe; both keep the pre-R33 copy, so nothing on this screen
+    // moves until the gate has actually said the server is off.
+    //
+    // Watched only when the feature is compiled in: a build that ships
+    // without Community has nothing to probe, and reading the gate
+    // controller there would start an account-API call for a section
+    // that already says "not in this build".
+    final gateStatus = communityEnabled
+        ? ref.watch(communityProfileControllerProvider).value?.status
+        : null;
     // Az AI Tanár belépési pontja. A `/tutor/*` útvonalak az `aiTutorEnabled`
     // kapu alatt regisztrálódnak (`app_router.dart`), ezért a gomb PONTOSAN
     // ugyanazzal a flaggel kapuzott — kikapcsolt kapunál nem mutat
@@ -71,6 +84,13 @@ class ProfileHubScreen extends ConsumerWidget {
             // hub and stranded the user there with no back affordance
             // (`practice_session_screen.dart` ~254-262 documents the rule).
             OutlinedButton(
+              key: const ValueKey('profile-hub-achievements-entry'),
+              // `push`, not `go` (2026-09-07 audit): every destination
+              // below is a TOP-LEVEL route, so a `go` REPLACES the stack —
+              // the arriving screen has `canPop == false`, its AppBar shows
+              // no back arrow and the adaptive shell's bottom bar is gone,
+              // so the only way back is leaving the app. Pushed, the same
+              // route pops straight back to this hub.
               onPressed: () => context.push(AppRoutes.gamificationHub),
               child: Text(l10n.profileHubAchievementsSectionTitle),
             ),
@@ -101,7 +121,13 @@ class ProfileHubScreen extends ConsumerWidget {
               _SectionLabel(l10n.profileHubCommunitySectionTitle),
               const SizedBox(height: 8),
               Text(
-                l10n.profileHubCommunityEnabledMessage,
+                // MI-L — a hub must not promise Community while the SERVER
+                // has it off; the gate controller already measures that.
+                _communityMessage(
+                  l10n,
+                  communityEnabled: communityEnabled,
+                  gateStatus: gateStatus,
+                ),
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               // A közösség BELÉPÉSI PONTJA (2026-09-05). A 13 community
@@ -117,18 +143,6 @@ class ProfileHubScreen extends ConsumerWidget {
               ),
             ],
             const SizedBox(height: 24),
-            // The way IN. The hub already said "Community is enabled" and then
-            // offered no route to it — the screens existed, their tests existed,
-            // and nothing anywhere constructed them (E18-R19). It points at the
-            // GATE, never straight at the feed: `CommunityGateScreen` owns the
-            // consent and signed-in requirements.
-            if (communityEnabled) ...[
-              OutlinedButton(
-                onPressed: () => context.push(AppRoutes.community),
-                child: Text(l10n.communityOpenCta),
-              ),
-              const SizedBox(height: 12),
-            ],
             OutlinedButton(
               onPressed: () => context.push(AppRoutes.profileLibrary),
               child: Text(l10n.navLibrary),
@@ -142,6 +156,31 @@ class ProfileHubScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// What the hub says about Community (MI-L, R33).
+  ///
+  /// The build flag alone was the only input, so a build that ships the
+  /// feature against a server running with the Community module OFF told
+  /// the user "Connect with other players and share your progress" and
+  /// then handed them a gate screen that says the opposite. The gate
+  /// controller already measures that case as
+  /// [CommunityGateStatus.unavailable]; this reads it.
+  ///
+  /// Every other state — including "not resolved yet" and "the probe
+  /// failed" — keeps the original copy on purpose: an unfinished probe
+  /// is not evidence that the server is off, and the pixel-pinned
+  /// `e13_r17_profile_hub_compact` golden renders exactly that case.
+  String _communityMessage(
+    AppLocalizations l10n, {
+    required bool communityEnabled,
+    required CommunityGateStatus? gateStatus,
+  }) {
+    if (!communityEnabled) return l10n.profileHubCommunityDisabledReason;
+    if (gateStatus == CommunityGateStatus.unavailable) {
+      return l10n.profileHubCommunityServerDisabledMessage;
+    }
+    return l10n.profileHubCommunityEnabledMessage;
   }
 }
 
@@ -193,6 +232,12 @@ class _AccountSection extends ConsumerWidget {
             // successful sign-in, which threw a `GoError` on a replaced
             // (never pushed) location.
             : OutlinedButton(
+                key: const ValueKey('profile-hub-sign-in-entry'),
+                // `push` (2026-09-07 audit): `/login` is a top-level route,
+                // and the login screen leaves itself by popping on success.
+                // Reached with a `go` the stack was one page deep, so that
+                // pop threw `GoError: There is nothing to pop` — the
+                // measured "login does not work" defect.
                 onPressed: () => context.push(AppRoutes.login),
                 child: Text(l10n.profileHubSignInCta),
               ),

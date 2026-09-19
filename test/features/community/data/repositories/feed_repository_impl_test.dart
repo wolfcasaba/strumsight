@@ -28,6 +28,7 @@ import 'package:strumsight/features/community/domain/value_objects/public_user_i
 /// beállított törzset adja vissza.
 class _RecordingAdapter implements HttpClientAdapter {
   RequestOptions? lastRequest;
+  int status = 200;
   Map<String, Object?> body = const {'items': <Object?>[], 'next_cursor': null};
 
   @override
@@ -39,7 +40,7 @@ class _RecordingAdapter implements HttpClientAdapter {
     lastRequest = options;
     return ResponseBody.fromString(
       jsonEncode(body),
-      200,
+      status,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],
       },
@@ -274,20 +275,63 @@ void main() {
     });
   });
 
-  test('B11 — a profil-posztok hiánya HIBA, nem üres oldal', () async {
-    // Egy üres oldal azt ÁLLÍTANÁ, hogy ennek a profilnak nincs posztja.
-    // Az igazság az, hogy nincs végpont — se route, se service. A
-    // `UNKNOWN > CONFIDENTLY WRONG` elv szerint a nem tudás nem
-    // öltözhet válasznak.
-    await expectLater(
-      repository.profilePosts(
+  group('profilePosts', () {
+    // E17-R11: 2026-09-06-ig ez a metódus `UnimplementedError`-t dobott,
+    // mert a szervernek se route-ja, se service-e nem volt. A cella
+    // mostantól a VALÓDI kimenő kérést méri.
+    test('B11 — a profil azonosítója az ÚTVONALBAN megy ki', () async {
+      adapter.body = {
+        'items': [_postJson()],
+        'next_cursor': null,
+      };
+
+      final page = await repository.profilePosts(
         userId: PublicUserId('55555555-5555-4555-8555-555555555555'),
         cursor: const CursorPage.initial(),
         limit: 25,
-      ),
-      throwsA(isA<UnimplementedError>()),
-    );
-    // A kérés EL SEM INDULT — nincs olyan végpont, amit eltalálhatna.
-    expect(adapter.lastRequest, isNull);
+      );
+
+      expect(
+        adapter.lastRequest!.path,
+        '/community/profiles/55555555-5555-4555-8555-555555555555/posts',
+      );
+      expect(adapter.lastRequest!.queryParameters['page_size'], 25);
+      // Első oldal: a `cursor` kulcs KIMARAD (a szerver `extra="forbid"`
+      // sémája egy `cursor=null`-t ismeretlen bemenetként utasítana el).
+      expect(
+        adapter.lastRequest!.queryParameters.containsKey('cursor'),
+        isFalse,
+      );
+      expect(page.items, hasLength(1));
+    });
+
+    test('B12 — a folytatólagos kurzor TÉNYLEGESEN kimegy', () async {
+      await repository.profilePosts(
+        userId: PublicUserId('55555555-5555-4555-8555-555555555555'),
+        cursor: const CursorPage.continued('profile-token'),
+        limit: 10,
+      );
+
+      expect(adapter.lastRequest!.queryParameters['cursor'], 'profile-token');
+      expect(adapter.lastRequest!.queryParameters['page_size'], 10);
+    });
+
+    test('B13 — a nem látható profil HIBA, nem üres oldal', () async {
+      // A szerver EGYFORMA 404-et ad a nem létező, a blokkolt, a privát
+      // és a csak-követőknek szóló profilra (leak-guard). A kliens ezért
+      // nem fordíthatja üres listává: az azt ÁLLÍTANÁ, hogy a profilnak
+      // nincs posztja, holott azt nem tudjuk.
+      adapter.status = 404;
+      adapter.body = {'detail': 'profile not found'};
+
+      await expectLater(
+        repository.profilePosts(
+          userId: PublicUserId('55555555-5555-4555-8555-555555555555'),
+          cursor: const CursorPage.initial(),
+          limit: 25,
+        ),
+        throwsA(isA<Object>()),
+      );
+    });
   });
 }

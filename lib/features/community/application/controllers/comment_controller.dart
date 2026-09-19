@@ -511,6 +511,27 @@ class CommentController extends AsyncNotifier<CommentSheetState> {
     state = AsyncData(current.copyWith(lastError: null));
   }
 
+  /// Drop one comment from the visible thread (R33, M10 — the report
+  /// sheet's "Hide from feed" shortcut on a comment target).
+  ///
+  /// Same contract as `FeedController.hideLocally`: the report row stays
+  /// on the server, the comment is NOT deleted, and a later `loadFor` /
+  /// `loadMore` re-reads the server's list — so the row can come back.
+  /// Hiding is the reporter's own view; mute and block are the durable
+  /// remedies, and the sheet offers both alongside this one.
+  ///
+  /// A no-op when the id is not in the thread (a post target).
+  void hideLocally(ContentId commentId) {
+    final current = state.value;
+    if (current == null) return;
+    final remaining = <CommentRow>[
+      for (final row in current.comments)
+        if (row.comment.id != commentId) row,
+    ];
+    if (remaining.length == current.comments.length) return;
+    state = AsyncData(current.copyWith(comments: remaining));
+  }
+
   // ---- internal ----------------------------------------------------------
 
   void _rollbackOptimistic(ContentId tempId) {

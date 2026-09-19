@@ -103,6 +103,7 @@ Future<({GoRouter router, List<String> visited})> _pumpHub(
         builder: (_, _) => const PracticeAreaHubScreen(),
       ),
       GoRoute(path: AppRoutes.practiceSetup, builder: (_, s) => probe(s)),
+      GoRoute(path: AppRoutes.practiceCatalog, builder: (_, s) => probe(s)),
       GoRoute(path: AppRoutes.practiceLearn, builder: (_, s) => probe(s)),
       GoRoute(path: AppRoutes.songTrainerLibrary, builder: (_, s) => probe(s)),
     ],
@@ -239,11 +240,12 @@ void main() {
     });
 
     // The goal CHIPS survived the 2026-09-18 integration as the hub's jump
-    // row over the same catalog these tiles list in full, so their absence is
-    // no longer the contract — the invariant this cell was written for is.
-    // It is asserted directly: every chip either carries a definition id or
-    // is disabled, and a bare `/practice/setup` is never reached.
-    testWidgets('no goal chip navigates without an id', (tester) async {
+    // row, and the 2026-09-19 audit integration (R18/B1) re-pointed them at
+    // the FILTERED CATALOG instead of one resolved definition — the other
+    // nine built-ins had no on-screen entry otherwise. The invariant this
+    // cell was written for is unchanged and still asserted directly: a chip
+    // never reaches a bare `/practice/setup`, the dead end it replaced.
+    testWidgets('no goal chip navigates without a goal', (tester) async {
       final hub = await _pumpHub(tester);
       final chips = find.byType(ActionChip);
       expect(chips, findsWidgets);
@@ -254,8 +256,11 @@ void main() {
         await tester.tap(chip);
         await tester.pumpAndSettle();
 
-        expect(hub.visited.last, startsWith(AppRoutes.practiceSetup));
-        expect(Uri.parse(hub.visited.last).queryParameters['id'], isNotNull);
+        expect(hub.visited.last, startsWith(AppRoutes.practiceCatalog));
+        expect(
+          Uri.parse(hub.visited.last).queryParameters['category'],
+          isNotNull,
+        );
 
         hub.router.go(AppRoutes.practiceHub);
         await tester.pumpAndSettle();
@@ -271,13 +276,13 @@ void main() {
         catalog: [_definition(id: 'only', mode: PracticeMode.chordChanges)],
       );
       expect(
-        find.byKey(const ValueKey('practice-hub-category-chords')),
+        find.byKey(const ValueKey('practice-hub-group-chords')),
         findsOneWidget,
       );
       for (final category in PracticeAreaHubCategory.values) {
         if (category == PracticeAreaHubCategory.chords) continue;
         expect(
-          find.byKey(ValueKey('practice-hub-category-${category.name}')),
+          find.byKey(ValueKey('practice-hub-group-${category.name}')),
           findsNothing,
         );
       }

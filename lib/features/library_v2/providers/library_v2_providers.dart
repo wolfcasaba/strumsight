@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/storage/key_value_note_store.dart';
+import '../../../core/storage/storage_keys.dart';
 import '../../audio_analysis/public.dart';
 import '../../practice/public.dart';
 import '../../song_trainer/public.dart';
@@ -16,6 +18,12 @@ import '../domain/library_item_source.dart';
 /// Each wraps an existing repository provider — no new storage is opened
 /// here (§5.4).
 final libraryV2SourcesProvider = Provider<List<LibraryItemSource>>((ref) {
+  // Javító sáv 2026-09-06 (E16-R05 L5): a recorded practice session
+  // invalidates `practiceHistoryV2ListProvider`; depending on it here makes
+  // the sources — and through them `LibraryV2Controller.build` — reload in
+  // the same container instead of after an app restart. The practice source
+  // below still reads the repository itself so its failure path is kept.
+  ref.watch(practiceHistoryV2ListProvider);
   return [
     AnalysisItemSource(ref.watch(analysisRepositoryProvider)),
     PracticeItemSource(() async {
@@ -45,6 +53,16 @@ final libraryV2DeleteActionsProvider = Provider<LibraryDeleteActions>((ref) {
     repository: ref.watch(analysisRepositoryProvider),
   );
 });
+
+/// The learner's per-item notes (M6, re-audit 2026-09-08).
+///
+/// Bound exactly like the four content sources above: the store itself lives
+/// on the app's persistence boundary (`lib/core/storage/`) and is reached
+/// through its own provider, so the library surface opens no storage of its
+/// own (§5.4) — it only names the key its notes belong to.
+final libraryItemNoteStoreProvider = Provider<KeyValueNoteStore>(
+  (ref) => ref.watch(noteStoreProvider(StorageKeys.libraryItemNotes)),
+);
 
 /// Free-text search over item titles.
 class LibraryV2SearchQueryController extends Notifier<String> {

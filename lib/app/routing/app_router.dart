@@ -9,7 +9,14 @@ import '../../core/logging/logger_provider.dart';
 import '../../features/analyze/screens/analyze_screen.dart';
 import '../../features/audio_analysis/application/analysis_capture_providers.dart';
 import '../../features/audio_analysis/domain/analysis_document.dart';
+import '../../features/audio_analysis/application/analysis_providers.dart';
+import '../../features/audio_analysis/application/compare_analyses_use_case.dart';
+import '../../features/audio_analysis/application/import_audio_file_use_case.dart';
+import '../../features/audio_analysis/domain/analysis_mode.dart';
+import '../../features/audio_analysis/domain/analysis_summary.dart';
+import '../../features/audio_analysis/presentation/capture/analysis_compare_picker.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_home_screen.dart';
+import '../../features/audio_analysis/presentation/capture/analysis_import_messages.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_processing_screen.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_recording_screen.dart';
 import '../../features/audio_analysis/domain/comparison/analysis_comparison.dart';
@@ -30,20 +37,24 @@ import '../../features/library/public.dart';
 import '../../features/library/screens/library_screen.dart';
 import '../../features/library/screens/session_detail_screen.dart';
 import '../../features/library_v2/domain/library_item.dart';
+import '../../features/library_v2/providers/library_v2_providers.dart';
 import '../../features/library_v2/screens/library_item_detail_screen.dart';
 import '../../features/library_v2/screens/unified_library_screen.dart';
 import '../../features/live/screens/live_screen.dart';
 import '../../features/metronome/screens/metronome_screen.dart';
 import '../../features/onboarding/onboarding_provider.dart';
 import '../../features/onboarding/screens/onboarding_screen.dart';
+import '../../features/practice/presentation/practice_result_route.dart';
 import '../../features/practice/presentation/screens/practice_hub_screen.dart';
-import '../../features/practice/presentation/screens/practice_result_screen.dart';
 import '../../features/practice/presentation/screens/practice_setup_screen.dart';
 import '../../features/practice/presentation/screens/practice_session_screen.dart';
 import '../../features/practice/public.dart'
-    show PracticeHistoryEntry, practiceCatalogProvider;
+    show practiceCatalogProvider, practiceCategoryFromCode;
 import '../../features/practice_generator/application/usecase/revise_practice_plan.dart'
     show PlanRevisionProposal;
+import '../../features/practice_generator/application/controller/today_plan_controller.dart'
+    show TodayPlanRouteRequest;
+import '../../features/practice_generator/presentation/plan_generation_launch.dart';
 import '../../features/practice_generator/presentation/plan_preview_args.dart';
 import '../../features/practice_generator/presentation/providers/practice_generator_providers.dart';
 import '../../features/practice_generator/presentation/screens/plan_change_review_screen.dart';
@@ -52,6 +63,7 @@ import '../../features/practice_generator/presentation/screens/plan_privacy_scre
 import '../../features/practice_generator/presentation/screens/weekly_plan_screen.dart';
 import '../../features/practice_generator/presentation/screens/plan_setup_screen.dart';
 import '../../features/practice_generator/presentation/screens/today_plan_screen.dart';
+import '../../features/practice_generator/presentation/today_plan_actions.dart';
 import '../../features/practice_hub/screens/practice_area_hub_screen.dart';
 import '../../features/profile_hub/screens/profile_hub_screen.dart';
 import '../../features/progress/screens/progress_screen.dart';
@@ -69,7 +81,11 @@ import '../../features/song_trainer/presentation/screens/song_editor_screen.dart
 import '../../features/song_trainer/presentation/screens/song_overview_screen.dart';
 import '../../features/song_trainer/presentation/screens/song_result_screen.dart';
 import '../../features/song_trainer/presentation/screens/song_trainer_session_route.dart';
+import '../../features/song_trainer/application/song_trainer_providers.dart';
+import '../../features/song_trainer/presentation/screens/setlist_list_screen_v2.dart';
+import '../../features/song_trainer/presentation/screens/setlist_session_route.dart';
 import '../../features/song_trainer/presentation/screens/trainer_setup_screen.dart';
+import '../../features/ai_tutor/presentation/practice_plan_preview_route.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_chat_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_data_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_home_screen.dart';
@@ -205,35 +221,163 @@ String? _songTrainerPayloadRedirect(
   return AppRoutes.songTrainerOverview.replaceFirst(':songId', songId);
 }
 
-/// A2b — resolves a Progress V2 evidence `sessionId` to the `LibraryItem`
-/// the unified library's detail route expects in `extra`.
+/// R18 (audit M5) — opens one unified-library session detail from a Progress
+/// V2 evidence row.
 ///
-/// Every mastery evidence sample on this tree is produced by
-/// `masteryEvidenceFromPracticeHistoryEntry` (origin `device`, `sessionId`
-/// = `PracticeHistoryEntry.id`), so the referenced session is always a
-/// practice-history entry. The mapping mirrors `library_v2`'s own
-/// `PracticeItemSource` (`library_v2_providers.dart`) field for field, and
-/// reads the SAME in-memory history the projection was built from — the
-/// four-source `libraryV2ItemsProvider` is deliberately not touched here:
-/// it requires the analysis/song/setlist repositories to be bootstrapped,
-/// which the skill-detail surface does not otherwise depend on.
+/// [AppRoutes.profileLibrarySession]'s redirect requires an `extra` of type
+/// [LibraryItem]; a push without one silently lands on the library LIST,
+/// which is the wrong page dressed up as a working link. This resolves the
+/// item out of the already-aggregated library and passes it as `extra`. When
+/// it cannot be resolved the miss is SPOKEN (a snackbar) instead of
+/// navigating somewhere the row did not name.
 ///
-/// Returns `null` when no entry matches, leaving the caller to decide
-/// where to send the user.
-PracticeLibraryItem? _practiceLibraryItemForSession({
+/// R34 (audit MI-C) — the aggregation's THREE states are now three answers.
+/// The caller used to hand over `libraryItems.value`, which is `null` both
+/// while the unified library is still being read AND when the read failed;
+/// every one of those taps was answered with "this session is no longer
+/// available", i.e. the app claimed a session was GONE while it was still
+/// loading. A load in flight is not a miss, and telling the user to wait is
+/// the only honest thing to say about it.
+void _openLibrarySession(
+  BuildContext context, {
+  required AppLocalizations l10n,
+  required AsyncValue<List<LibraryItem>> items,
+  required String route,
   required String sessionId,
-  required List<PracticeHistoryEntry> history,
 }) {
-  for (final entry in history) {
-    if (entry.id != sessionId) continue;
-    return PracticeLibraryItem(
-      id: entry.id,
-      title: entry.displayTitle,
-      createdAt: entry.createdAt,
-      syncStatus: LibrarySyncStatus.synced,
+  final messenger = ScaffoldMessenger.of(context);
+  final resolved = items.value;
+  if (resolved == null) {
+    // No data yet. `hasError` separates "the library could not be read"
+    // (a real unavailability) from "not finished yet" (a wait).
+    messenger.showSnackBar(
+      SnackBar(
+        key: Key(
+          items.hasError
+              ? 'progress-evidence-unavailable'
+              : 'progress-evidence-loading',
+        ),
+        content: Text(
+          items.hasError
+              ? l10n.progressEvidenceUnavailable
+              : l10n.progressEvidenceLoading,
+        ),
+      ),
     );
+    return;
   }
-  return null;
+  LibraryItem? match;
+  for (final item in resolved) {
+    if (item.id == sessionId) {
+      match = item;
+      break;
+    }
+  }
+  if (match == null) {
+    messenger.showSnackBar(
+      SnackBar(
+        key: const Key('progress-evidence-unavailable'),
+        content: Text(l10n.progressEvidenceUnavailable),
+      ),
+    );
+    return;
+  }
+  context.push(route.replaceFirst(':sessionId', sessionId), extra: match);
+}
+
+/// R26 (audit MI4) — the "Import file" CTA's real flow.
+///
+/// The CTA used to say, honestly, that no import flow existed. It does now:
+/// the picker hands back bytes, the WAV boundary decoder (`E06-R05`, already
+/// tested) turns them into validated PCM, and that PCM starts the IDENTICAL
+/// run a microphone capture starts — the same [AnalysisCaptureFlow], the
+/// same validator, the same isolate and the same persistence (E17-R02). The
+/// pipeline never learns where the samples came from beyond the input's own
+/// enum.
+///
+/// A container this build cannot decode is still SPOKEN, not swallowed:
+/// `analysisImportMessage` names the actual reason (unsupported container,
+/// too large, too short, too long, unreadable), so the user knows what to
+/// fix instead of facing a button that appears to do nothing.
+Future<void> _startAnalysisImport(BuildContext context, WidgetRef ref) async {
+  final outcome = await ref.read(importAudioFileUseCaseProvider)();
+  // The picker is a full-screen platform surface: the user can leave this
+  // route while it is open. Everything after this point touches `ref` and
+  // `context`, both of which are invalid once that happens.
+  if (!context.mounted) return;
+  if (outcome case AudioFileImportReady(:final audio)) {
+    ref
+        .read(analysisCaptureOriginProvider.notifier)
+        .markStarted(AnalysisInputSource.importedFile);
+    unawaited(ref.read(analysisCaptureFlowProvider).analyzeImportedFile(audio));
+    // `push`, NEM `go` (R17-minta): a kezdőlapot maga is `push` nyitotta az
+    // Elemzés fülről, és egy `go` az egész stacket lecserélné — a
+    // feldolgozó képernyőről nem lenne visszaút sehová.
+    context.push(AppRoutes.analysisProcessing);
+    return;
+  }
+  final message = analysisImportMessage(AppLocalizations.of(context), outcome);
+  // A cancelled picker says nothing — dismissing a chooser is not an error.
+  if (message == null) return;
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+}
+
+/// R34 (audit M11) — the analysis COMPARISON's only entry point.
+///
+/// Measured before this round: `CompareAnalysesUseCase` — the single
+/// producer of an `AnalysisComparison` — had ZERO `lib/` callers, and
+/// `AppRoutes.analysisCompare` had zero navigations, while
+/// `analysisComparisonEnabled` was ON in the shipped development build. The
+/// whole feature (use case, compatibility evaluator, screen, ARB copy) was
+/// finished and unreachable.
+///
+/// The flow reads the SAVED documents back by id: pick, read, and push
+/// only on a complete pair (a summary carries no metrics at all). A failed read is NAMED and navigates nowhere —
+/// the compare route's own redirect would otherwise bounce the user to
+/// `/live` for a reason they could not see.
+Future<void> _openAnalysisCompare(
+  BuildContext context,
+  WidgetRef ref,
+  List<AnalysisSummary> summaries,
+) async {
+  final l10n = AppLocalizations.of(context);
+  final pair = await showAnalysisComparePicker(context, summaries: summaries);
+  // The sheet is a route: the user can leave the Analyze home while it is
+  // open, and everything below touches `context`.
+  if (pair == null || !context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.showSnackBar(
+    SnackBar(
+      key: const Key('analysis-compare-progress'),
+      content: Text(l10n.analysisCompareLoading),
+    ),
+  );
+  final repository = ref.read(analysisRepositoryProvider);
+  final before = await repository.getById(pair.before.documentId);
+  final after = await repository.getById(pair.after.documentId);
+  if (!context.mounted) return;
+  messenger.hideCurrentSnackBar();
+  final beforeDocument = switch (before) {
+    Success<AnalysisDocument>(:final value) => value,
+    Failure<AnalysisDocument>() => null,
+  };
+  final afterDocument = switch (after) {
+    Success<AnalysisDocument>(:final value) => value,
+    Failure<AnalysisDocument>() => null,
+  };
+  if (beforeDocument == null || afterDocument == null) {
+    messenger.showSnackBar(
+      SnackBar(content: Text(l10n.analysisCompareLoadFailed)),
+    );
+    return;
+  }
+  final comparison = const CompareAnalysesUseCase()(
+    before: beforeDocument,
+    after: afterDocument,
+  );
+  // `push`, NEM `go` (R30): the comparison lands ON TOP of the Analyze
+  // home, so the ordinary pop is the way back.
+  context.push(AppRoutes.analysisCompare, extra: comparison);
 }
 
 /// App router: a bottom-nav [ShellRoute] over the five tabs, plus full-screen
@@ -451,6 +595,39 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.setlists,
         builder: (_, _) => const SetlistListScreen(),
       ),
+      // Setlist V2 (R10, audit §5.2). Until now `SetlistListScreenV2` and
+      // `SetlistSessionScreen` had no route and no construction site
+      // anywhere in `lib/` — measured `unreachable` by
+      // `tool/check_screen_reachability.dart`. Tapping a setlist opens the
+      // ordered session; the session's per-item runner launches the real
+      // Song Trainer session for each item and waits for it, which is what
+      // makes the setlist advance item by item.
+      GoRoute(
+        path: AppRoutes.setlistsV2,
+        builder: (_, _) => Consumer(
+          builder: (context, ref, _) => SetlistListScreenV2(
+            controller: ref.watch(setlistControllerProvider),
+            clock: DateTime.now,
+            onOpenSetlist: (setlist) => openSetlistSession(context, setlist),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.setlistSession,
+        redirect: (_, state) =>
+            state.extra is SongSetlist ? null : AppRoutes.setlistsV2,
+        builder: (_, state) => Consumer(
+          builder: (context, ref, _) => SetlistSessionScreen(
+            setlist: state.extra! as SongSetlist,
+            // Practice is the only mode the shipped app can honestly run:
+            // every song session the trainer offers is the scored one.
+            mode: SetlistSessionMode.practice,
+            availability: (item) => item.initialAvailability,
+            performanceRunner: unavailableSetlistPerformanceRunner,
+            createPracticeRunner: () => setlistItemRunner(context, ref),
+          ),
+        ),
+      ),
       GoRoute(
         path: AppRoutes.chords,
         builder: (_, _) => const ChordLibraryScreen(),
@@ -514,28 +691,23 @@ final routerProvider = Provider<GoRouter>((ref) {
               now: ref.watch(progressNowProvider),
               localize: (key) => progressV2LocalizedText(l10n, key),
             )!;
+            // R18 (audit M5) — the unified library's items, WATCHED here so
+            // the aggregation starts loading while the user reads the skill
+            // detail. MÉRT hiba: the evidence rows used to push
+            // `/profile/library/session/:sessionId` with NO `extra`, and that
+            // route's own redirect requires `state.extra is LibraryItem` —
+            // so every evidence tap silently landed on the library LIST
+            // instead of the session it named.
+            final libraryItems = ref.watch(libraryV2ItemsProvider);
             return SkillDetailScreen(
               projection: projection,
-              // A2b — `profileLibrarySession` REQUIRES a `LibraryItem` in
-              // `extra` (its redirect bounces to the list otherwise), so a
-              // push carrying only the substituted `:sessionId` made every
-              // evidence link a dead end. Resolve the session first; when
-              // it cannot be resolved, go to the list DELIBERATELY rather
-              // than letting the route's redirect swallow the tap.
-              onOpenEvidence: (route, sessionId) {
-                final item = _practiceLibraryItemForSession(
-                  sessionId: sessionId,
-                  history: practiceHistory,
-                );
-                if (item == null) {
-                  context.push(AppRoutes.profileLibrary);
-                  return;
-                }
-                context.push(
-                  route.replaceFirst(':sessionId', sessionId),
-                  extra: item,
-                );
-              },
+              onOpenEvidence: (route, sessionId) => _openLibrarySession(
+                context,
+                l10n: l10n,
+                items: libraryItems,
+                route: route,
+                sessionId: sessionId,
+              ),
               onStartRecommendedPractice: () =>
                   context.push(AppRoutes.practiceHub),
             );
@@ -652,6 +824,22 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.practiceHub,
             builder: (_, _) => const PracticeHubScreen(),
           ),
+        // R18 (audit B2) — the catalog LIST, registered regardless of the
+        // shell flag. Measured defect: with the shell on, `/practice` renders
+        // the Practice AREA hub, whose only definition-carrying control is
+        // the recommended CTA (`catalog.first`); the registration above is
+        // `!adaptiveShellEnabled`-only, so nine of the ten built-in practices
+        // had NO on-screen entry point in the shipped build. Declared here
+        // (before the shell below) so it stays a top-level, pushable route:
+        // the hub `push`es it and the user pops straight back.
+        GoRoute(
+          path: AppRoutes.practiceCatalog,
+          builder: (_, state) => PracticeHubScreen(
+            category: practiceCategoryFromCode(
+              state.uri.queryParameters['category'],
+            ),
+          ),
+        ),
         GoRoute(
           path: AppRoutes.practiceSetup,
           builder: (_, _) => const PracticeSetupScreen(),
@@ -662,7 +850,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
         GoRoute(
           path: AppRoutes.practiceResult,
-          builder: (_, _) => const PracticeResultFallback(),
+          builder: (_, _) => const PracticeResultRoute(),
         ),
       ],
       // E15-R07 F1 (ADR 0491 D1) — the two MEASURED-constructible Practice
@@ -675,21 +863,65 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRoute(
           path: AppRoutes.practiceGeneratorSetup,
           builder: (_, _) => Consumer(
-            builder: (context, ref, _) => PlanSetupScreen(
-              controller: ref.watch(planSetupControllerProvider),
-            ),
+            builder: (context, ref, _) {
+              // Javító sáv 2026-09-06 (R4): watched, not read — the
+              // generation use case is autoDispose and must outlive the
+              // wizard's last step (its own doc-comment's rule).
+              final startGeneration = ref.watch(startPlanGenerationProvider);
+              return PlanSetupScreen(
+                controller: ref.watch(planSetupControllerProvider),
+                onFinished: (request) => launchPlanGeneration(
+                  context,
+                  ref,
+                  startGeneration,
+                  request,
+                ),
+              );
+            },
           ),
         ),
         GoRoute(
           path: AppRoutes.practiceGeneratorToday,
-          builder: (_, _) => Consumer(
-            builder: (context, ref, _) => TodayPlanScreen(
-              controller: ref.watch(todayPlanControllerProvider),
-              // The active plan is the screen's body (E17-R06): without it
-              // the route always rendered "no active plan".
-              plan: ref.watch(activePracticePlanProvider).value,
-              isTodayRouteEnabled: true,
-            ),
+          // Javító sáv 2026-09-06 (R4): the screen used to be built WITHOUT
+          // the plan (always "no active plan") and WITHOUT callbacks (every
+          // action button disabled). R10 (2026-09-07) binds `swap` too —
+          // `ActivePlanController.swap` now rewrites today's first pending
+          // block to a same-skill catalog alternative.
+          builder: (_, state) => Consumer(
+            builder: (context, ref, _) {
+              // R18 (audit M6) — `.value` alone made BOTH loading and error
+              // read as `null`, and `null` is this screen's measured "no
+              // active plan" state. A user whose stored plan failed to load
+              // was told they have no plan at all. The three states are
+              // distinct here now.
+              final planAsync = ref.watch(activePracticePlanProvider);
+              return planAsync.when(
+                loading: () => _RouteLoadingScaffold(
+                  key: const Key('today-plan-route-loading'),
+                  exitLocation: entryLocation,
+                ),
+                error: (_, _) => _RouteErrorScaffold(
+                  key: const Key('today-plan-route-error'),
+                  exitLocation: entryLocation,
+                  onRetry: () => ref.invalidate(activePracticePlanProvider),
+                ),
+                data: (plan) => TodayPlanScreen(
+                  controller: ref.watch(todayPlanControllerProvider),
+                  plan: plan,
+                  launchRequest: TodayPlanRouteRequest.tryParse(state.extra),
+                  isTodayRouteEnabled: true,
+                  onStart: (block) => openPracticeForBlock(context, block),
+                  onSwap: (_) =>
+                      runTodayPlanAction(context, ref, TodayPlanAction.swap),
+                  onSkip: (_) =>
+                      runTodayPlanAction(context, ref, TodayPlanAction.skip),
+                  onShorten: () =>
+                      runTodayPlanAction(context, ref, TodayPlanAction.shorten),
+                  onPause: () =>
+                      runTodayPlanAction(context, ref, TodayPlanAction.pause),
+                ),
+              );
+            },
           ),
         ),
         GoRoute(
@@ -698,12 +930,25 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, ref, _) {
               final plan = ref.watch(activePracticePlanProvider);
               // A `plan` a képernyő szerződésében NULLAZHATÓ, és a `null`
-              // ott a „még nincs terv" állapot — nem hiányzó adat. Betöltés
-              // közben tehát nem hazudunk üres tervet: ugyanaz a `null`
-              // megy be, amit a képernyő maga is kezel.
-              return WeeklyPlanScreen(
-                plan: plan.value,
-                today: ref.watch(practiceGeneratorTodayProvider)(),
+              // ott a „még nincs terv" állapot — nem hiányzó adat.
+              // R18 (audit M6): éppen EZÉRT nem mehet be a `.value` nyersen.
+              // A betöltés és a hiba is `null`-lá lapult, tehát a képernyő
+              // mindkettőt „nincs terved"-ként mondta ki. A `null` csak a
+              // `data` ágon jelenthet hiányzó tervet.
+              return plan.when(
+                loading: () => _RouteLoadingScaffold(
+                  key: const Key('weekly-plan-route-loading'),
+                  exitLocation: entryLocation,
+                ),
+                error: (_, _) => _RouteErrorScaffold(
+                  key: const Key('weekly-plan-route-error'),
+                  exitLocation: entryLocation,
+                  onRetry: () => ref.invalidate(activePracticePlanProvider),
+                ),
+                data: (value) => WeeklyPlanScreen(
+                  plan: value,
+                  today: ref.watch(practiceGeneratorTodayProvider)(),
+                ),
               );
             },
           ),
@@ -918,9 +1163,39 @@ final routerProvider = Provider<GoRouter>((ref) {
                     path: AppRoutes.practiceHub,
                     builder: (_, _) => const PracticeAreaHubScreen(),
                   ),
+                // R30 (re-audit #2 M4) — the tile that opens this route
+                // PUSHES it, but the screen builds no `Scaffold` of its own
+                // and the adaptive shell supplies none with an app bar: the
+                // pushed page carried no visible way back at all (only the
+                // system gesture). Same adapter idea as `/practice/live`
+                // above — a route-level `Scaffold` for a screen that brings
+                // none — plus the exit this one needs. The bar repeats the
+                // screen's own headline on purpose: that headline lives
+                // outside this round's files, and a titleless bar would
+                // render as an empty strip whenever this route is the
+                // branch's own first page.
                 GoRoute(
                   path: AppRoutes.practiceAnalyze,
-                  builder: (_, _) => const AnalyzeScreen(),
+                  builder: (_, _) => Builder(
+                    builder: (context) => Scaffold(
+                      appBar: AppBar(
+                        // The router's own pop-ability, not the branch
+                        // navigator's: this route lives INSIDE a shell
+                        // branch, and a pushed branch route is a second
+                        // shell instance whose inner navigator holds a
+                        // single page — an implied leading would be absent
+                        // there, and a plain back control would pop a
+                        // navigator with nothing on it. No leading at all
+                        // when the route is the branch's own first page,
+                        // so no dead control is ever drawn.
+                        leading: context.canPop()
+                            ? BackButton(onPressed: () => context.pop())
+                            : null,
+                        title: Text(AppLocalizations.of(context).navAnalyze),
+                      ),
+                      body: const AnalyzeScreen(),
+                    ),
+                  ),
                 ),
                 GoRoute(
                   path: AppRoutes.practiceLearn,
@@ -1074,6 +1349,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: AppRoutes.tutorData,
           builder: (_, _) => const TutorDataScreen(),
         ),
+        GoRoute(
+          path: AppRoutes.tutorPlanPreview,
+          builder: (_, _) => const PracticePlanPreviewRoute(),
+        ),
       ],
       if (visionEnabled && visionSetupEnabled) ...[
         GoRoute(
@@ -1151,38 +1430,69 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRoute(
           path: AppRoutes.analysisHome,
           builder: (_, _) => Consumer(
-            builder: (context, ref, _) => AnalysisHomeScreen(
-              recentAnalyses:
-                  ref.watch(recentAnalysesProvider).value ?? const [],
-              onStartRecording: () => context.push(AppRoutes.analysisRecording),
-              // File import has no picker/decoder use case wired in this
-              // feature yet (only the WAV decoder gateway exists), so the
-              // tap says so instead of pretending.
-              onImportFile: () => ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    AppLocalizations.of(context).analysisHomeImportUnavailable,
-                  ),
-                ),
-              ),
-              onOpenAnalysis: (summary) async {
-                final document = await ref
-                    .read(analysisCaptureFlowProvider)
-                    .loadAnalysis(summary.documentId);
-                if (!context.mounted) return;
-                if (document == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        AppLocalizations.of(context).analysisHomeOpenFailed,
+            builder: (context, ref, _) {
+              // R18 (audit M6) — `.value ?? const []` flattened the
+              // provider's THREE states into one: a load in flight and a
+              // failed index read both rendered as "no earlier analyses",
+              // a claim the app could not have measured. Three states,
+              // three frames.
+              final recent = ref.watch(recentAnalysesProvider);
+              if (recent.isLoading) {
+                return _RouteLoadingScaffold(
+                  key: const Key('analysis-home-route-loading'),
+                  exitLocation: entryLocation,
+                );
+              }
+              if (recent.hasError) {
+                return _RouteErrorScaffold(
+                  key: const Key('analysis-home-route-error'),
+                  exitLocation: entryLocation,
+                  onRetry: () => ref.invalidate(recentAnalysesProvider),
+                );
+              }
+              final summaries = recent.value ?? const <AnalysisSummary>[];
+              return AnalysisHomeScreen(
+                recentAnalyses: summaries,
+                onStartRecording: () =>
+                    context.push(AppRoutes.analysisRecording),
+                // R26 (audit MI4) — a CTA VALÓDI importot nyit. A korábbi
+                // őszinte hiány-üzenet helyére a folyamat lépett; a "nem
+                // tudom dekódolni" eset megmaradt, de már a konkrét okot
+                // mondja ki (`analysis_import_messages.dart`).
+                onImportFile: () =>
+                    unawaited(_startAnalysisImport(context, ref)),
+                // R34 (audit M11) — the comparison's entry point, gated on
+                // its OWN flag. `null` when the flag is off, and the screen
+                // then renders no action at all: a "Compare" control in
+                // front of a route that is not registered would be the
+                // dead-control class this bar closes.
+                onCompareAnalyses: analysisComparisonEnabled
+                    ? () => unawaited(
+                        _openAnalysisCompare(context, ref, summaries),
+                      )
+                    : null,
+                onOpenAnalysis: (summary) async {
+                  final document = await ref
+                      .read(analysisCaptureFlowProvider)
+                      .loadAnalysis(summary.documentId);
+                  if (!context.mounted) return;
+                  if (document == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          AppLocalizations.of(context).analysisHomeOpenFailed,
+                        ),
                       ),
-                    ),
+                    );
+                    return;
+                  }
+                  await context.push(
+                    AppRoutes.analysisOverview,
+                    extra: document,
                   );
-                  return;
-                }
-                await context.push(AppRoutes.analysisOverview, extra: document);
-              },
-            ),
+                },
+              );
+            },
           ),
         ),
         GoRoute(
@@ -1196,6 +1506,9 @@ final routerProvider = Provider<GoRouter>((ref) {
                 // await, so the Processing Stage never mounts on a stale
                 // state and the replaced Recording Stage may dispose its
                 // recorder at once.
+                ref
+                    .read(analysisCaptureOriginProvider.notifier)
+                    .markStarted(AnalysisInputSource.microphone);
                 unawaited(
                   ref
                       .read(analysisCaptureFlowProvider)
@@ -1215,8 +1528,15 @@ final routerProvider = Provider<GoRouter>((ref) {
               onCancel: () => unawaited(
                 ref.read(analysisControllerProvider.notifier).cancel(),
               ),
-              onRestart: () =>
-                  context.pushReplacement(AppRoutes.analysisRecording),
+              // R30 — egy importált futás után a felvevő képernyő HAZUDNA a
+              // bemenetről: a "kezdés elölről" oda visz vissza, ahonnan ez a
+              // futás indult.
+              onRestart: () => context.pushReplacement(
+                ref.read(analysisCaptureOriginProvider) ==
+                        AnalysisInputSource.importedFile
+                    ? AppRoutes.analysisHome
+                    : AppRoutes.analysisRecording,
+              ),
               onViewResult: (document) =>
                   context.push(AppRoutes.analysisOverview, extra: document),
             ),
@@ -1358,12 +1678,36 @@ final routerProvider = Provider<GoRouter>((ref) {
               state: evaluation.state,
               reason: evaluation.reason,
               weeklyConsistencyDays: weeklyConsistencyDays.value,
+              // R22 (audit MI1): the CTA's own copy is "Start a recovery
+              // practice" (`streakV2RecoveryCta`), and the ONLY recovery
+              // concept this domain has is `StreakEvaluationRequest`'s
+              // `recoveryEligible` — a lower qualification threshold for a
+              // practice session, never a purchasable token or a grace-day
+              // claim. So the honest behaviour is the one the label
+              // promises: take the user to the practice hub where such a
+              // session starts. Same precedent as `QuestStartPracticeAction`
+              // above.
+              //
+              // R34 — the CTA now also CREDITS the recovery it promises.
+              // R22's "no state is mutated here" no longer holds, and that
+              // is the point: it held only because no repository could
+              // grant a recovery. Still nothing touches the ledger, the
+              // freeze count or the streak state — a recovery is a lower
+              // BAR for the next session, never a day the learner did not
+              // practise.
+              // `StreakRecoveryGrantStore.grant` persists a SINGLE-USE
+              // lower qualification threshold for the next session
+              // (`docs/ui/legacy-backlog.md` §6.2); the grant is only spent
+              // by a day that has a canonical activity, so tapping the CTA
+              // and then not practising cannot burn it. Navigation is
+              // unchanged — the hub is still where such a session starts.
               onRecoveryPressed: () {
-                // BACKLOG (`docs/ui/legacy-backlog.md`, E16-R01 entry 2):
-                // no repository method exists to purchase/apply a streak
-                // recovery, and `StreakDetailScreen` has no "recovery
-                // unavailable" contract to fall back to (screens are this
-                // round's tilos zona) — the button stays rendered but inert.
+                unawaited(
+                  ref
+                      .read(streakRecoveryGrantStoreProvider)
+                      .grant(ref.read(todayEpochDayProvider)),
+                );
+                context.push(AppRoutes.practiceHub);
               },
             );
           },
@@ -1379,10 +1723,30 @@ final routerProvider = Provider<GoRouter>((ref) {
                 ref.watch(rewardInboxItemsProvider),
                 l10n,
               ),
-              onItemSelected: (_) {
-                // BACKLOG (`docs/ui/legacy-backlog.md`, E16-R01 entry 3): no
-                // reward-detail screen exists on the tree to navigate to —
-                // building one is new scope, not a bekötés.
+              // R22 (audit MI2): opening a row shows the already-built
+              // `RewardSummarySheet` — a bottom sheet, not a new route, so
+              // no matrix fixture or §3.2 row is needed. The sheet renders a
+              // drained `CelebrationSummary`, so the single tapped item is
+              // wrapped into a one-event summary; `addedAt` is used for both
+              // window bounds because a postaláda row IS the whole batch.
+              // The item is the already-localized one (see
+              // `_localizedRewardInboxItems`), so the sheet's raw
+              // `titleKey`/`bodyKey` render as real copy.
+              onItemSelected: (RewardInboxItem item) {
+                final preferences = ref.read(gamificationPreferencesProvider);
+                unawaited(
+                  RewardSummarySheet.show<void>(
+                    context,
+                    summary: CelebrationSummary(
+                      events: <RewardEvent>[item.event],
+                      totalXp: item.event.earnedXp,
+                      startedAt: item.addedAt,
+                      endedAt: item.addedAt,
+                    ),
+                    feedback: gamificationFeedbackFor(preferences),
+                    reduceMotion: preferences.reduceMotion,
+                  ),
+                );
               },
               onMarkSeen: (RewardInboxItem item) {
                 // Review m2: the screen's `onMarkSeen` contract is `void`
@@ -1429,3 +1793,101 @@ final routerProvider = Provider<GoRouter>((ref) {
   });
   return router;
 });
+
+/// R18 (audit M6) — the loading frame a route shows while the data it is
+/// composed from is still being read.
+///
+/// MÉRT hiba: three route builders read `AsyncValue.value` directly, so
+/// loading AND error both collapsed into the SAME `null`/empty-list value
+/// the screens below render as a measured "you have nothing here" state.
+/// A spinner is not a richer contract — it is the ABSENCE of the claim.
+class _RouteLoadingScaffold extends StatelessWidget {
+  const _RouteLoadingScaffold({required this.exitLocation, super.key});
+
+  /// Where the frame's back control goes when there is nothing to pop.
+  final String exitLocation;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(leading: _RouteFrameBackButton(exitLocation)),
+      body: const Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+/// R30 (re-audit #2 B3/3) — the way out of a router-owned frame.
+///
+/// The two router-owned frames in this file replace a whole screen — while
+/// its data is loading, or after that read failed. Neither carried an
+/// `AppBar`, so a frame reached with `go` (a redirect target, a deep link)
+/// showed a spinner or an error with NO control on it at all: the system
+/// back left the app. This one pops when there is a stack and otherwise
+/// returns to the shell entry point, so it is never a silent no-op.
+class _RouteFrameBackButton extends StatelessWidget {
+  const _RouteFrameBackButton(this.exitLocation);
+
+  final String exitLocation;
+
+  @override
+  Widget build(BuildContext context) {
+    return BackButton(
+      key: const Key('route-frame-back'),
+      onPressed: () {
+        final navigator = Navigator.of(context);
+        if (navigator.canPop()) {
+          navigator.pop();
+          return;
+        }
+        GoRouter.maybeOf(context)?.go(exitLocation);
+      },
+    );
+  }
+}
+
+/// R18 (audit M6) — the failure frame for the same three routes.
+///
+/// Shape borrowed from `club_detail_screen.dart`'s `_ClubFeedErrorCard`
+/// (icon + message + retry), rebuilt locally rather than imported: that one
+/// is a private widget of a Community screen, and the router must not reach
+/// into a feature's presentation internals.
+class _RouteErrorScaffold extends StatelessWidget {
+  const _RouteErrorScaffold({
+    required this.onRetry,
+    required this.exitLocation,
+    super.key,
+  });
+
+  final VoidCallback onRetry;
+
+  /// Where the frame's back control goes when there is nothing to pop.
+  final String exitLocation;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Scaffold(
+      appBar: AppBar(leading: _RouteFrameBackButton(exitLocation)),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Icon(Icons.error_outline, size: 48),
+                const SizedBox(height: 16),
+                Text(l10n.shellDataErrorMessage, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: onRetry,
+                  child: Text(l10n.shellDataRetry),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

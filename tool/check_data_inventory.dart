@@ -361,9 +361,29 @@ const Map<String, String> dioConsumingClassExclusions = {
 /// into `api_client.dart`) is exactly the blind spot the blanket exclusion
 /// would otherwise hide; [checkExclusionCallSiteDrift] re-measures both
 /// files on every run and fails if either count has moved.
+///
+/// Javító sáv 2026-09-08 (R19 CI-lelet): `api_client.dart` went 3 → 4 when
+/// `_requestJson` gained the `readsErrorDetail` branch — the SAME path and
+/// options issued as `_dio.request<String>` (Dio forces `responseType` to
+/// JSON for any other generic argument, so the opt-in `ResponseType.plain`
+/// only survives that way). Re-measured: the fourth call site rides the
+/// identical interceptor chain and never targets a route of its own, so no
+/// inventory entry is missing.
+///
+/// Javító sáv 2026-09-08 (R27, community media): 4 → 5. The fifth call site
+/// is `getBytes`, added for `GET /community/media/{public_id}` — the ONLY
+/// endpoint in the tree whose success body is bytes rather than JSON, so it
+/// cannot ride `_requestJson`. Measured, and the same conclusion as the
+/// fourth: it takes the caller's path (no route of its own), rides the same
+/// `DioFactory` interceptor chain (the JWT comes from `auth_interceptor`,
+/// exactly as for every other authenticated call), and sends NOTHING — the
+/// request has no body and no query parameters, so it cannot become an
+/// egress route the data inventory would need a separate row for. The
+/// multipart primitive added in the same round is deliberately NOT a sixth
+/// site: it delegates to `_requestJson`.
 const Map<String, int> dioConsumingClassExclusionCallSiteCounts = {
   'lib/core/network/dio_factory.dart': 0,
-  'lib/core/network/api_client.dart': 3,
+  'lib/core/network/api_client.dart': 5,
 };
 
 /// MINOR-2: loosened off the `ApiClient` return type — the previous pattern
@@ -418,8 +438,24 @@ final _apiClientTypedMemberPattern = RegExp(
 //
 // A minta két beágyazási szintet enged meg — ennyi fedi a fában előforduló
 // alakokat (`CommunityPage<CommunityPost>`, `Map<String, String>`).
+//
+// Javító sáv 2026-09-08 (R27): `getBytes` és `postMultipartJson` felvéve. A
+// kettő az `ApiClient` KÉT ÚJ igéje (a közösségi média-letöltés az egyetlen
+// bájt-törzsű válasz, a feltöltés az egyetlen többrészes kérés a fában), és a
+// lista nélkülük CSENDBEN vak lett volna rájuk — ugyanaz a hibaosztály, amit
+// a fenti `getJson<CommunityPage<…>>` lelet már egyszer megfizetett: egy
+// adatvédelmi detektor, ami a hívás IGÉJÉTŐL függően vak, rosszabb, mint egy
+// hiányzó detektor, mert zöldet mutat.
+//
+// MÉRVE: a bővítés EGYETLEN új kimenő útvonalat sem fedez fel ma. A
+// `postMultipartJson` egyetlen hívója a `HttpCommunityPostRepository`, ami a
+// `postJson`/`delete` miatt amúgy is felfedezett és leltározott
+// (`account_api_community_post_repository`); a `getBytes` egyetlen hívója egy
+// providerbe zárt lokális változó (`community_media_tile.dart`), tehát sem
+// `ApiClient`-mezős osztály, sem dio-t importáló fájl nem áll mögötte. A
+// bővítés így a JÖVŐT zárja le, nem a jelent javítja.
 final _apiClientRequestVerbCallPattern = RegExp(
-  r'\.(getJson|postJson|putJson|post|delete)\s*'
+  r'\.(getJson|postJson|putJson|post|delete|getBytes|postMultipartJson)\s*'
   r'(<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>)?\s*\(',
 );
 

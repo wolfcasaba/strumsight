@@ -27,7 +27,10 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../app/config/app_config.dart';
+import '../../../../app/routing/app_route.dart';
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/models/learning_goal.dart';
@@ -46,6 +49,12 @@ class TutorProfileScreen extends ConsumerWidget {
     final goalsController = ref.read(
       tutorLearningGoalControllerProvider.notifier,
     );
+
+    // The `/tutor/plan-preview` route is registered ONLY inside the
+    // `aiTutorEnabled` block of `app_router.dart`, so the CTA below is
+    // gated by the very same flag — an ungated button would push an
+    // unregistered path on a build where the tutor is off.
+    final aiTutorEnabled = ref.watch(appConfigProvider).flags.aiTutorEnabled;
 
     final weeklyErrorText = switch (profile.lastValidationCode) {
       StudentProfileValidationCode.weeklyPracticeMinutesOutOfRange =>
@@ -161,6 +170,31 @@ class TutorProfileScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
+                // R12 — the on-screen entry to `/tutor/plan-preview`
+                // (audit §5.2). The route and its real draft producer have
+                // existed since R9, but no shipped surface pushed it, so
+                // the plan preview was unreachable. This screen owns the
+                // goals the producer turns into a plan, which is why the
+                // CTA lives here and not on the pixel-pinned tutor home.
+                // A card, not an `SsSection` + `SsButton`: the section and
+                // button counts on this screen are pinned by
+                // `tutor_profile_screen_test.dart` R22-PF6.
+                if (aiTutorEnabled) ...<Widget>[
+                  const SizedBox(height: SsSpacing.space4),
+                  SsContentCard(
+                    key: const Key('tutorProfilePlanPreview'),
+                    icon: Icons.event_note_outlined,
+                    title: l10n.tutorPlanPreviewEntryTitle,
+                    message: l10n.tutorPlanPreviewEntryBody,
+                    actions: <SsCardAction>[
+                      SsCardAction(
+                        label: l10n.tutorPlanPreviewEntryTitle,
+                        onPressed: () =>
+                            context.push(AppRoutes.tutorPlanPreview),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

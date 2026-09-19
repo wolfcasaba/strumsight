@@ -20,12 +20,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../data/cache/analysis_cache.dart';
+import '../data/input/analysis_audio_file_picker.dart';
 import '../data/local/file_analysis_repository.dart';
 import '../data/migration/analysis_migration_version_store.dart';
 import '../data/migration/legacy_library_migrator.dart';
 import '../domain/analysis_repository.dart';
 import '../domain/analysis_document.dart';
 import '../domain/analysis_event.dart';
+import '../domain/analysis_mode.dart';
 import '../../../core/storage/storage_keys.dart';
 import '../../library/public.dart' show AnalyzedSession;
 import '../../progress/public.dart'
@@ -35,6 +37,7 @@ import 'analysis_controller.dart';
 import 'analysis_isolate_runner.dart';
 import 'analyze_audio_use_case.dart';
 import 'cancel_analysis_use_case.dart';
+import 'import_audio_file_use_case.dart';
 import 'save_analysis_use_case.dart';
 import 'v2_analysis_runner.dart';
 
@@ -264,3 +267,46 @@ final class _RiverpodAnalysisPracticeCreditRecorder
         );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Hang-import (R26, audit MI4) — a "Fájl importálása" belépő.
+//
+// A kezdőlap CTA-ja eddig egy ŐSZINTE hiány-üzenetet mutatott, mert a fához
+// nem tartozott import-folyamat. A hiányzó darab NEM a dekóder volt (a
+// `WavDecoderAdapter` és a `FileAnalysisInput` az E06-R05 óta megvan és
+// tesztelt), hanem a platform-szedő és a kettőt összekötő use case. Az
+// elemzés maga az E17-R02 `AnalysisCaptureFlow`-ján fut, ugyanazon a
+// validátoron, vezérlőn és mentésen, amit egy mikrofonos felvétel használ.
+// ---------------------------------------------------------------------------
+
+/// A hang-import platform-határa. A widget-teszt saját, a fájlrendszert nem
+/// érintő szedőt injektál ide.
+final analysisAudioFilePickerProvider = Provider<AnalysisAudioFilePicker>(
+  (_) => const PlatformAnalysisAudioFilePicker(),
+);
+
+/// Fájl → validált PCM az elemzés bemeneti határán. Elemzést NEM indít: a
+/// visszaadott mintákat a hívó ugyanabba a futásba adja, amit egy mikrofonos
+/// felvétel indít.
+final importAudioFileUseCaseProvider = Provider<ImportAudioFileUseCase>(
+  (ref) => ImportAudioFileUseCase(
+    picker: ref.watch(analysisAudioFilePickerProvider),
+  ),
+);
+
+/// Melyik bemenetből indult a LEGUTÓBB elindított futás.
+///
+/// A feldolgozó képernyő "Kezdés elölről" gombjának kell: egy importált
+/// futás után a felvevő képernyőre dobni a felhasználót azt állítaná, hogy
+/// az elemzés mikrofonból jött.
+final class AnalysisCaptureOrigin extends Notifier<AnalysisInputSource> {
+  @override
+  AnalysisInputSource build() => AnalysisInputSource.microphone;
+
+  void markStarted(AnalysisInputSource source) => state = source;
+}
+
+final analysisCaptureOriginProvider =
+    NotifierProvider<AnalysisCaptureOrigin, AnalysisInputSource>(
+      AnalysisCaptureOrigin.new,
+    );

@@ -269,36 +269,48 @@ implementation (SDD, unscheduled).
 
 ### 6.2 Streak-recovery purchase flow (E16-R01 entry 2)
 
-**What:** `StreakDetailScreen.onRecoveryPressed` (wired in the router's
-`AppRoutes.streakDetail` route) stays a no-op — the recovery CTA renders
-(when `reason == StreakEvaluationReason.broken`) but tapping it does nothing.
+**Status: the dead control is CLOSED in R22 (audit MI1, 2026-09-07); the
+purchase flow itself stays open.**
 
-**Why it wasn't built this round:** there is no repository method to
-purchase or apply a streak recovery, and `StreakDetailScreen` itself has no
-"recovery unavailable" contract to degrade to instead — both are in this
-round's tilos zona (`data/**`, `presentation/screens/**`).
+**What:** `StreakDetailScreen.onRecoveryPressed` (wired in the router's
+`AppRoutes.streakDetail` route) was a no-op — the recovery CTA rendered
+(when `reason == StreakEvaluationReason.broken`) but tapping it did nothing.
+
+**What R22 changed:** the CTA now pushes `AppRoutes.practiceHub`. The button's
+own copy (`streakV2RecoveryCta` — "Start a recovery practice" / "Indíts egy
+visszatérő gyakorlást") promises exactly that, and the ONLY recovery concept
+the domain has is `StreakEvaluationRequest.recoveryEligible`: a lower
+qualification threshold for a practice session, never a purchasable token.
+So navigating to the place such a session starts is the whole honest
+behaviour available — no state is mutated, because nothing in the domain
+grants a recovery without a real qualified day.
+
+**Still open:** a repository method that GRANTS `recoveryEligible` for the
+next session (and therefore a real purchase/claim step), plus a
+"recovery unavailable" contract on the screen.
 
 **Owner:** a future round whose `allowed_paths` covers the streak-recovery
 repository method and the screen's disabled/unavailable state (SDD,
 unscheduled).
 
-**Date measured:** 2026-09-03.
+**Date measured:** 2026-09-03. **Partially closed:** 2026-09-07 (R22).
 
 ### 6.3 Reward-detail route (E16-R01 entry 3)
 
+**Status: CLOSED in R22 (audit MI2, 2026-09-07) — without a new screen.**
+
 **What:** `RewardInboxScreen.onItemSelected` (wired in the router's
-`AppRoutes.rewardInbox` route) stays a no-op — selecting an inbox entry does
+`AppRoutes.rewardInbox` route) was a no-op — selecting an inbox entry did
 not navigate anywhere.
 
-**Why it wasn't built this round:** there is no reward-detail screen
-anywhere on the tree to route to; building one is a new screen, which is new
-scope beyond this round's composition-only brief (brief §3 — "NINCS benne:
-ÚJ üzleti logika / képernyő").
+**What R22 changed:** selecting a row now opens the ALREADY-BUILT
+`RewardSummarySheet` as a modal bottom sheet, fed a one-event
+`CelebrationSummary` built from the tapped item. No new screen and no new
+route were needed (so no `e15_r13` matrix fixture and no §3.2 row), and the
+`gamificationFeedbackFor` adapter the preferences provider had been carrying
+"for the future caller" finally has its caller.
 
-**Owner:** a future round that scopes and builds a reward-detail screen
-(SDD, unscheduled).
-
-**Date measured:** 2026-09-03.
+**Date measured:** 2026-09-03. **Closed:** 2026-09-07 (R22).
 
 ### 6.4 Quest-board content source (E16-R01 entry 4, fix-round)
 

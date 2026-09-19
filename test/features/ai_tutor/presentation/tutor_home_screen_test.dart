@@ -353,4 +353,41 @@ void main() {
       },
     );
   }
+
+  // -----------------------------------------------------------------
+  // R17 (2026-09-07 audit) — the Chat CTA PUSHES, like the three side
+  // entries above.
+  //
+  // MÉRT hiba: `context.go(AppRoutes.tutorChat)` egy TOP-LEVEL útvonalra
+  // lépett, tehát KICSERÉLTE a stacket. A Chat saját vissza-nyila egy
+  // csupasz `maybePop` volt, aminek így nem volt mit poppolnia — a
+  // vezérlő némán nem csinált semmit.
+  // -----------------------------------------------------------------
+  testWidgets('R17: the Chat CTA pushes, so the Chat can come back', (
+    tester,
+  ) async {
+    final container = await _pump(tester, aiTutorEnabled: true);
+    final router = container.read(routerProvider);
+    router.go(AppRoutes.tutorHome);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    await tester.ensureVisible(find.byKey(const Key('tutorHomeStartCta')));
+    await tester.tap(find.byKey(const Key('tutorHomeStartCta')));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(router.state.uri.path, AppRoutes.tutorChat);
+    expect(tester.takeException(), isNull);
+    // The measure: there IS something to pop — under `go` there was not.
+    expect(router.canPop(), isTrue);
+    router.pop();
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(router.state.uri.path, AppRoutes.tutorHome);
+    tester.takeException();
+  });
 }

@@ -33,6 +33,7 @@ import '../../domain/entities/community_post.dart';
 import '../../domain/entities/moderation_state.dart';
 import '../../domain/entities/share_artifact.dart';
 import '../../domain/policies/community_audience.dart';
+import 'community_media_tile.dart';
 import 'community_moderation_placeholder.dart';
 import 'community_theme_scope.dart';
 
@@ -41,7 +42,12 @@ import 'community_theme_scope.dart';
 /// Renders [post] using the card matching the artifact's [ShareArtifactType].
 /// Unknown artifact types fall through to [_FallbackCard] (A5).
 class FeedCard extends StatelessWidget {
-  const FeedCard({super.key, required this.post, this.onOpenComments});
+  const FeedCard({
+    super.key,
+    required this.post,
+    this.onOpenComments,
+    this.onReport,
+  });
 
   /// The post this card renders. The card reads only the post's public
   /// fields — it never mutates the controller or the repository.
@@ -57,6 +63,22 @@ class FeedCard extends StatelessWidget {
   /// pixel-identical.
   final VoidCallback? onOpenComments;
 
+  /// Opens the report sheet for this post (R33, M10).
+  ///
+  /// **Why a long-press and not a visible overflow button.** The feed
+  /// card is rendered by two pixel-pinned goldens
+  /// (`e13_r33_following_feed_compact{,_scale2}.png`) that cannot be
+  /// re-recorded on this box, and an overflow icon in the header would
+  /// move every pixel below it. A long-press adds a gesture and the
+  /// matching `SemanticsAction.longPress` — the screen reader announces
+  /// it, the raster does not change by one byte. When a golden
+  /// re-record round happens, this callback is exactly the seam a
+  /// visible affordance would hang off.
+  ///
+  /// `null` (the default, and what every existing card test and golden
+  /// passes) leaves the card without the gesture at all.
+  final VoidCallback? onReport;
+
   @override
   Widget build(BuildContext context) {
     // A7 — a removed post gets a visible placeholder instead of its real
@@ -69,7 +91,7 @@ class FeedCard extends StatelessWidget {
     }
     final artifact = post.artifact;
     final theme = Theme.of(context);
-    return Padding(
+    final card = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: CommunityThemeScope(
         child: SsSurface(
@@ -82,6 +104,19 @@ class FeedCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 if (post.body != null && post.body!.isNotEmpty) ...<Widget>[
                   Text(post.body!, style: theme.textTheme.bodyMedium),
+                  const SizedBox(height: 8),
+                ],
+                // Csatolt média (javító sáv R27). FELTÉTELES, tehát egy
+                // csatolmány nélküli poszt kártyája bájtra ugyanaz, mint
+                // eddig — a meglévő golden-képek és kártya-tesztek
+                // fixture-jei mind ilyenek. A szerver csak `ready`
+                // sorokat küld, tehát egy közzététel után elutasított
+                // vagy törölt csatolmány egyszerűen eltűnik a listából.
+                for (final media in post.media) ...<Widget>[
+                  CommunityMediaTile(
+                    key: Key('feed-card-media-${media.publicId}'),
+                    media: media,
+                  ),
                   const SizedBox(height: 8),
                 ],
                 _artifactBody(context: context, post: post, artifact: artifact),
@@ -106,6 +141,19 @@ class FeedCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+    final onReport = this.onReport;
+    if (onReport == null) return card;
+    // `opaque` so the whole card area answers the long press — a card
+    // built out of `Text` runs has no hit-testable surface of its own,
+    // and `deferToChild` would leave most of it dead. Children are still
+    // hit-tested FIRST (`RenderProxyBoxWithHitTestBehavior`), so the
+    // comments button keeps its tap.
+    return GestureDetector(
+      key: Key('feed-card-report-${post.id.value}'),
+      behavior: HitTestBehavior.opaque,
+      onLongPress: onReport,
+      child: card,
     );
   }
 

@@ -22,13 +22,14 @@ import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/features/curriculum/presentation/screens/curriculum_ladder_screen.dart';
+import 'package:strumsight/features/analyze/screens/analyze_screen.dart';
 import 'package:strumsight/features/library_v2/screens/unified_library_screen.dart';
 import 'package:strumsight/features/onboarding/screens/first_win_stage_screen.dart';
 import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
 import 'package:strumsight/features/practice/domain/model/practice_session_state.dart';
 import 'package:strumsight/features/practice/presentation/practice_effect_listener.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_result_screen.dart'
-    show PracticeResultFallback;
+    show PracticeResultScreen;
 import 'package:strumsight/features/practice/presentation/screens/practice_session_screen.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_setup_screen.dart';
 import 'package:strumsight/features/practice_hub/screens/practice_area_hub_screen.dart';
@@ -50,6 +51,44 @@ FeatureFlags _shippedBeFlags() => FeatureFlags.forEnvironment(
   AppEnvironment.development,
   accountEnabled: false,
 );
+
+/// The flag set the R30 cell at the bottom of this file measures against.
+///
+/// MÉRT: `forEnvironment` resolves every dart-define it reads to `false`
+/// when the define is absent, and `audioAnalysisV2Enabled` is one of those —
+/// so [_shippedBeFlags] alone does NOT register the `/analysis/*` routes.
+/// The shipped development artifact reaches them through the preview
+/// overlay (`forShippedBuild` passes `previewAll: true` for development);
+/// this asks for exactly that overlay, and leaves the account layer off so
+/// the cell needs no auth surface.
+FeatureFlags _shippedPreviewFlags() => FeatureFlags.forEnvironment(
+  AppEnvironment.development,
+  accountEnabled: false,
+  previewAll: true,
+);
+
+/// Pumps FIXED frames until [finder] matches nothing, at most [maxFrames].
+///
+/// MÉRT (run 564/565): a popped route is NOT gone when the pop is issued —
+/// it stays on stage for its whole reverse transition, and its overlay
+/// entry is removed a frame after that, while the route it uncovers is
+/// already found underneath. So "the arriving screen is here" needs no
+/// waiting, but "the leaving one is gone" is not measurable on a fixed pump
+/// budget. `pumpAndSettle` is out for the reason the cell below states
+/// (Riverpod 3 auto-retries a failing `FutureProvider`), so this is the
+/// same bounded shape `analysis_exit_chain_test` and the R18 entry-point
+/// cells already use.
+Future<void> _pumpUntilGone(
+  WidgetTester tester,
+  Finder finder, {
+  int maxFrames = 40,
+}) async {
+  await tester.pump();
+  for (var frame = 0; frame < maxFrames; frame++) {
+    if (finder.evaluate().isEmpty) return;
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+}
 
 /// Advances [session]'s fake clock in small, fixed steps until the active
 /// session's status satisfies [reached] — the same bounded-tick pattern
@@ -237,22 +276,34 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
   );
   await tester.pumpAndSettle();
 
-  // 4. "Eredmény" — the NavigateToResult effect lands on `/practice/result`,
-  // which always builds `PracticeResultFallback` — an explicit, already
-  // MÉRT (E12-R20) "no detailed result on this route" state, not a
-  // placeholder. `PracticeResultFallback`'s class name does not end in
-  // "Screen" (it is not one of the 96 `tool/ui_inventory.dart`-measured
-  // classes), so it is intentionally NOT added to [walked] — the A4
-  // partition tracks the measured `PracticeResultScreen` class separately
-  // (see the round doc's exclusion table).
-  expect(find.byType(PracticeResultFallback), findsOneWidget);
-  expect(find.text(l10n.practiceResultUnavailableTitle), findsOneWidget);
+  // 4. "Eredmény" — the NavigateToResult effect lands on `/practice/result`.
+  // Javító sáv 2026-09-06: the route no longer builds
+  // `PracticeResultFallback` unconditionally — `PracticeResultRoute`
+  // resolves the ending session's OWN entry (the `practice_result_target.dart`
+  // hand-off plus the after-record hook's `practiceHistoryV2ListProvider`
+  // invalidation) and builds the real `PracticeResultScreen`. That class IS
+  // one of the measured `tool/ui_inventory.dart` classes, so this stop now
+  // joins [walked], and `practice_result_screen.dart` is no longer an
+  // excluded row in `docs/release/full-app-verification.md` §3.2.
+  expect(find.byType(PracticeResultScreen), findsOneWidget);
+  walked.add('PracticeResultScreen');
 
   final history = await loadPracticeHistory(session.container);
   expect(
     history,
     hasLength(1),
     reason: 'the finished session must leave exactly one persisted record',
+  );
+  expect(
+    find.byWidgetPredicate(
+      (widget) =>
+          widget is PracticeResultScreen &&
+          widget.entry.id == history.single.id,
+    ),
+    findsOneWidget,
+    reason:
+        'the result route must render the entry the just-finished session '
+        'actually persisted — real data, never an empty fallback',
   );
 
   // §5.2 L5 (docs/release/full-app-verification.md) used to hold here:
@@ -417,6 +468,7 @@ void main() {
             'PracticeAreaHubScreen',
             'PracticeSetupScreen',
             'PracticeSessionScreen',
+            'PracticeResultScreen',
             'UnifiedLibraryScreen',
             'ProgressDashboardScreen',
             'ProfileHubScreen',
@@ -427,6 +479,131 @@ void main() {
               'built — a shrinking set silently drops A2/A3 coverage, a '
               'growing set means this expectation is stale',
         );
+      },
+    );
+  });
+
+  // R30 (re-audit #2 §7 DoD) — the STRUCTURAL reason CI never caught the
+  // dead ends this round closes: every stop of the walk above ARRIVES with
+  // a test-side `router.go` and LEAVES the same way, so a screen with no
+  // on-screen exit reads exactly like a screen with one. This cell leaves
+  // by tapping what a user can actually see, and fails if that control is
+  // missing or dead.
+  //
+  // It deliberately does NOT extend `runCoreWalkthrough`: that function's
+  // returned set is the A4 partition against
+  // `docs/release/full-app-verification.md` §3.2, where both screens below
+  // are documented EXCLUSIONS. Walking them there would flip A4 from
+  // "disjoint" to overlapping — a documentation change this round is not
+  // scoped to make.
+  group('E16-R05 A2/A3 + R30 — the Analysis door is left by TAPPING, not by '
+      'a test-side router.go', () {
+    testWidgets(
+      'Today -> Practice -> Analyze -> the detailed-analysis door, and back '
+      'out again through the controls actually on screen',
+      (tester) async {
+        final store = InMemoryKeyValueStore();
+        final session = await bootE2eApp(
+          tester,
+          store: store,
+          onboardingSeen: true,
+          flags: _shippedPreviewFlags(),
+        );
+
+        expect(find.byType(TodayHubScreen), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('today-hub-primary-cta')));
+        await tester.pumpAndSettle();
+        expect(find.byType(PracticeAreaHubScreen), findsOneWidget);
+
+        final analyzeTile = find.byKey(const ValueKey('practice-hub-analyze'));
+        await tester.scrollUntilVisible(
+          analyzeTile,
+          120,
+          scrollable: find
+              .descendant(
+                of: find.byType(PracticeAreaHubScreen),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        // `scrollUntilVisible` stops as soon as the target is BUILT, which
+        // for a `ListView` happens inside the cache extent — below the
+        // viewport, where a tap would not hit it.
+        await tester.ensureVisible(analyzeTile);
+        await tester.pumpAndSettle();
+        await tester.tap(analyzeTile);
+        await tester.pumpAndSettle();
+        expect(find.byType(AnalyzeScreen), findsOneWidget);
+
+        final door = find.byKey(const Key('analyze-open-analysis-v2'));
+        await tester.ensureVisible(door);
+        await tester.pumpAndSettle();
+        await tester.tap(door);
+        await tester.pump();
+        // Bounded pumps, never `pumpAndSettle`: Riverpod 3 auto-retries a
+        // `FutureProvider` that throws, and a settle would chase that retry.
+        // 400 ms is past the push transition.
+        await tester.pump(const Duration(milliseconds: 400));
+
+        // MÉRT LELET: `bootE2eApp` never wires the analysis repository (the
+        // same gap the Library stop above records), so the recent-analyses
+        // read fails and the route renders its OWN error frame instead of
+        // the capture home. R18 made that frame honest; R30 is what puts a
+        // control on it — the assertion below is that exit, not the read.
+        expect(
+          find.byKey(const Key('analysis-home-route-error')),
+          findsOneWidget,
+        );
+
+        final errorFrame = find.byKey(const Key('analysis-home-route-error'));
+        await tester.tap(find.byKey(const Key('route-frame-back')));
+        // The pushed frame has to be OFF STAGE before the next tap: while it
+        // is still transitioning out it sits above the Analyze page, and the
+        // exit tapped below would land on the leaving route instead.
+        await _pumpUntilGone(tester, errorFrame);
+        expect(
+          errorFrame,
+          findsNothing,
+          reason: 'the pushed error frame is popped by its own control',
+        );
+        expect(
+          find.byType(AnalyzeScreen),
+          findsOneWidget,
+          reason:
+              'the frame was PUSHED, so its control pops back to the screen '
+              'that opened it',
+        );
+
+        // R30 (M4) — the Analyze page itself: the screen brings no
+        // `Scaffold`, and before this round the pushed page carried no exit
+        // either. The route's adapter is what this tap proves.
+        //
+        // MÉRT LELET (run 565): that exit is REAL, but it is not a
+        // DESCENDANT of `AnalyzeScreen` — the adapter WRAPS the screen, so
+        // the `BackButton` sits in the `AppBar` of the `Scaffold` ABOVE it.
+        // The original descendant finder could therefore never match, no
+        // matter how the page was reached. The closest `Scaffold` ancestor
+        // IS that frame (the shell's own `Scaffold` is further up), which
+        // is the finder `r18_entry_points_test`'s M4 cell already drives.
+        final analyzeFrame = find
+            .ancestor(
+              of: find.byType(AnalyzeScreen),
+              matching: find.byType(Scaffold),
+            )
+            .first;
+        final analyzeBack = find.descendant(
+          of: analyzeFrame,
+          matching: find.byType(BackButton),
+        );
+        expect(analyzeBack, findsOneWidget);
+        await tester.tap(analyzeBack);
+        await tester.pumpAndSettle();
+        expect(find.byType(AnalyzeScreen), findsNothing);
+        expect(find.byType(PracticeAreaHubScreen), findsOneWidget);
+
+        await session.dispose(tester);
+        // ADR 0472 D6 / brief §9 — flutter_animate's teardown timer.
+        await tester.pump(const Duration(milliseconds: 400));
       },
     );
   });

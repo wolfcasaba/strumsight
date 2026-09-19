@@ -11,6 +11,7 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEFAULT_DIAGNOSTICS_DIR = str(Path(__file__).resolve().parents[1] / "diagnostics_data")
+_DEFAULT_MEDIA_ROOT = str(Path(__file__).resolve().parents[1] / "media_data")
 BCRYPT_MAX_PASSWORD_BYTES = 72
 
 # Closed environment value set (ADR 0445 D1). The client's enum names
@@ -63,6 +64,21 @@ class Settings(BaseSettings):
     # CORS origins for the Flutter web/dev client. "*" is fine for dev.
     cors_origins: list[str] = ["*"]
 
+    # Reverse-proxy awareness for the auth throttles (R14, javító sáv
+    # 2026-09-06 §5.4). EMPTY by default: `X-Forwarded-For` is caller-supplied
+    # and therefore spoofable, so `client_ip_for_throttle()` reads it ONLY when
+    # the direct socket peer is listed here. On the live deploy
+    # (`docs/operations/backend-live-deploy.md`) Caddy is the single hop and
+    # the container sees it as the docker-bridge gateway address (or
+    # 127.0.0.1 in host-network mode) — that MEASURED address is what belongs
+    # here, never a range and never a wildcard.
+    #
+    # Like `cors_origins`, this is a JSON list in the environment
+    # (`STRUMSIGHT_TRUSTED_PROXY_IPS=["172.18.0.1"]`). An empty *string* value
+    # is a JSON parse error at boot, so omit the key entirely — or write `[]`
+    # — to keep the default.
+    trusted_proxy_ips: list[str] = []
+
     # Lab services stay zero-setup in dev, but are absent from production
     # unless explicitly enabled. The validator supplies environment-sensitive
     # defaults while preserving explicit kwargs and STRUMSIGHT_* overrides.
@@ -73,14 +89,35 @@ class Settings(BaseSettings):
 
     # AI Tutor proxy (ADR 0131) — feature-flagged, config-driven provider selection.
     # The provider secret stays on the server; the client never sees it.
-    # Production may extend the allowlist with an "openai" provider and its
-    # configured model IDs; the default remains fail-closed for that provider.
+    #
+    # `tutor_provider` names which ADAPTER `main.py::_build_tutor_gateway`
+    # constructs: "fake" (the default — a canned reply, no network),
+    # "minimax" (THE tutor provider — MiniMax M3 over its
+    # Anthropic-compatible Messages API), "anthropic" or "openai".
+    # `tutor_allowed_providers` is the independent ALLOWLIST the registry
+    # validates the provider/model pair against, and it stays fail-closed at
+    # `{"fake": ["fake-model"]}`: switching to a real provider requires the
+    # operator to extend it explicitly, e.g.
+    #   STRUMSIGHT_TUTOR_PROVIDER=minimax
+    #   STRUMSIGHT_TUTOR_MODEL=MiniMax-M3
+    #   STRUMSIGHT_TUTOR_ALLOWED_PROVIDERS={"minimax": ["MiniMax-M3"]}
+    #   STRUMSIGHT_TUTOR_API_KEY=<the MiniMax key>
+    # (`MiniMax-M3[1m]` is Claude Code's context-window suffix, NOT an API
+    # model id — the allowlist and the model key both take `MiniMax-M3`.)
+    # A real provider with an empty or dev-default key REFUSES to boot in every
+    # environment (`main.py::_guard_tutor_provider`), not only in prod.
+    # The runbook is docs/operations/backend-live-deploy.md §7.2.
     tutor_enabled: bool = False
     tutor_provider: str = "fake"
     tutor_model: str = "fake-model"
     tutor_api_key: str = "dev-tutor-key"
     tutor_allowed_providers: dict[str, list[str]] = {"fake": ["fake-model"]}
     tutor_openai_base_url: str = "https://api.openai.com/v1"
+    tutor_anthropic_base_url: str = "https://api.anthropic.com/v1"
+    # MiniMax's Anthropic-compatible Messages API lives under
+    # `https://api.minimax.io/anthropic`, with `/v1/messages` beneath it —
+    # the adapter appends `/messages`, so the base URL ends in `/v1`.
+    tutor_minimax_base_url: str = "https://api.minimax.io/anthropic/v1"
     tutor_max_request_bytes: int = 4000
     tutor_max_history_messages: int = 20
     tutor_max_context_bytes: int = 8000
@@ -103,6 +140,59 @@ class Settings(BaseSettings):
     community_media_enabled: bool = False
     community_leaderboard_enabled: bool = False
     community_clubs_enabled: bool = False
+
+    # Community media upload pipeline (E09 javító sáv R27). Every value
+    # here is read ONLY when `community_media_enabled` is true — the
+    # router is not even registered otherwise (`build_community_router`),
+    # so a deploy that never flips that flag is unaffected by these
+    # defaults.
+    #
+    # SECURITY defaults are fail-closed on both processing hops:
+    #
+    #   * `media_scanner` defaults to "disabled", and the *disabled*
+    #     adapter REJECTS every upload — there is deliberately no
+    #     pass-through scanner. Accepting user bytes therefore requires
+    #     the operator to stand up clamd and set
+    #     STRUMSIGHT_MEDIA_SCANNER=clamd (runbook §7.3).
+    #   * `media_audio_transcoder` defaults to "disabled", which rejects
+    #     every AUDIO upload with `audio_transcoder_unavailable`. Images
+    #     are re-encoded in-process by Pillow, which is a hard
+    #     requirement (`requirements.txt`); audio needs an external
+    #     transcoder this repository does not ship.
+    #
+    # `media_root` is the ONLY writable path the pipeline touches. It is
+    # content-addressed (`<sha256[0:2]>/<sha256[2:4]>/<sha256>`), so the
+    # public_id -> row -> path resolution never concatenates
+    # caller-supplied text into a filesystem path.
+    media_root: str = _DEFAULT_MEDIA_ROOT
+    media_max_image_bytes: int = 8 * 1024 * 1024
+    media_max_audio_bytes: int = 20 * 1024 * 1024
+    #: Live (non-deleted) media rows a single profile may hold. The
+    #: per-account quota; the per-IP throttle below is the second,
+    #: independent bound.
+    media_max_items_per_profile: int = 50
+    media_upload_rate_limit_max: int = 20
+    media_upload_rate_limit_window: int = 3600
+    #: Longest edge (px) of the re-encoded image. Anything larger is
+    #: downscaled; the re-encode ALWAYS happens, even for a small image,
+    #: because dropping the original container is the point (A6.2.4).
+    media_image_max_dimension: int = 2048
+    media_image_quality: int = 82
+    #: "clamd" | "disabled". Never a pass-through value.
+    media_scanner: str = "disabled"
+    media_scanner_host: str = "127.0.0.1"
+    media_scanner_port: int = 3310
+    #: When non-empty this UNIX socket path wins over host/port.
+    media_scanner_socket: str = ""
+    media_scanner_timeout_seconds: float = 10.0
+    #: "disabled" (reject every audio upload) | "ffmpeg".
+    media_audio_transcoder: str = "disabled"
+    media_ffmpeg_path: str = "ffmpeg"
+    media_audio_max_duration_seconds: int = 180
+    #: When true the pipeline parks a scanned + transcoded upload in
+    #: `review` instead of `ready`, so a human has to release it. OFF by
+    #: default — the state exists for the operator who wants it.
+    media_review_required: bool = False
 
     @property
     def community_postgres_ready(self) -> bool:

@@ -613,6 +613,58 @@ void main() {
     final inBounds = MeasureRange(start: 0, endExclusive: 2);
     expect(inBounds.resolve(measureCount: 2, sections: sections), isNotNull);
   });
+
+  // R13 (audit §5.2): the speed slider of a SCORED session. It used to be
+  // handed `null` — the judged timeline was compiled once, at the setup
+  // speed, and nothing could re-time it. The controller can now move the
+  // targets and the audio together at a bar boundary, so the running row
+  // must hand the slider a live handler instead of an inert one.
+  testWidgets('R13 a running scored session gets a live speed handler', (
+    tester,
+  ) async {
+    final harness = _Harness.scored();
+    addTearDown(harness.dispose);
+    await harness.controller.prepare();
+    await harness.controller.start();
+    harness.practiceClock.advance(
+      harness.practice.state.target!.countInDuration +
+          const Duration(milliseconds: 1),
+    );
+    harness.practiceTick.emitTick();
+    expect(harness.practice.state.status, PracticeSessionStatus.running);
+    expect(harness.controller.canChangeBackingRate, isTrue);
+
+    // The family key is identity-based (no `==` on the inputs): the SAME
+    // instance must reach the override and the screen, otherwise the real
+    // provider builds and reads the bootstrap-only asset repository.
+    final inputs = SongTrainerControllerInputs(
+      compilation: _scoredCompilation(),
+      backingAsset: _asset,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          ..._preferenceOverridesForScreen(),
+          songTrainerControllerProvider(
+            inputs,
+          ).overrideWith((ref) => harness.controller),
+        ],
+        child: MaterialApp(
+          theme: SsLightTheme.data(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SongTrainerScreen(inputs: inputs),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(harness.controller.state.status, SongTrainerStatus.running);
+    final slider = tester.widget<Slider>(
+      find.byKey(const Key('song-trainer-speed')),
+    );
+    expect(slider.onChanged, isNotNull);
+  });
 }
 
 final SongAssetReference _asset = SongAssetReference(

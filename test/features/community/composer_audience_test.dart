@@ -32,6 +32,7 @@ import 'package:strumsight/features/auth/data/token_store.dart';
 import 'package:strumsight/features/auth/model/auth_user.dart';
 import 'package:strumsight/features/auth/providers/auth_providers.dart';
 import 'package:strumsight/features/community/application/controllers/post_composer_controller.dart';
+import 'package:strumsight/features/community/data/api/community_media_picker.dart';
 import 'package:strumsight/features/community/data/repositories/profile_repository_impl.dart';
 import 'package:strumsight/features/community/domain/entities/community_comment.dart';
 import 'package:strumsight/features/community/domain/entities/community_post.dart';
@@ -142,6 +143,17 @@ class _FakeCommunityPostRepository implements CommunityPostRepository {
   }) => throw UnsupportedError('not used in this test');
 }
 
+/// Választó, ami mindig megszakítást ad — a MI5 cellák nem töltenek fel.
+class _NullPicker implements CommunityMediaPicker {
+  int calls = 0;
+
+  @override
+  Future<PickedCommunityMedia?> pickImage() async {
+    calls++;
+    return null;
+  }
+}
+
 class _FakeAuthController extends AuthController {
   _FakeAuthController(this._user);
   final AuthUser _user;
@@ -163,11 +175,38 @@ Map<String, Object?> _practiceSummaryArtifactJson() {
   ).toJson();
 }
 
-Widget _harness({Locale locale = const Locale('en')}) {
+/// [mediaEnabled] drives `communityMediaEnabled` (R21, audit MI5). The
+/// default is `false` — that is what EVERY shipped build resolves to, since
+/// the flag is define-only in every environment (`feature_flags.dart`) — so
+/// the untouched harness measures the real composer.
+Widget _harness({
+  Locale locale = const Locale('en'),
+  bool mediaEnabled = false,
+}) {
   return ProviderScope(
     overrides: [
+      if (mediaEnabled)
+        appConfigProvider.overrideWithValue(
+          const AppConfig(
+            environment: AppEnvironment.development,
+            apiBaseUrl: AppConfig.devApiBaseUrl,
+            flags: FeatureFlags(
+              accountEnabled: false,
+              diagnosticsEnabled: false,
+              labModeAvailable: false,
+              communityMediaEnabled: true,
+            ),
+            diagnosticsToken: AppConfig.devDiagnosticsToken,
+            buildMode: 'test',
+            appVersion: 'test',
+          ),
+        ),
       communityKeyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
       communityLoggerProvider.overrideWithValue(const NoopAppLogger()),
+      // R27 — a „Média csatolása" gomb valódi választót hív. A hamis
+      // választó `null`-t ad (a felhasználó megszakította), tehát a
+      // MI5-cellák a gomb LÉTÉT mérik, platform-csatorna nélkül.
+      communityMediaPickerProvider.overrideWithValue(_NullPicker()),
       communityPostRepositoryProvider.overrideWithValue(
         _FakeCommunityPostRepository(),
       ),
@@ -189,6 +228,13 @@ Widget _harness({Locale locale = const Locale('en')}) {
   );
 }
 
+/// The composer's labels come from the ARB catalogue (R20, audit M8) —
+/// asserting on the literal Hungarian strings the screen used to hardcode
+/// would re-freeze exactly the bug this round removed.
+AppLocalizations _en() => lookupAppLocalizations(const Locale('en'));
+
+AppLocalizations _hu() => lookupAppLocalizations(const Locale('hu'));
+
 PostComposerState _state(WidgetTester tester) {
   final element = tester.element(find.byType(PostComposerScreen));
   return ProviderScope.containerOf(
@@ -203,10 +249,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(_state(tester).audience, CommunityAudience.followers);
-      // The chip rendered as selected must be "Követők" (followers), not
-      // "Nyilvános" (public) — the default is visible, not just internal.
+      // The chip rendered as selected must be the FOLLOWERS one, not the
+      // public one — the default is visible, not just internal.
       final chip = tester.widget<ChoiceChip>(
-        find.widgetWithText(ChoiceChip, 'Követők'),
+        find.widgetWithText(
+          ChoiceChip,
+          _en().communityComposerAudienceFollowers,
+        ),
       );
       expect(chip.selected, isTrue);
     });
@@ -223,7 +272,7 @@ void main() {
     });
 
     testWidgets(
-      'on threshold — picking "Követők" applies immediately and is visible before submit',
+      'on threshold — picking followers applies immediately and is visible before submit',
       (tester) async {
         await tester.pumpWidget(_harness());
         await tester.pumpAndSettle();
@@ -238,7 +287,12 @@ void main() {
         await tester.pumpAndSettle();
         expect(_state(tester).audience, CommunityAudience.private);
 
-        await tester.tap(find.widgetWithText(ChoiceChip, 'Követők'));
+        await tester.tap(
+          find.widgetWithText(
+            ChoiceChip,
+            _en().communityComposerAudienceFollowers,
+          ),
+        );
         await tester.pumpAndSettle();
 
         // No confirmation sheet for a non-public pick.
@@ -246,19 +300,27 @@ void main() {
         // The choice applies immediately and is visible before any submit.
         expect(_state(tester).audience, CommunityAudience.followers);
         final chip = tester.widget<ChoiceChip>(
-          find.widgetWithText(ChoiceChip, 'Követők'),
+          find.widgetWithText(
+            ChoiceChip,
+            _en().communityComposerAudienceFollowers,
+          ),
         );
         expect(chip.selected, isTrue);
       },
     );
 
     testWidgets(
-      'above threshold — picking "Nyilvános" holds behind an irreversibility confirmation',
+      'above threshold — picking public holds behind an irreversibility confirmation',
       (tester) async {
         await tester.pumpWidget(_harness());
         await tester.pumpAndSettle();
 
-        await tester.tap(find.widgetWithText(ChoiceChip, 'Nyilvános'));
+        await tester.tap(
+          find.widgetWithText(
+            ChoiceChip,
+            _en().communityComposerAudiencePublic,
+          ),
+        );
         await tester.pumpAndSettle();
 
         // The pick does NOT apply yet — a spelled-out confirmation is
@@ -291,7 +353,12 @@ void main() {
         await tester.pumpWidget(_harness(locale: const Locale('hu')));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.widgetWithText(ChoiceChip, 'Nyilvános'));
+        await tester.tap(
+          find.widgetWithText(
+            ChoiceChip,
+            _hu().communityComposerAudiencePublic,
+          ),
+        );
         await tester.pumpAndSettle();
 
         final huLabels = lookupAppLocalizations(const Locale('hu'));
@@ -308,7 +375,12 @@ void main() {
         await tester.pumpWidget(_harness());
         await tester.pumpAndSettle();
 
-        await tester.tap(find.widgetWithText(ChoiceChip, 'Nyilvános'));
+        await tester.tap(
+          find.widgetWithText(
+            ChoiceChip,
+            _en().communityComposerAudiencePublic,
+          ),
+        );
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const Key('ss-confirmation-cancel')));
         await tester.pumpAndSettle();
@@ -325,11 +397,11 @@ void main() {
 
       expect(find.byType(SsSwitchRow), findsNWidgets(5));
       for (final label in <String>[
-        'Akkord-idővonal',
-        'Strumminta',
-        'Tempó',
-        'Aktív napok',
-        'Legjobb pontszám',
+        _en().communityComposerPreviewChordTimeline,
+        _en().communityComposerPreviewStrumPattern,
+        _en().communityComposerPreviewTempo,
+        _en().communityComposerPreviewStreakDays,
+        _en().communityComposerPreviewBestScore,
       ]) {
         final row = tester.widget<SsSwitchRow>(
           find.widgetWithText(SsSwitchRow, label),
@@ -339,7 +411,10 @@ void main() {
 
       // Flipping a toggle reflects the real field value, not a hardcoded
       // label — the row's `value` tracks the controller's SharePreview.
-      final strumRow = find.widgetWithText(SsSwitchRow, 'Strumminta');
+      final strumRow = find.widgetWithText(
+        SsSwitchRow,
+        _en().communityComposerPreviewStrumPattern,
+      );
       await tester.scrollUntilVisible(
         strumRow,
         300,
@@ -351,7 +426,10 @@ void main() {
       expect(_state(tester).sharePreview.includeStrumPattern, isTrue);
       expect(_state(tester).sharePreview.includeChordTimeline, isFalse);
       final flipped = tester.widget<SsSwitchRow>(
-        find.widgetWithText(SsSwitchRow, 'Strumminta'),
+        find.widgetWithText(
+          SsSwitchRow,
+          _en().communityComposerPreviewStrumPattern,
+        ),
       );
       expect(flipped.value, isTrue);
     });
@@ -444,6 +522,47 @@ void main() {
         expect(audienceGroup.groupValue, isNot(CommunityAudience.public));
       },
     );
+  });
+
+  // -------------------------------------------------------------------
+  // R21 / audit MI5 — the stub "Attach media" CTA follows its own flag.
+  // -------------------------------------------------------------------
+  group('MI5 — a média-csatolás a communityMediaEnabled mögött áll', () {
+    testWidgets('a kikapcsolt zászló mellett NINCS média-gomb', (tester) async {
+      // Ez a SZÁLLÍTOTT állapot: a `communityMediaEnabled` define-only
+      // minden környezetben (nyitott R-SEC-01 / R-PRIV-01), tehát a
+      // felhasználó eddig egy olyan gombot látott, ami sosem tölthetett
+      // fel semmit.
+      await tester.pumpWidget(_harness());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('composer-attach-media')), findsNothing);
+      expect(find.text(_en().communityComposerAttachMedia), findsNothing);
+      // A szerkesztő többi része érintetlen marad — a gomb helyén nem
+      // maradt lyuk, a következő szekció ott van.
+      expect(find.text(_en().communityComposerAudienceLabel), findsOneWidget);
+    });
+
+    testWidgets('a bekapcsolt zászló mellett a gomb ott van és MŰKÖDIK', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_harness(mediaEnabled: true));
+      await tester.pumpAndSettle();
+
+      final button = find.byKey(const Key('composer-attach-media'));
+      expect(button, findsOneWidget);
+      expect(find.text(_en().communityComposerAttachMedia), findsOneWidget);
+
+      // R27 óta a koppintás VALÓDI kép-választást indít. A „később"
+      // snackbar eltűnt: a gomb nem ígér, hanem csinál. A hamis választó
+      // megszakítást ad, tehát a szerkesztő állapota változatlan marad.
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(find.text(_en().communityComposerMediaLater), findsNothing);
+      expect(_state(tester).mediaIds, isEmpty);
+      // A teljes csatolási folyamat saját sora:
+      // `test/features/community/application/post_composer_media_test.dart`.
+    });
   });
 }
 

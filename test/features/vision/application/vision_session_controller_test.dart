@@ -2,17 +2,25 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/camera/camera_frame.dart';
 import 'package:strumsight/core/camera/camera_permission.dart';
 import 'package:strumsight/core/camera/camera_providers.dart';
 import 'package:strumsight/core/camera/camera_session_coordinator.dart';
 import 'package:strumsight/core/camera/fake_camera_capture.dart';
+import 'package:strumsight/core/storage/storage_providers.dart';
 import 'package:strumsight/features/vision/application/calibration_loss_machine.dart';
+import 'package:strumsight/features/vision/application/vision_pipeline_providers.dart';
 import 'package:strumsight/features/vision/application/vision_session_controller.dart';
 import 'package:strumsight/features/vision/application/vision_session_state.dart';
+import 'package:strumsight/features/vision/data/persistence/vision_session_repository.dart';
+import 'package:strumsight/features/vision/data/pipeline/vision_frame_pipeline.dart';
+import 'package:strumsight/features/vision/domain/feedback/insight_code.dart';
 import 'package:strumsight/features/vision/domain/quality/vision_frame_quality.dart';
 import 'package:strumsight/features/vision/domain/quality/vision_quality_summary.dart';
 import 'package:strumsight/features/vision/domain/vision_session.dart';
 import 'package:strumsight/features/vision/domain/vision_session_result.dart';
+
+import '../../../core/storage/in_memory_key_value_store.dart';
 
 final class _PermissionGateway implements CameraPermissionGateway {
   _PermissionGateway(this.current, {CameraPermissionState? requested})
@@ -28,13 +36,70 @@ final class _PermissionGateway implements CameraPermissionGateway {
   Future<CameraPermissionState> request() async => requested;
 }
 
+/// A pipeline stand-in: the controller must delegate frames to it and copy
+/// its published summaries into state without inspecting a buffer itself.
+final class _FakeProcessor implements VisionFrameProcessor {
+  _FakeProcessor()
+    : _updates = StreamController<VisionPipelineUpdate>.broadcast();
+
+  final StreamController<VisionPipelineUpdate> _updates;
+  final List<int> frameIds = <int>[];
+  bool disposed = false;
+
+  @override
+  Stream<VisionPipelineUpdate> get updates => _updates.stream;
+
+  @override
+  void onFrame(CameraFrame frame) {
+    frameIds.add(frame.frameId);
+  }
+
+  @override
+  void reset() {}
+
+  @override
+  Future<void> dispose() async {
+    disposed = true;
+    await _updates.close();
+  }
+
+  Future<void> emit(VisionPipelineUpdate update) async {
+    if (!_updates.isClosed) _updates.add(update);
+    await Future<void>.delayed(Duration.zero);
+  }
+}
+
+VisionPipelineUpdate _update({
+  VisionMetricState hand = VisionMetricState.notObservable,
+  VisionMetricState pose = VisionMetricState.notObservable,
+  CalibrationLossState guitar = CalibrationLossState.tracking,
+  VisionInsight? cue,
+  List<VisionInsight> sessionSummary = const <VisionInsight>[],
+}) => VisionPipelineUpdate(
+  summary: VisionQualitySummary.fromFrames(const <VisionFrameQuality>[]),
+  hand: hand,
+  pose: pose,
+  guitar: guitar,
+  realtimeCue: cue,
+  sessionSummary: sessionSummary,
+);
+
 final class _Rig {
-  _Rig(this.container, this.capture, this.coordinator, this.results);
+  _Rig(
+    this.container,
+    this.capture,
+    this.coordinator,
+    this.results,
+    this.processor,
+    this.store,
+  );
 
   final ProviderContainer container;
   final FakeCameraCapture capture;
   final CameraSessionCoordinator coordinator;
   final List<VisionSessionResult> results;
+  final _FakeProcessor processor;
+  final InMemoryKeyValueStore store;
 
   VisionSessionController get controller =>
       container.read(visionSessionControllerProvider.notifier);
@@ -48,10 +113,13 @@ final class _Rig {
 _Rig _rig({
   CameraPermissionState permission = CameraPermissionState.granted,
   Future<void>? startGate,
+  bool persistResults = false,
 }) {
   final capture = FakeCameraCapture(startGate: startGate);
   final coordinator = CameraSessionCoordinator();
   final results = <VisionSessionResult>[];
+  final processor = _FakeProcessor();
+  final store = InMemoryKeyValueStore();
   final container = ProviderContainer(
     overrides: [
       cameraPermissionGatewayProvider.overrideWithValue(
@@ -59,18 +127,24 @@ _Rig _rig({
       ),
       cameraCaptureFactoryProvider.overrideWithValue(() => capture),
       cameraSessionCoordinatorProvider.overrideWithValue(coordinator),
+      // E09-R28a: the session now builds a real pipeline, which reads the
+      // persisted calibration. A stand-in keeps these cells about the state
+      // machine rather than about frame quality.
+      visionFrameProcessorFactoryProvider.overrideWithValue(() => processor),
+      keyValueStoreProvider.overrideWithValue(store),
       visionSessionClockProvider.overrideWithValue(
         () => DateTime.utc(2026, 8, 8, 12),
       ),
       visionSessionIdFactoryProvider.overrideWithValue(
         () => VisionSessionId.create('session-1'),
       ),
-      visionSessionResultListenerProvider.overrideWithValue(results.add),
+      if (!persistResults)
+        visionSessionResultListenerProvider.overrideWithValue(results.add),
     ],
   );
   // Keeps the auto-dispose session controller alive for the test route.
   container.listen(visionSessionControllerProvider, (_, _) {});
-  return _Rig(container, capture, coordinator, results);
+  return _Rig(container, capture, coordinator, results, processor, store);
 }
 
 Future<void> _startToRunning(_Rig rig) async {
@@ -262,6 +336,108 @@ void main() {
         expect(rig.state.realtimeCue, isNull);
       },
     );
+  });
+
+  group('VisionSessionController pipeline wiring (E09-R28a)', () {
+    test('every delivered frame reaches the processor', () async {
+      final rig = _rig();
+      addTearDown(rig.dispose);
+      await _startToRunning(rig);
+
+      expect(rig.capture.emitFrame().isSuccess, isTrue);
+      expect(rig.capture.emitFrame().isSuccess, isTrue);
+
+      expect(rig.processor.frameIds, <int>[0, 1]);
+      expect(rig.state.status, VisionSessionStatus.running);
+    });
+
+    test('a published summary lands in state', () async {
+      final rig = _rig();
+      addTearDown(rig.dispose);
+      await _startToRunning(rig);
+
+      final cue = VisionInsight(
+        code: InsightCode.setupNotObservable,
+        policyVersion: 'e05-r23-v1',
+        evidenceIds: const <String>['evidence-1'],
+        confidence: 1,
+      );
+      await rig.processor.emit(
+        _update(hand: VisionMetricState.needsImprovement, cue: cue),
+      );
+
+      expect(rig.state.overlayQuality.hand, VisionMetricState.needsImprovement);
+      expect(rig.state.overlayQuality.guitar, CalibrationLossState.tracking);
+      expect(rig.state.realtimeCue, cue);
+    });
+
+    test('a lost calibration moves the session to calibrationLost', () async {
+      final rig = _rig();
+      addTearDown(rig.dispose);
+      await _startToRunning(rig);
+
+      await rig.processor.emit(_update(guitar: CalibrationLossState.lost));
+
+      expect(rig.state.status, VisionSessionStatus.calibrationLost);
+      expect(rig.state.calibrationState, CalibrationLossState.lost);
+      // A later update must keep updating the cue without tripping the state
+      // machine's invalid-transition guard.
+      await rig.processor.emit(_update(guitar: CalibrationLossState.lost));
+      expect(rig.state.issue, isNot(VisionSessionIssue.invalidTransition));
+    });
+
+    test('emitting after the session ended is inert', () async {
+      final rig = _rig();
+      addTearDown(rig.dispose);
+      await _startToRunning(rig);
+      await rig.controller.stop();
+
+      final before = rig.state;
+      await rig.processor.emit(
+        _update(hand: VisionMetricState.needsImprovement),
+      );
+
+      expect(rig.processor.disposed, isTrue);
+      expect(rig.state.status, before.status);
+      expect(rig.state.issue, isNull);
+    });
+
+    test('the processor is disposed with the capture', () async {
+      final rig = _rig();
+      addTearDown(rig.dispose);
+      await _startToRunning(rig);
+
+      await rig.controller.stop();
+
+      expect(rig.processor.disposed, isTrue);
+    });
+
+    test('recalibrating drops the processor', () async {
+      final rig = _rig();
+      addTearDown(rig.dispose);
+      await _startToRunning(rig);
+
+      await rig.controller.recalibrate();
+
+      expect(rig.state.status, VisionSessionStatus.calibrating);
+      expect(rig.processor.disposed, isTrue);
+    });
+
+    test('the finished session is persisted by the default listener', () async {
+      final rig = _rig(persistResults: true);
+      addTearDown(rig.dispose);
+      await _startToRunning(rig);
+      expect(rig.capture.emitFrame().isSuccess, isTrue);
+
+      await rig.controller.stop();
+      await Future<void>.delayed(Duration.zero);
+
+      final entries = VisionSessionRepository(store: rig.store).list();
+      expect(entries, hasLength(1));
+      expect(entries.single.sessionId, 'session-1');
+      expect(entries.single.observedFrameCount, 1);
+      expect(entries.single.modelVersions, isNotEmpty);
+    });
   });
 
   group('VisionSessionController exit matrix', () {

@@ -34,8 +34,10 @@ import '../../../../core/logging/app_logger.dart';
 import '../../../../core/storage/json_document_store.dart';
 import '../../../../core/storage/key_value_store.dart';
 import '../../data/local/community_draft_store.dart';
+import '../../data/repositories/post_repository_impl.dart';
 import '../../domain/policies/community_audience.dart';
 import '../../domain/repositories/post_repository.dart';
+import '../../domain/value_objects/content_id.dart';
 
 /// Document schema version of the Community outbox envelope.
 ///
@@ -71,6 +73,8 @@ class CommunityPendingPost {
     required this.sourceArtifactJson,
     required this.createdAt,
     this.attempts = 0,
+    this.clubId,
+    this.mediaIds = const <String>[],
   });
 
   /// The Kör 5 idempotency key, generated at enqueue time and
@@ -106,6 +110,25 @@ class CommunityPendingPost {
   /// double-submit impossible regardless of how many retries fire.
   int attempts;
 
+  /// The PUBLIC id of the club this post belongs to, or `null` for an
+  /// ordinary post (E17-R11).
+  ///
+  /// Persisted with the record so a drain that runs after an app
+  /// restart still knows the destination. Losing it would publish the
+  /// post to the global feed instead of the club, and the user would
+  /// see a success with the wrong audience.
+  final String? clubId;
+
+  /// A már feltöltött, csatolandó médiák publikus azonosítói (javító
+  /// sáv R27).
+  ///
+  /// Ugyanúgy PERZISZTÁLT, mint a [clubId], és ugyanabból az okból: a
+  /// bájtok már a szerveren vannak, de a poszthoz KÖTÉS a közzétételkor
+  /// történik. Ha a lista egy újraindításban elveszne, a drain egy
+  /// csatolmány nélküli posztot tenne közzé — a felhasználó sikert
+  /// látna, és a képe sehol nem jelenne meg.
+  final List<String> mediaIds;
+
   Map<String, Object?> toJson() => <String, Object?>{
     'schemaVersion': communityOutboxSchemaVersion,
     'idempotencyKey': idempotencyKey,
@@ -114,6 +137,13 @@ class CommunityPendingPost {
     'sourceArtifactJson': sourceArtifactJson,
     'createdAt': createdAt.toIso8601String(),
     'attempts': attempts,
+    // A kulcs csak klub-kontextusban kerül a dokumentumba, így a régi
+    // bájtok verzió-emelés nélkül olvashatók maradnak: a hiányzó kulcs
+    // jelentése egyértelműen „nem klubba megy".
+    if (clubId != null) 'clubId': clubId,
+    // Ugyanaz a szabály: az ÜRES lista kimarad, tehát a média előtti
+    // rekordok verzió-emelés nélkül olvashatók.
+    if (mediaIds.isNotEmpty) 'mediaIds': mediaIds,
   };
 
   static CommunityPendingPost fromJson(Map<String, Object?> object) {
@@ -163,6 +193,17 @@ class CommunityPendingPost {
     final attemptsRaw = object['attempts'];
     final attempts = attemptsRaw is int ? attemptsRaw : 0;
     final audience = _audienceFromWire(audienceWire);
+    // A hiányzó kulcs „nincs klub". Egy ROSSZ típusú (vagy üres) érték
+    // viszont NEM olvasható „akkor globális"-ként: az a posztot csendben
+    // más közönségnek küldené ki. A rekord ezért elbukik, és a betöltő a
+    // meglévő `pending_post_skipped` ágon naplózza.
+    final clubIdRaw = object['clubId'];
+    if (clubIdRaw != null && (clubIdRaw is! String || clubIdRaw.isEmpty)) {
+      throw JsonRecordException(
+        'clubId must be a non-empty string when present',
+        field: 'clubId',
+      );
+    }
     return CommunityPendingPost(
       idempotencyKey: key,
       audience: audience,
@@ -170,8 +211,38 @@ class CommunityPendingPost {
       sourceArtifactJson: sourceArtifactRaw,
       createdAt: createdAt,
       attempts: attempts,
+      clubId: clubIdRaw as String?,
+      mediaIds: _mediaIdsFromJson(object['mediaIds']),
     );
   }
+}
+
+/// A perzisztált csatolmány-azonosítók visszaolvasása.
+///
+/// A hiányzó kulcs ÜRES lista (a média előtti rekordok ilyenek). Egy
+/// ROSSZ alakú érték viszont NEM olvasható „akkor nincs csatolmány"-ként
+/// — az a felhasználó képét némán ejtené a közzétételkor —, ezért a
+/// rekord elbukik, és a betöltő a meglévő `pending_post_skipped` ágon
+/// naplózza.
+List<String> _mediaIdsFromJson(Object? raw) {
+  if (raw == null) return const <String>[];
+  if (raw is! List) {
+    throw const JsonRecordException(
+      'mediaIds must be a list of non-empty strings',
+      field: 'mediaIds',
+    );
+  }
+  final ids = <String>[];
+  for (final item in raw) {
+    if (item is! String || item.isEmpty) {
+      throw const JsonRecordException(
+        'mediaIds must be a list of non-empty strings',
+        field: 'mediaIds',
+      );
+    }
+    ids.add(item);
+  }
+  return List<String>.unmodifiable(ids);
 }
 
 CommunityAudience _audienceFromWire(String wire) {
@@ -340,6 +411,8 @@ final class LocalCommunityOutbox implements CommunityOutbox {
       sourceArtifactJson: Map<String, Object?>.from(draft.sourceArtifactJson),
       createdAt: draft.lastEditedAt,
       attempts: 0,
+      clubId: draft.clubId,
+      mediaIds: draft.mediaIds,
     );
     _pending.add(record);
     await _persist();
@@ -353,18 +426,24 @@ final class LocalCommunityOutbox implements CommunityOutbox {
 
     for (final record in List<CommunityPendingPost>.from(_pending)) {
       try {
-        await _repository.createPost(
-          audience: record.audience,
-          body: record.body,
-          artifact: record.sourceArtifactJson,
-          // A2 — the persisted, stable mutation key. The server
-          // sees the same key on every retry; the first successful
-          // submit wins, every later attempt returns the existing
-          // post id (ADR 0405 §1). A buggy implementation that
-          // regenerated the key per call would create a duplicate
-          // post — the §6.1 measure-matrix row 2.
-          idempotencyKey: record.idempotencyKey,
-        );
+        // A2 — the persisted, stable mutation key. The server sees the
+        // same key on every retry; the first successful submit wins,
+        // every later attempt returns the existing post id (ADR 0405
+        // §1). A buggy implementation that regenerated the key per call
+        // would create a duplicate post — the §6.1 measure-matrix row 2.
+        final clubId = record.clubId;
+        if (clubId != null) {
+          await _createClubPost(record, clubId);
+        } else if (record.mediaIds.isEmpty) {
+          await _repository.createPost(
+            audience: record.audience,
+            body: record.body,
+            artifact: record.sourceArtifactJson,
+            idempotencyKey: record.idempotencyKey,
+          );
+        } else {
+          await _createPostWithMedia(record);
+        }
         acknowledged.add(record.idempotencyKey);
         _pending.removeWhere(
           (candidate) => candidate.idempotencyKey == record.idempotencyKey,
@@ -396,6 +475,64 @@ final class LocalCommunityOutbox implements CommunityOutbox {
     return CommunityOutboxDrainReport(
       acknowledged: List<String>.unmodifiable(acknowledged),
       retrying: List<String>.unmodifiable(retrying),
+    );
+  }
+
+  /// Klub-poszt kiküldése (E17-R11).
+  ///
+  /// A klub-cél a szerződésen KÍVÜLI `createClubPost`-on megy ki (a
+  /// `CommunityPostRepository` interfészt tizenkét teszt-fake valósítja
+  /// meg; egy új absztrakt metódus mindet eltörné). Ha a bekötött
+  /// repository nem az élő HTTP-implementáció — fiók nélküli mód, vagy egy
+  /// olyan fake, ami nem ismeri a klub-utat —, akkor NEM esünk vissza a
+  /// klub nélküli `createPost`-ra: az a posztot némán a globális feedbe
+  /// tenné, a felhasználó pedig sikert látna rossz célponttal. A dobott
+  /// hiba a `_drain` meglévő retry-ágára fut, tehát a rekord a sorban
+  /// marad, a kulcsával együtt.
+  Future<void> _createClubPost(CommunityPendingPost record, String clubId) {
+    final repository = _repository;
+    if (repository is! HttpCommunityPostRepository) {
+      throw StateError(
+        'a klub-poszt kiküldéséhez az élő HTTP poszt-repository kell '
+        '(klub: $clubId); a bekötött repository '
+        '${repository.runtimeType} nem ismeri a klub-utat',
+      );
+    }
+    return repository.createClubPost(
+      clubId: ContentId(clubId),
+      audience: record.audience,
+      body: record.body,
+      artifact: record.sourceArtifactJson,
+      idempotencyKey: record.idempotencyKey,
+      mediaIds: record.mediaIds,
+    );
+  }
+
+  /// Csatolmányos poszt kiküldése (javító sáv R27).
+  ///
+  /// Pontosan a `_createClubPost` mintája és ugyanaz az indoka: a
+  /// `media_ids` a szerződésen KÍVÜLI, opcionális paraméter, mert a
+  /// `CommunityPostRepository`-t tizenkét teszt-fake valósítja meg. Ha a
+  /// bekötött repository nem az élő HTTP-implementáció, NEM esünk vissza
+  /// a csatolmány nélküli `createPost`-ra: az a képet némán elhagyná, a
+  /// felhasználó pedig sikert látna egy üres poszttal. A dobott hiba a
+  /// meglévő retry-ágra fut, tehát a rekord a sorban marad — a
+  /// csatolmányaival együtt.
+  Future<void> _createPostWithMedia(CommunityPendingPost record) {
+    final repository = _repository;
+    if (repository is! HttpCommunityPostRepository) {
+      throw StateError(
+        'a csatolmányos poszt kiküldéséhez az élő HTTP poszt-repository '
+        'kell (${record.mediaIds.length} csatolmány); a bekötött '
+        'repository ${repository.runtimeType} nem ismeri a média-utat',
+      );
+    }
+    return repository.createPost(
+      audience: record.audience,
+      body: record.body,
+      artifact: record.sourceArtifactJson,
+      idempotencyKey: record.idempotencyKey,
+      mediaIds: record.mediaIds,
     );
   }
 

@@ -46,6 +46,7 @@ discipline).
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Iterator
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
@@ -60,6 +61,16 @@ from ..feed.following_feed import (
 )
 from ..feed.following_feed import (
     FeedPage as FeedPageRepo,
+)
+from ..feed.profile_posts import (
+    DEFAULT_PAGE_SIZE as PROFILE_POSTS_DEFAULT_PAGE_SIZE,
+)
+from ..feed.profile_posts import (
+    MAX_PAGE_SIZE as PROFILE_POSTS_MAX_PAGE_SIZE,
+)
+from ..feed.profile_posts import (
+    ProfileNotVisible,
+    list_profile_posts,
 )
 from ..post_projection import project_page
 from ..schemas.feed import FEED_PAGE_SIZE_MAX, FeedPage, FeedPageQuery
@@ -235,7 +246,83 @@ def get_following_feed(
             pass
 
 
+# ---------------------------------------------------------------------------
+# GET /community/profiles/{public_id}/posts
+# ---------------------------------------------------------------------------
+
+
+@router.get("/profiles/{public_id}/posts", status_code=status.HTTP_200_OK)
+def get_profile_posts(
+    public_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser,
+    cursor: str | None = Query(default=None, max_length=512),
+    page_size: int | None = Query(default=None, ge=1),
+) -> FeedPage:
+    """One cursor-paginated page of a single profile's posts.
+
+    The Flutter ``CommunityFeedRepository.profilePosts`` contract has
+    named this route since Kör 5; until E17-R11 it had neither a route
+    nor a service, and the Dart implementation threw rather than
+    claiming a profile has no posts. This is that route.
+
+    **Same wire shape as the two feeds.** The response is the shared
+    :class:`FeedPage` built through ``post_projection.project_page``,
+    so a profile's post carries the same counters and viewer state a
+    feed card does — the client renders it with the existing pipeline
+    and cannot end up drawing invented zeroes.
+
+    **Visibility is the service's.** Unknown profile, blocked pair,
+    private profile and followers-only-and-not-a-follower all raise the
+    single ``ProfileNotVisible``, which becomes ONE 404 here — never a
+    403, because a 403 would confirm the profile exists (the leak-guard
+    the club feed and the post read path already carry).
+
+    **Why it lives in the feed router.** This module already owns the
+    two things this endpoint needs and ``routers/profile.py`` has
+    neither: the fail-closed cursor-signing key resolution
+    (:func:`_resolve_cursor_secret`) and the authenticated viewer
+    resolution. The path does not collide with
+    ``/community/profiles/{public_id}`` (a different segment count) nor
+    with the literal ``/community/profiles/search`` in the search
+    router.
+    """
+    db_gen = _session_factory(request)
+    db = next(db_gen)
+    try:
+        try:
+            viewer_pk = _resolve_viewer_profile_pk(db, current_user.id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        cursor_secret = _resolve_cursor_secret(request.app.state.settings)
+        effective = page_size or PROFILE_POSTS_DEFAULT_PAGE_SIZE
+        if effective > PROFILE_POSTS_MAX_PAGE_SIZE:
+            effective = PROFILE_POSTS_MAX_PAGE_SIZE
+        try:
+            repo_page = list_profile_posts(
+                db,
+                viewer_profile_id=viewer_pk,
+                target_public_id=public_id,
+                cursor=cursor,
+                page_size=effective,
+                cursor_secret=cursor_secret,
+            )
+        except ProfileNotVisible as exc:
+            raise HTTPException(status_code=404, detail="profile not found") from exc
+        return FeedPage(
+            items=project_page(db, list(repo_page.items), viewer_profile_id=viewer_pk),
+            next_cursor=repo_page.next_cursor,
+        )
+    finally:
+        try:
+            next(db_gen, None)
+        except StopIteration:
+            pass
+
+
 __all__ = [
     "get_following_feed",
+    "get_profile_posts",
     "router",
 ]

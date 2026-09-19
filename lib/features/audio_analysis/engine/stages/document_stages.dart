@@ -96,6 +96,15 @@ final class DocumentAssemblyStage
         sampleRate: input.input.input.sampleRate,
         channelCount: input.input.input.channelCount,
         fingerprint: fingerprint,
+        // The ONLY provenance an imported file leaves behind (R26): the name
+        // the OS reported, and nothing else — no path, no bytes, no second
+        // hash (the content hash is `fingerprint`, above). It stays null for
+        // every other source, because only the file-import boundary sets
+        // `sourceDisplayName`. This field is the reason it exists, and the
+        // export codec's allowlist (ADR 0247) deliberately omits it, so an
+        // exported/shared analysis still carries no file name — pinned by
+        // `test/property/analysis_export_redaction_property_test.dart`.
+        sourceName: input.input.input.sourceDisplayName?.value,
       ),
       provenance: AnalysisProvenance(
         appVersion: _appVersion,

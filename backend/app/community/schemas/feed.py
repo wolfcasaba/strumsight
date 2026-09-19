@@ -39,6 +39,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..models.post import POST_BODY_MAX_LENGTH
 from ..policies.access_policy import CommunityAudience
+from .media import MediaOut
 
 # ---------------------------------------------------------------------------
 # Page-size thresholds (ADR 0406 §5.3 / §0.0 D7).
@@ -128,6 +129,11 @@ class FeedPostItem(BaseModel):
     #: cache-elhető a poszttal együtt más néző számára.
     viewer_bookmarked: bool = False
     viewer_reaction: str | None = None
+    #: Attached media descriptors, in attachment order (javító sáv R27).
+    #: Only ``ready`` rows appear — a post whose attachment was later
+    #: rejected or deleted renders as a post with no media, never as a
+    #: broken tile.
+    media: list[MediaOut] = Field(default_factory=list)
     created_at: datetime
     #: The Kör 11 ``updated_at`` resource-version token (ADR 0398 §6
     #: precedent). Echoed back on PATCH for optimistic concurrency.

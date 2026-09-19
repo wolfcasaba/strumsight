@@ -616,6 +616,30 @@
   "@analysisCompareDirectionUnchanged": {},
   "analysisCompareEmpty": "A két session között egyetlen metrika sem hasonlítható össze.",
   "@analysisCompareEmpty": {},
+  "analysisCompareLoadFailed": "Ezeket az elemzéseket nem sikerült megnyitni erről az eszközről.",
+  "@analysisCompareLoadFailed": {
+    "description": "Shown when at least one of the two chosen analysis documents could not be read back; no navigation happens. R34 (audit M11)."
+  },
+  "analysisCompareLoading": "Mindkét elemzés betöltése…",
+  "@analysisCompareLoading": {
+    "description": "Progress snackbar shown while the two chosen analysis documents are read back from the on-device repository. R34 (audit M11)."
+  },
+  "analysisComparePickerCancel": "Mégse",
+  "@analysisComparePickerCancel": {
+    "description": "Dismisses the compare picker sheet without comparing anything. R34 (audit M11)."
+  },
+  "analysisComparePickerConfirm": "Összehasonlítás",
+  "@analysisComparePickerConfirm": {
+    "description": "Confirm button of the compare picker sheet; enabled only when exactly two analyses are selected. R34 (audit M11)."
+  },
+  "analysisComparePickerHint": "Válassz ki pontosan két mentett elemzést. A régebbi lesz az „előtte” oldal.",
+  "@analysisComparePickerHint": {
+    "description": "Explains the selection rule inside the compare picker sheet. R34 (audit M11)."
+  },
+  "analysisComparePickerTitle": "Két elemzés összehasonlítása",
+  "@analysisComparePickerTitle": {
+    "description": "Title of the bottom sheet that lets the user pick exactly two saved analyses to compare. R34 (audit M11)."
+  },
   "analysisCompareReasonDescriptiveMetricNotComparable": "Ez a metrika leíró jellegű — a változása itt nem jobb vagy rosszabb minősítést kap.",
   "@analysisCompareReasonDescriptiveMetricNotComparable": {},
   "analysisCompareReasonDifferentMetricId": "A két session más metrikát mért.",
@@ -672,6 +696,10 @@
   "@analysisExportSectionWarnings": {},
   "analysisExportTitle": "Exportálás és megosztás",
   "@analysisExportTitle": {},
+  "analysisHomeCompareCta": "Két elemzés összehasonlítása",
+  "@analysisHomeCompareCta": {
+    "description": "AppBar action on the Analyze home that opens the two-analysis picker. Only rendered when at least two saved analyses exist and the comparison flag is on. R34 (audit M11)."
+  },
   "analysisHomeEntryCta": "Felvétel elemzése (V2)",
   "analysisHomeImportCta": "Fájl importálása",
   "@analysisHomeImportCta": {},
@@ -691,6 +719,10 @@
     }
   },
   "analysisHomeOpenFailed": "Nem sikerült megnyitni ezt az elemzést.",
+  "analysisHomeOpeningAnalysis": "Elemzés megnyitása…",
+  "@analysisHomeOpeningAnalysis": {
+    "description": "Progress snackbar shown while a saved analysis document is read back from the on-device repository after tapping a recent-analysis card. R32."
+  },
   "analysisHomeRecentEmpty": "Még nincs elemzés — kezdéshez vegyél fel vagy importálj egyet.",
   "@analysisHomeRecentEmpty": {},
   "analysisHomeRecentSectionTitle": "Legutóbbi elemzések",
@@ -701,6 +733,36 @@
   "@analysisHomeRecordDescription": {},
   "analysisHomeTitle": "Elemzés",
   "@analysisHomeTitle": {},
+  "analysisImportClipTooLong": "Ez a felvétel hosszabb {minutes} percnél. Importálj belőle egy rövidebb részt.",
+  "@analysisImportClipTooLong": {
+    "description": "Shown when the imported audio exceeds the maximum analysable duration. R26 file-import flow.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisImportClipTooShort": "Ez a felvétel túl rövid az elemzéshez.",
+  "@analysisImportClipTooShort": {
+    "description": "Shown when the imported audio is below the minimum analysable duration. R26 file-import flow."
+  },
+  "analysisImportFileTooLarge": "A fájl nagyobb {megabytes} MB-nál. Importálj belőle egy rövidebb részt.",
+  "@analysisImportFileTooLarge": {
+    "description": "Shown when the chosen audio file exceeds the analysis input byte limit. R26 file-import flow.",
+    "placeholders": {
+      "megabytes": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisImportUnreadable": "A fájlt nem sikerült hangként beolvasni — sérült vagy hiányos lehet.",
+  "@analysisImportUnreadable": {
+    "description": "Shown when a decodable container failed at the analysis input boundary for any other reason (truncated chunk, bad sizes, non-finite samples). R26 file-import flow."
+  },
+  "analysisImportUnsupportedFormat": "Ez a hangformátum ezen az eszközön nem importálható. Alakítsd át WAV-ra, és próbáld újra.",
+  "@analysisImportUnsupportedFormat": {
+    "description": "Shown when the chosen file is a container this build has no decoder for (any compressed format), or a WAV whose encoding is unsupported. R26 file-import flow."
+  },
   "analysisInsightChordTransitionHotspot": "Egy akkordváltás célzott gyakorlást igényel ({hotspotId}).",
   "@analysisInsightChordTransitionHotspot": {
     "placeholders": {
@@ -1142,6 +1204,10 @@
   "@analysisRecordingStop": {},
   "analysisRecordingTitle": "Felvétel",
   "@analysisRecordingTitle": {},
+  "analysisSaveFailed": "Az elemzést nem sikerült elmenteni az eszközre.",
+  "@analysisSaveFailed": {
+    "description": "Shown on the processing screen when persisting a finished analysis to the on-device repository failed. R26."
+  },
   "analysisTechniqueAttackInstability": "Hangindítás tisztasága",
   "analysisTechniqueChordChangeGap": "Akkordváltás folyamatossága",
   "analysisTechniqueConfidenceCollapseDuration": "Akkordfelismerés bizonytalanságának időtartama",
@@ -1267,6 +1333,7 @@
   "authContinueWithoutAccount": "Folytatás fiók nélkül",
   "authEmail": "Email",
   "authEmailInvalid": "Adj meg egy érvényes email címet",
+  "authEmailTakenHint": "Van már fiókod? Válts alább bejelentkezésre.",
   "authErrorEmailTaken": "Ez az email már regisztrálva van",
   "authErrorInvalidCredentials": "Hibás email vagy jelszó",
   "authErrorNetwork": "Nem érhető el a szerver. Ellenőrizd a kapcsolatot.",
@@ -1424,6 +1491,20 @@
   "chordLibraryTitle": "Akkordtár",
   "commonCancel": "Mégse",
   "commonClose": "Bezárás",
+  "communityBookmarkLoadMore": "Több betöltése",
+  "@communityBookmarkLoadMore": {},
+  "communityBookmarkRemoveAction": "Eltávolítás",
+  "@communityBookmarkRemoveAction": {},
+  "communityBookmarkTombstoneBody": "Ez a poszt már nem érhető el. A könyvjelző a listádban marad, amíg el nem távolítod.",
+  "@communityBookmarkTombstoneBody": {},
+  "communityBookmarksEmpty": "Még nincs mentett poszt.",
+  "@communityBookmarksEmpty": {},
+  "communityBookmarksErrorTitle": "A könyvjelzők nem töltődtek be.",
+  "@communityBookmarksErrorTitle": {},
+  "communityBookmarksRetry": "Újra",
+  "@communityBookmarksRetry": {},
+  "communityBookmarksTitle": "Könyvjelzők",
+  "@communityBookmarksTitle": {},
   "communityChallengeAccept": "Elfogad",
   "@communityChallengeAccept": {},
   "communityChallengeActionBlockAuthor": "Szerző tiltása",
@@ -1502,6 +1583,8 @@
   "@communityClubChallengesUnavailableBody": {},
   "communityClubChallengesUnavailableTitle": "A klub kihívásai még nem érhetők el",
   "@communityClubChallengesUnavailableTitle": {},
+  "communityClubComposeCta": "Új poszt",
+  "@communityClubComposeCta": {},
   "communityClubDetailError": "A klub nem tölthető be.",
   "@communityClubDetailError": {},
   "communityClubDetailJoin": "Csatlakozás kérése",
@@ -1532,6 +1615,8 @@
   "@communityClubDetailTitle": {},
   "communityClubFeedEmpty": "Ebben a klubban még nincs poszt.",
   "@communityClubFeedEmpty": {},
+  "communityClubFeedError": "A klub posztjai nem tölthetők be.",
+  "@communityClubFeedError": {},
   "communityClubFeedPinnedHeader": "Kitűzött",
   "@communityClubFeedPinnedHeader": {},
   "communityClubFeedRecentHeader": "Legutóbbi",
@@ -1635,6 +1720,66 @@
   "@communityCommentsSend": {},
   "communityCommentsTitle": "Hozzászólások",
   "@communityCommentsTitle": {},
+  "communityComposerAttachMedia": "Média csatolása",
+  "@communityComposerAttachMedia": {},
+  "communityComposerAudienceFollowers": "Követők",
+  "@communityComposerAudienceFollowers": {},
+  "communityComposerAudienceLabel": "Kik láthatják",
+  "@communityComposerAudienceLabel": {},
+  "communityComposerAudiencePrivate": "Privát",
+  "@communityComposerAudiencePrivate": {},
+  "communityComposerAudiencePublic": "Nyilvános",
+  "@communityComposerAudiencePublic": {},
+  "communityComposerBodyHint": "Mit szeretnél megosztani?",
+  "@communityComposerBodyHint": {},
+  "communityComposerBodyLabel": "Szöveg",
+  "@communityComposerBodyLabel": {},
+  "communityComposerClubTarget": "Ez a poszt a klubba kerül, nem a saját feededbe.",
+  "@communityComposerClubTarget": {},
+  "communityComposerDiscard": "Elvetés",
+  "@communityComposerDiscard": {},
+  "communityComposerFailure": "A poszt nem került elküldésre — próbáld újra.",
+  "@communityComposerFailure": {},
+  "communityComposerFailureWithCode": "A poszt nem került elküldésre — próbáld újra. ({code})",
+  "@communityComposerFailureWithCode": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "communityComposerMediaLater": "A média csatolása később érhető el.",
+  "@communityComposerMediaLater": {},
+  "communityComposerMediaLimitReached": "Egy poszthoz legfeljebb 4 csatolmányt tehetsz.",
+  "@communityComposerMediaLimitReached": {},
+  "communityComposerMediaSectionLabel": "Csatolmányok",
+  "@communityComposerMediaSectionLabel": {},
+  "communityComposerMediaUploadFailed": "A képet nem sikerült feltölteni. A szöveged megvan — próbáld újra.",
+  "@communityComposerMediaUploadFailed": {},
+  "communityComposerPreviewBestScore": "Legjobb pontszám",
+  "@communityComposerPreviewBestScore": {},
+  "communityComposerPreviewChordTimeline": "Akkord-idővonal",
+  "@communityComposerPreviewChordTimeline": {},
+  "communityComposerPreviewLabel": "Megosztott mezők",
+  "@communityComposerPreviewLabel": {},
+  "communityComposerPreviewStreakDays": "Aktív napok",
+  "@communityComposerPreviewStreakDays": {},
+  "communityComposerPreviewStrumPattern": "Strumminta",
+  "@communityComposerPreviewStrumPattern": {},
+  "communityComposerPreviewTempo": "Tempó",
+  "@communityComposerPreviewTempo": {},
+  "communityComposerPublish": "Közzététel",
+  "@communityComposerPublish": {},
+  "communityComposerSubmitting": "Közzététel…",
+  "@communityComposerSubmitting": {},
+  "communityComposerSuccess": "Sikeresen közzétéve.",
+  "@communityComposerSuccess": {},
+  "communityComposerTitle": "Új poszt",
+  "@communityComposerTitle": {},
+  "communityEditAddInterestCancel": "Mégse",
+  "@communityEditAddInterestCancel": {},
+  "communityEditAddInterestConfirm": "Hozzáadás",
+  "@communityEditAddInterestConfirm": {},
   "communityEditAddInterestCta": "Címke hozzáadása",
   "communityEditAvatarLabel": "Profilkép",
   "@communityEditAvatarLabel": {},
@@ -1691,10 +1836,20 @@
   "@communityFollowersBlockAction": {},
   "communityFollowersMuteAction": "Némítás",
   "@communityFollowersMuteAction": {},
+  "communityGateAppBarErrorTitle": "A Közösség nem töltődött be",
+  "@communityGateAppBarErrorTitle": {},
+  "communityGateAppBarLoggedOutTitle": "Bejelentkezés a Közösségbe",
+  "@communityGateAppBarLoggedOutTitle": {},
+  "communityGateAppBarTitle": "Közösség",
+  "@communityGateAppBarTitle": {},
+  "communityGateAppBarUnavailableTitle": "A Közösség nem érhető el",
+  "@communityGateAppBarUnavailableTitle": {},
   "communityGateDisabledBody": "A Közösség funkció konfigurációban ki van kapcsolva. A StrumSight többi része — felismerés, gyakorlás, beállítások — a szokásos módon működik.",
   "communityGateDisabledTitle": "A Közösség nem elérhető ebben a buildben",
   "@communityGateDisabledTitle": {},
   "communityGateErrorBody": "Nem sikerült betölteni a Közösség-profilodat. Húzd le a frissítéshez, vagy ellenőrizd a kapcsolatot.",
+  "communityGateErrorTitle": "A Közösség nem tölthető be",
+  "@communityGateErrorTitle": {},
   "communityGateLoadingBody": "Közösség-profilod ellenőrzése…",
   "communityGateLoggedOutBody": "A Közösség-profilod a StrumSight-fiókodhoz kötődik, hogy eszközök között megtaláljanak az emberek.",
   "communityGateLoggedOutCta": "Bejelentkezés vagy fiók létrehozása",
@@ -1705,6 +1860,10 @@
   "communityGateProfileMissingTitle": "Hozd létre a Közösség-profilod",
   "@communityGateProfileMissingTitle": {},
   "communityGateRetry": "Újra",
+  "communityGateUnavailableBody": "Ez a szerver kikapcsolt Közösség-modullal fut, ezért még nincs hova bejelentkezni. A StrumSight többi része változatlanul működik.",
+  "@communityGateUnavailableBody": {},
+  "communityGateUnavailableTitle": "A Közösség még nincs bekapcsolva ezen a szerveren",
+  "@communityGateUnavailableTitle": {},
   "communityHubBookmarks": "Könyvjelzők",
   "communityHubChallenges": "Kihívások",
   "communityHubClubs": "Klubok",
@@ -1721,6 +1880,14 @@
   "communityHubFollowers": "Követők",
   "communityHubFollowing": "Követettek",
   "communityHubLeaderboard": "Ranglista",
+  "communityHubMyPostsEmpty": "Még nem posztoltál semmit.",
+  "@communityHubMyPostsEmpty": {},
+  "communityHubMyPostsError": "A posztjaid nem töltődtek be.",
+  "@communityHubMyPostsError": {},
+  "communityHubMyPostsRetry": "Újra",
+  "@communityHubMyPostsRetry": {},
+  "communityHubMyPostsTitle": "A posztjaid",
+  "@communityHubMyPostsTitle": {},
   "communityHubNotifications": "Értesítések",
   "communityHubSafety": "Letiltva és némítva",
   "@communityHubSafety": {
@@ -1731,6 +1898,44 @@
   "@communityHubSectionTitle": {
     "description": "Section heading above the Community hub's navigation entries (E17 / WP-C)."
   },
+  "communityMediaDeletedBody": "Ezt a médiát eltávolítottuk.",
+  "@communityMediaDeletedBody": {},
+  "communityMediaPendingQueued": "A média feldolgozásra vár.",
+  "@communityMediaPendingQueued": {},
+  "communityMediaPendingReview": "Ellenőrzésre vár.",
+  "@communityMediaPendingReview": {},
+  "communityMediaPendingScanning": "Kártevő-ellenőrzés…",
+  "@communityMediaPendingScanning": {},
+  "communityMediaPendingTranscoding": "Lejátszás előkészítése…",
+  "@communityMediaPendingTranscoding": {},
+  "communityMediaPlay": "Lejátszás",
+  "@communityMediaPlay": {},
+  "communityMediaRejectedAudio": "Elutasítva: ez a szerver nem tud hangfeltöltést feldolgozni.",
+  "@communityMediaRejectedAudio": {},
+  "communityMediaRejectedBody": "Ezt a médiát elutasítottuk, ezért nem játszható le.",
+  "@communityMediaRejectedBody": {},
+  "communityMediaRejectedEmpty": "Elutasítva: a fájl üres volt.",
+  "@communityMediaRejectedEmpty": {},
+  "communityMediaRejectedGeneric": "Elutasítva: ezt a fájlt nem fogadtuk el.",
+  "@communityMediaRejectedGeneric": {},
+  "communityMediaRejectedMalware": "Elutasítva: a vírusvizsgálat megjelölte ezt a fájlt.",
+  "@communityMediaRejectedMalware": {},
+  "communityMediaRejectedTooLarge": "Elutasítva: a fájl túl nagy.",
+  "@communityMediaRejectedTooLarge": {},
+  "communityMediaRejectedUnavailable": "Elutasítva: a szerver most nem tudta átvizsgálni a fájlt.",
+  "@communityMediaRejectedUnavailable": {},
+  "communityMediaRejectedUnsupported": "Elutasítva: ez a fájltípus nem támogatott.",
+  "@communityMediaRejectedUnsupported": {},
+  "communityMediaRemove": "Csatolmány eltávolítása",
+  "@communityMediaRemove": {},
+  "communityMediaStateDeleted": "Törölve",
+  "@communityMediaStateDeleted": {},
+  "communityMediaStateReady": "Kész",
+  "@communityMediaStateReady": {},
+  "communityMediaStateRejected": "Elutasítva",
+  "@communityMediaStateRejected": {},
+  "communityMediaUnavailable": "Ezt a képet nem sikerült betölteni.",
+  "@communityMediaUnavailable": {},
   "communityModerationRemovedPlaceholder": "Ezt a tartalmat eltávolították.",
   "@communityModerationRemovedPlaceholder": {},
   "communityNotificationChallengeCompletedTitle": "Kihívás teljesítve",
@@ -1816,6 +2021,54 @@
   "@communityPublicConfirmCta": {},
   "communityPublicConfirmTitle": "Nyilvánossá teszed?",
   "@communityPublicConfirmTitle": {},
+  "communityReactWithSemantics": "Reagálás ezzel: {reaction}",
+  "@communityReactWithSemantics": {
+    "placeholders": {
+      "reaction": {
+        "type": "String"
+      }
+    }
+  },
+  "communityReactionBarSemantics": "Reakciók",
+  "@communityReactionBarSemantics": {},
+  "communityReactionCelebrate": "Ünneplés",
+  "@communityReactionCelebrate": {},
+  "communityReactionCountSemantics": "{count} reakció",
+  "@communityReactionCountSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "communityReactionHelpful": "Hasznos",
+  "@communityReactionHelpful": {},
+  "communityReactionInspiring": "Inspiráló",
+  "@communityReactionInspiring": {},
+  "communityReactionSupport": "Támogatás",
+  "@communityReactionSupport": {},
+  "communitySearchClear": "Törlés",
+  "@communitySearchClear": {},
+  "communitySearchClearAll": "Összes törlése",
+  "@communitySearchClearAll": {},
+  "communitySearchEmptyHint": "Írj be egy felhasználónév-kezdetet, hogy játékosokat találj.",
+  "@communitySearchEmptyHint": {},
+  "communitySearchHint": "Keresés felhasználónév szerint",
+  "@communitySearchHint": {},
+  "communitySearchNetworkError": "Hálózati hiba",
+  "@communitySearchNetworkError": {},
+  "communitySearchNoMatches": "Nincs találat.",
+  "@communitySearchNoMatches": {},
+  "communitySearchRecentStorageError": "A korábbi keresések frissítése nem sikerült",
+  "@communitySearchRecentStorageError": {},
+  "communitySearchRecentTitle": "Korábbi keresések",
+  "@communitySearchRecentTitle": {},
+  "communitySearchRemoveRecent": "Eltávolítás",
+  "@communitySearchRemoveRecent": {},
+  "communitySearchRetry": "Újra",
+  "@communitySearchRetry": {},
+  "communitySearchServerError": "Szerverhiba",
+  "@communitySearchServerError": {},
   "curriculumAttemptCounted": "Beleszámít az utadba",
   "curriculumAttemptDone": "Kör vége",
   "curriculumBarOf": "{total} ütem közül a {bar}.",
@@ -2110,7 +2363,7 @@
       }
     }
   },
-  "feedCardAchievementUnlocked": "Achievement unlocked",
+  "feedCardAchievementUnlocked": "Teljesítmény feloldva",
   "@feedCardAchievementUnlocked": {},
   "feedCardAnalysisImprovementMetric": "{metric}: {direction} ({before} → {after})",
   "@feedCardAnalysisImprovementMetric": {
@@ -2794,7 +3047,15 @@
   "navLearn": "Tanulás",
   "navLibrary": "Könyvtár",
   "navLive": "Élő",
+  "navProfile": "Profil",
+  "@navProfile": {
+    "description": "Adaptive shell navigation label for the Profile destination (the destination renders the profile hub, not the tutor profile)."
+  },
   "navSettings": "Beállítások",
+  "navSongs": "Dalok",
+  "@navSongs": {
+    "description": "Adaptive shell navigation label for the Songs destination (the destination renders the songbook list, not the Song Trainer library)."
+  },
   "nudgeBody": "Pár perc pengetés, és megy tovább a sorozat.",
   "nudgeBodyFriday": "Indítsd a hétvégét egy pengetéssel — a sorozatod hálás lesz.",
   "nudgeBodyWeekend": "Egy laza pengetés is számít — pörögjön a sorozat.",
@@ -2937,6 +3198,7 @@
   "@planSetupEquipmentTitle": {},
   "planSetupFinish": "Beállítás befejezése",
   "@planSetupFinish": {},
+  "planSetupGenerationFailed": "A tervet nem sikerült elkészíteni. A válaszaid megvannak — próbáld újra a Befejezést.",
   "planSetupGoalCustom": "Egyéni cél",
   "@planSetupGoalCustom": {},
   "planSetupGoalRhythm": "Ritmus",
@@ -2972,6 +3234,10 @@
   "@planSetupUnavailable": {},
   "planSetupUnknown": "Nem tudom",
   "@planSetupUnknown": {},
+  "practiceAreaHubAllPractices": "Összes gyakorlat",
+  "@practiceAreaHubAllPractices": {
+    "description": "Opens the full practice catalog list from the practice area hub."
+  },
   "practiceAreaHubCategoriesHeading": "Böngészés cél szerint",
   "practiceAreaHubCategoryChords": "Akkordok",
   "practiceAreaHubCategoryComingSoonHint": "Ebben a kategóriában még nincs gyakorlat — hamarosan",
@@ -2991,12 +3257,29 @@
   "practiceAreaHubDifficultyAdvanced": "Haladó",
   "practiceAreaHubDifficultyBeginner": "Kezdő",
   "practiceAreaHubDifficultyIntermediate": "Középhaladó",
+  "practiceAreaHubMoreHeading": "További eszközök",
+  "@practiceAreaHubMoreHeading": {
+    "description": "Section heading on the practice area hub above the entries that open the full practice catalog, the analysis tool and the lesson library."
+  },
   "practiceAreaHubQuickToolsHeading": "Gyors eszközök",
   "practiceAreaHubRecommendedCta": "Ajánlott gyakorlás indítása",
   "practiceAreaHubRecommendedMessage": "Indíts egy, a jelenlegi szintedhez válogatott gyakorlást.",
   "practiceAreaHubRecommendedTitle": "Neked ajánlott",
   "practiceCatalogAlternatingEighthsTitle": "Váltakozó nyolcadok",
   "practiceCatalogCGAmFProgressionTitle": "C–G–Am–F akkordmenet",
+  "practiceCatalogCategoryEmpty": "Ehhez a célhoz még egyik beépített gyakorlat sem tartozik.",
+  "@practiceCatalogCategoryEmpty": {
+    "description": "Shown on the catalog listing when a goal-category chip resolves to no built-in definition. Distinct from the whole-catalog empty copy: the catalog is NOT empty, only this goal has no content. R34 (audit MI-B)."
+  },
+  "practiceCatalogCategoryHeading": "Kategória: {category}",
+  "@practiceCatalogCategoryHeading": {
+    "description": "Heading of the practice catalog list when it is filtered to one goal category.",
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  },
   "practiceCatalogEmToCChangesTitle": "Em ↔ C akkordváltás",
   "practiceCatalogFirstWaltzTitle": "Első keringő",
   "practiceCatalogFolkPatternTitle": "Folk szinkópa",
@@ -3230,6 +3513,10 @@
   "@practicePlanCatchUpSheetTravelBody": {},
   "practicePlanCatchUpSheetTravelTitle": "Az utazás nem számít kimaradásnak",
   "@practicePlanCatchUpSheetTravelTitle": {},
+  "practicePlanStatusBadgeSemantic": "Állapot",
+  "@practicePlanStatusBadgeSemantic": {
+    "description": "Semantic label (a11y) for the status icon rendered next to a day-status label on the today plan screen."
+  },
   "practicePlanStatusCompletedLabel": "Teljesített nap",
   "@practicePlanStatusCompletedLabel": {},
   "practicePlanStatusNoActiveLabel": "Nincs aktív terv",
@@ -3522,6 +3809,10 @@
     "description": "Profile hub button opening the Community gate. Restored into the base segment 2026-09-06 (see analysisHomeImportUnavailable)."
   },
   "profileHubCommunitySectionTitle": "Közösség",
+  "profileHubCommunityServerDisabledMessage": "A Közösség ki van kapcsolva azon a szerveren, amellyel ez a build beszél.",
+  "@profileHubCommunityServerDisabledMessage": {
+    "description": "A Profil-központ Közösség-alcíme, amikor a kapu CommunityGateStatus.unavailable állapotra jutott. Azért a community szegmensben él, mert a lib/l10n/base kör-szinten tiltott."
+  },
   "profileHubLocalOnlyMessage": "Fiók nélkül használod a StrumSightot — minden ezen az eszközön marad.",
   "profileHubLocalOnlyTitle": "Helyi profil",
   "profileHubProgressSectionTitle": "Fejlődés",
@@ -3546,6 +3837,14 @@
   "progressDailyGoal": "Napi cél",
   "progressDaysPracticed": "Játéknap",
   "progressEmpty": "Játssz élőben, elemezz egy riffet, vagy teljesíts egy leckét — itt jelenik meg a haladásod.",
+  "progressEvidenceLoading": "Még töltjük a munkameneteidet — próbáld újra egy pillanat múlva.",
+  "@progressEvidenceLoading": {
+    "description": "Shown when a Progress V2 skill-evidence row is tapped while the unified library aggregation is still loading. Distinct from the no-such-session copy: nothing is missing yet. R34 (audit MI-C)."
+  },
+  "progressEvidenceUnavailable": "Ez a munkamenet nincs a könyvtáradban.",
+  "@progressEvidenceUnavailable": {
+    "description": "Shown when a skill-detail evidence row cannot be resolved to a library item, instead of silently opening the library list."
+  },
   "progressGoalMet": "Mai cél teljesítve 🎉",
   "progressGoalOption": "{count} perc",
   "@progressGoalOption": {
@@ -3632,6 +3931,12 @@
     }
   },
   "progressV2EvidenceSectionTitle": "Bizonyíték",
+  "progressV2HistoryUnavailableMessage": "A gyakorlásaid ezen az eszközön vannak, de nem sikerült beolvasni őket. Ez nem ugyanaz, mint hogy még soha nem gyakoroltál — semmi nem veszett el, csak az olvasás bukott meg.",
+  "@progressV2HistoryUnavailableMessage": {},
+  "progressV2HistoryUnavailableRetry": "Újra",
+  "@progressV2HistoryUnavailableRetry": {},
+  "progressV2HistoryUnavailableTitle": "A gyakorlás-előzményed nem olvasható",
+  "@progressV2HistoryUnavailableTitle": {},
   "progressV2MetricHistorySectionTitle": "Mérőszám-előzmények",
   "progressV2MetricVersionChangedNote": "A mérési módszer megváltozott ezek a szakaszok között — az ugrás az új módszert tükrözi, nem hirtelen javulást.",
   "progressV2MetricVersionLabel": "Mérce v{version}",
@@ -3717,6 +4022,10 @@
         "type": "int"
       }
     }
+  },
+  "questArchivedBadge": "Archiválva",
+  "@questArchivedBadge": {
+    "description": "Semantic label (a11y) for the archived-state icon badge on a quest card."
   },
   "questCompletedBadge": "Teljesítve",
   "questCompletedBody": "A jutalom már a főkönyvedben van.",
@@ -3965,6 +4274,8 @@
       }
     }
   },
+  "rewardSummaryDismiss": "Bezárás",
+  "@rewardSummaryDismiss": {},
   "rewardSummaryEntrySemantics": "{title}. {body}",
   "@rewardSummaryEntrySemantics": {
     "placeholders": {
@@ -3973,6 +4284,14 @@
       },
       "body": {
         "type": "String"
+      }
+    }
+  },
+  "rewardSummaryEventXp": "{xp} XP",
+  "@rewardSummaryEventXp": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
       }
     }
   },
@@ -4016,6 +4335,8 @@
   "setlistPlayAll": "Szett lejátszása",
   "setlistRemoveSong": "Eltávolítás a szettből",
   "setlistRename": "Átnevezés",
+  "setlistRunnerBody": "Játszd le a szettet sorban — minden dal a Dal-trénerben nyílik meg, és a szett a befejezés után lép tovább.",
+  "setlistRunnerTitle": "Szettlista lejátszása",
   "setlistSessionCapo": "Capo {capo}",
   "@setlistSessionCapo": {
     "placeholders": {
@@ -4155,7 +4476,59 @@
   "settingsTuningHint": "A hangoló által használt A4 kamarahang. A szabvány 440 Hz.",
   "settingsTuningReference": "Hangolási referencia",
   "settingsVersion": "Verzió: {version}",
+  "shareCardBpmLabel": "BPM",
+  "@shareCardBpmLabel": {},
   "shareCardButton": "Kártya megosztása",
+  "shareCardChordsLabel": "AKKORDOK",
+  "@shareCardChordsLabel": {},
+  "shareCardDownLabel": "LE ↓",
+  "@shareCardDownLabel": {},
+  "shareCardLengthLabel": "HOSSZ",
+  "@shareCardLengthLabel": {},
+  "shareCardLessonBestComboLabel": "LEGJOBB KOMBÓ",
+  "@shareCardLessonBestComboLabel": {},
+  "shareCardLessonCompleteLabel": "Lecke teljesítve",
+  "@shareCardLessonCompleteLabel": {},
+  "shareCardLessonHitsLabel": "TALÁLAT",
+  "@shareCardLessonHitsLabel": {},
+  "shareCardLessonMoatLine": "Strumirány szerint osztályozva",
+  "@shareCardLessonMoatLine": {},
+  "shareCardMoatLine": "Az egyetlen app, amelyik látja a le/fel strumokat",
+  "@shareCardMoatLine": {},
+  "shareCardMyRiffFallback": "A riffem",
+  "@shareCardMyRiffFallback": {},
+  "shareCardNoStrumsPlaceholder": "Nem érzékeltünk strummot",
+  "@shareCardNoStrumsPlaceholder": {},
+  "shareCardStrumPatternLabel": "A TE STRUMMINTÁD",
+  "@shareCardStrumPatternLabel": {},
+  "shareCardStrumSubtitle": "Akkord- és strumirány-érzékelő",
+  "@shareCardStrumSubtitle": {},
+  "shareCardTitleLabel": "CÍM",
+  "@shareCardTitleLabel": {},
+  "shareCardUpLabel": "FEL ↑",
+  "@shareCardUpLabel": {},
+  "shareCardWrappedAccuracyLabel": "↓↑ PONTOSSÁG",
+  "@shareCardWrappedAccuracyLabel": {},
+  "shareCardWrappedDaysLabel": "NAP",
+  "@shareCardWrappedDaysLabel": {},
+  "shareCardWrappedMinutesLabel": "JÁTÉK-PERC",
+  "@shareCardWrappedMinutesLabel": {},
+  "shareCardWrappedMoatLine": "Az app, amelyik osztályozza a strummozásod",
+  "@shareCardWrappedMoatLine": {},
+  "shareCardWrappedSessionsLabel": "MUNKAMENET",
+  "@shareCardWrappedSessionsLabel": {},
+  "shareCardWrappedStreakLine": "{count} napos sorozat",
+  "@shareCardWrappedStreakLine": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shareCardWrappedStrumsLabel": "STRUM",
+  "@shareCardWrappedStrumsLabel": {},
+  "shareCardWrappedWeekLabel": "AZ ÉN STRUM HETEM",
+  "@shareCardWrappedWeekLabel": {},
   "shareRedactionChords": "Akkordmenet",
   "shareRedactionDuration": "Munkamenet hossza",
   "shareRedactionIncludeTitle": "A munkamenet címének megosztása",
@@ -4166,6 +4539,14 @@
   "shareRedactionTitle": "Amit megosztasz",
   "shareTextButton": "Megosztás szövegként",
   "shareTitle": "Megosztás",
+  "shellDataErrorMessage": "Ezt most nem sikerült betölteni.",
+  "@shellDataErrorMessage": {
+    "description": "Shown by a route that failed to load its data, instead of an empty state that would claim there is nothing to show."
+  },
+  "shellDataRetry": "Újra",
+  "@shellDataRetry": {
+    "description": "Retry action next to shellDataErrorMessage."
+  },
   "songAddChord": "Akkord hozzáadása",
   "songBpm": "{count} BPM",
   "@songBpm": {
@@ -4458,7 +4839,23 @@
       }
     }
   },
+  "songTrainerLaunchFailed": "A menet nem indult el — a dal megváltozott a beállítás óta. Nyisd meg újra.",
   "songTrainerLoading": "Song Trainer betöltése…",
+  "songTrainerLoopAbClear": "A–B törlése",
+  "@songTrainerLoopAbClear": {},
+  "songTrainerLoopAbSet": "A–B",
+  "@songTrainerLoopAbSet": {},
+  "songTrainerLoopCounterSemantics": "Ismétlés: {current}/{total}",
+  "@songTrainerLoopCounterSemantics": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "songTrainerLoopIndex": "Ismétlés {current}/{total}",
   "@songTrainerLoopIndex": {
     "placeholders": {
@@ -4811,6 +5208,14 @@
   "todayHubContinueCta": "Gyakorlás folytatása",
   "todayHubDayCompletedMessage": "Elérted a mai célod. Gyere vissza holnap, vagy gyakorolj tovább.",
   "todayHubDayCompletedTitle": "Szép munka ma",
+  "todayHubMinutesShort": "{minutes} perc",
+  "@todayHubMinutesShort": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
   "todayHubNewUserMessage": "Az első gyakorlás csak pár percet vesz igénybe.",
   "todayHubNewUserTitle": "Vágjunk bele",
   "todayHubNextStep": "Következik: {step}",
@@ -4822,6 +5227,12 @@
     }
   },
   "todayHubNoPlanMessage": "Még nincs terved — indulj a Gyakorlásba, hogy elkezdd.",
+  "todayHubPlanUnreadableMessage": "A gyakorlási terved ezen az eszközön van, de nem sikerült beolvasni. Ez nem ugyanaz, mint hogy nincs terved — semmi nem veszett el, csak az olvasás bukott meg.",
+  "@todayHubPlanUnreadableMessage": {},
+  "todayHubPlanUnreadableRetry": "Újra",
+  "@todayHubPlanUnreadableRetry": {},
+  "todayHubPlanUnreadableTitle": "A terved nem olvasható",
+  "@todayHubPlanUnreadableTitle": {},
   "todayHubPracticeMoreCta": "Gyakorolj még",
   "todayHubPrivacyAudioLocal": "A hangod nem hagyja el a telefont",
   "todayHubPrivacyNoAccount": "Nem kell fiók",
@@ -4832,9 +5243,12 @@
   "todayHubStartPracticeCta": "Gyakorlás indítása",
   "todayHubTitle": "Ma",
   "todayHubViewProgressCta": "Fejlődés megtekintése",
-  "todayHubVisionCardMessage": "Használd a kamerát az ujjazat visszajelzéséhez.",
+  "todayHubVisionCardMessage": "Ellenőrizd a kamerával a képkivágást és a fényt játék előtt.",
   "todayHubVisionCardTitle": "Vizuális gyakorlás",
   "todayHubVisionUnavailableReason": "A vizuális gyakorláshoz támogatott eszköz kell, és ebben a buildben még nem érhető el.",
+  "todayPlanActionFailed": "A módosítást nem sikerült menteni. A terv változatlan.",
+  "todayPlanActionNothingToChange": "A mai tervben nem maradt mit módosítani.",
+  "@todayPlanActionNothingToChange": {},
   "todayPlanCompletedBody": "Szép munka. A befejezett gyakorlás a tervelőzményekben marad.",
   "@todayPlanCompletedBody": {},
   "todayPlanCompletedTitle": "A mai nap teljesítve",
@@ -4873,6 +5287,8 @@
   "@todayPlanStart": {},
   "todayPlanSwap": "Csere",
   "@todayPlanSwap": {},
+  "todayPlanSwapNoAlternative": "A mai gyakorlathoz nincs azonos készségű alternatíva.",
+  "@todayPlanSwapNoAlternative": {},
   "todayPlanTitle": "Ma",
   "@todayPlanTitle": {},
   "todayPlanUnavailableBody": "A terved mára nem ütemez gyakorlást.",
@@ -4997,8 +5413,21 @@
   "tutorDataMemoryTitle": "Megjegyzett tények",
   "tutorDataScreenSemantics": "Tutor adatok képernyő",
   "tutorDataTitle": "Tutor adatok",
+  "tutorPlanCatalogEmpty": "Ezen az eszközön még nincs elérhető gyakorlat, ezért nem építhető gyakorlási terv.",
+  "tutorPlanDraftRationale": "Az eszközön elérhető gyakorlatokból, a választott gyakorlási hosszra építve.",
+  "tutorPlanDraftTitle": "{minutes} perces gyakorlási terv",
+  "@tutorPlanDraftTitle": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "tutorPlanNotBuildable": "Ez a gyakorlási terv most nem készíthető elő.",
   "tutorPlanOpenPreview": "A gyakorlási terv előnézetének megnyitása",
   "tutorPlanPreviewEntry": "Gyakorlási terv előnézete",
+  "tutorPlanPreviewEntryBody": "A céljaidból tervvázlatot készít, amit átnézhetsz, szerkeszthetsz és aktiválhatsz.",
+  "tutorPlanPreviewEntryTitle": "Gyakorlásterv javaslata",
   "tutorPlanSaveFailed": "A gyakorlási tervet nem sikerült menteni.",
   "tutorPlanSaved": "A gyakorlási terv a tanár memóriájába mentve.",
   "tutorPlanStartUnavailable": "Ehhez a tervhez még nincs indítható gyakorlat.",
@@ -5126,6 +5555,10 @@
   "visionSetupReadyTitle": "A kamera beállítása kész",
   "visionSetupRequestPermission": "Kamera engedélyezése",
   "visionSetupSkipAction": "Folytatás kamera nélkül",
+  "visionSetupStartSession": "Kamerás munkamenet indítása",
+  "@visionSetupStartSession": {
+    "description": "Primary call to action on the camera setup ready step; opens the vision session."
+  },
   "visionSetupTitle": "Kamera beállítása",
   "visionSetupUnsupportedDeviceNotice": "Ez az eszköz nem támogatja a kamera nézetet. Folytathatod csak hanggal.",
   "weeklyPlanScheduled": "{count} blokk ütemezve",

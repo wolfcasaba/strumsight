@@ -80,6 +80,35 @@ cd backend
 Python 3.12 for backend changes, then applies `alembic upgrade head` to an
 isolated temporary SQLite database. It can also be started manually.
 
+### Suite runtime — two test-only levers (measured, round 25)
+
+The CI "Backend test gate" step was cancelled at 14 min 56 s of its 15 min
+limit. Profiling (`python -m pytest --durations=60`) found the run was
+CPU-bound on two things; both are now handled in TEST code only, and
+production behaviour is unchanged. Measured on a 4-core Xeon @ 2.80 GHz
+container, Python 3.12: **928 s (15 m 28 s) -> 126 s (2 m 06 s)** for the
+same 1052 tests, with no test skipped, removed or weakened.
+
+- **bcrypt cost factor.** `app/security.py::PASSWORD_HASH_ROUNDS` is `12`
+  (bcrypt's own default) and is a MODULE CONSTANT, never an environment /
+  `Settings` knob, so no deployment can weaken it. Only the pytest process
+  rebinds it, in `tests/conftest.py`, to `4` — measured 0.271 s vs 0.001 s
+  per hash, and the suite mints thousands of fixture hashes (the three
+  `test_club_service.py` A7 cells stage 499 users each: 139 s per test).
+  The shipped value keeps explicit coverage in
+  `tests/test_auth.py::test_production_cost_factor_hashes_and_verifies`,
+  which restores it through the `production_password_hashing` fixture.
+- **Per-test Alembic replays.** Roughly twenty test modules provisioned their
+  SQLite database with a function-scoped `alembic upgrade head` — 22
+  revisions, ~0.30 s per call.
+  `tests/migration_template.py::apply_head_schema()` replays the chain ONCE
+  per pytest process and byte-copies the resulting database file, so every
+  test still opens a schema the production migration chain produced,
+  `alembic_version` row included — never a `Base.metadata.create_all`
+  shortcut. Tests that assert something ABOUT migrating (upgrade/downgrade
+  behaviour, readiness on a stale head, the rollback drill, the
+  in-process-migration logging trap) still call `alembic.command` directly.
+
 ## API
 
 | Method | Path             | Auth   | Body / returns |
@@ -122,12 +151,127 @@ isolated temporary SQLite database. It can also be started manually.
   `STRUMSIGHT_DIAG_TOKEN`; otherwise the process refuses to boot. Configure
   upload storage with `STRUMSIGHT_DIAG_DIR` and stage the optional APK with
   `STRUMSIGHT_APK_PATH`.
+- **AI Tutor proxy (ADR 0131 / 0142, wired R23; MiniMax R29b):** off by default
+  (`STRUMSIGHT_TUTOR_ENABLED=false` ⇒ `/tutor/*` is not mounted, the client
+  gets a plain 404). When enabled, `STRUMSIGHT_TUTOR_PROVIDER` selects the
+  adapter/profile the composition root builds:
+
+  | `STRUMSIGHT_TUTOR_PROVIDER` | model key | base-URL override | auth header |
+  |---|---|---|---|
+  | `fake` (default, no socket) | `fake-model` | — | — |
+  | `minimax` (**the product's provider** — MiniMax M3 over its Anthropic-compatible Messages API) | `MiniMax-M3` | `STRUMSIGHT_TUTOR_MINIMAX_BASE_URL` (`https://api.minimax.io/anthropic/v1`) | `Authorization: Bearer` |
+  | `anthropic` (Anthropic Messages API) | vendor model id | `STRUMSIGHT_TUTOR_ANTHROPIC_BASE_URL` | `x-api-key` |
+  | `openai` (Chat Completions) | vendor model id | `STRUMSIGHT_TUTOR_OPENAI_BASE_URL` | `Authorization: Bearer` |
+
+  MiniMax and Anthropic share ONE adapter
+  (`app/tutor/provider_gateway.py::AnthropicProviderGateway`) and differ only
+  by `AnthropicCompatibleProfile` — base URL plus which header carries the
+  key — so the streaming contract and the whole error classification are the
+  same code for both. The `Bearer` scheme for MiniMax is measured from this
+  repository's own MiniMax tooling (`tools/mm-round.sh`); the adapter sends
+  that one header only, never a second copy of the secret. `MiniMax-M3[1m]`
+  is Claude Code's context-window suffix, NOT an API model id — configuring
+  it fails the boot on the allowlist check.
+
+  `STRUMSIGHT_TUTOR_ALLOWED_PROVIDERS` is the SEPARATE JSON allowlist the
+  registry validates the provider/model pair against (e.g.
+  `{"minimax": ["MiniMax-M3"]}`); it stays fail-closed at
+  `{"fake": ["fake-model"]}`. A real provider also needs a non-empty,
+  non-development `STRUMSIGHT_TUTOR_API_KEY`. All three failure
+  modes — unknown provider, allowlist miss, unusable key — refuse to BOOT in
+  every environment, not just prod, so a misconfigured tutor never serves a
+  fake answer that looks real. `GET /tutor/capability` reports the live
+  `provider` and `model` (never the key) so a flip is verifiable from outside
+  the container — and the client reads the same answer, falling back to its
+  on-device stub when the server says `fake`. The provider secret stays on the server; provider failures
+  are normalized to redacted `ProviderError`/`ProviderTimeoutError` and the
+  prompt, the reply and the key are never logged. The client-facing answer is
+  the same for every provider failure (`502`, or `504` on a timeout), while the
+  SERVER log carries the profile name plus a one-line classification — `configuration` (401/403/404),
+  `busy` (429/529/5xx), `invalid_request` (400/413/422), `timeout`, `transport`,
+  `malformed_response`, `incomplete_response` — plus at most the HTTP status,
+  never the provider body. Flip sequence, the classification table, cost/limit
+  knobs and the privacy statement:
+  `docs/operations/backend-live-deploy.md` §7.2.
+- **Community media upload (javító sáv R27):** off by default.
+  `STRUMSIGHT_COMMUNITY_MEDIA_ENABLED=false` ⇒ `POST/GET/DELETE
+  /community/media` are not in the route table at all (a registration
+  gate, like `clubs` / `leaderboards`), so an un-flipped deploy answers
+  the framework's bare 404 and the client's existing "not enabled on this
+  server" path applies unchanged. Flipping the flag is NOT enough to make
+  an upload succeed — two further switches are fail-closed on purpose:
+
+  | variable | default | effect |
+  |---|---|---|
+  | `STRUMSIGHT_MEDIA_ROOT` | `backend/media_data` | content-addressed store root (`<sha[0:2]>/<sha[2:4]>/<sha>`); the ONLY writable path the pipeline touches |
+  | `STRUMSIGHT_MEDIA_SCANNER` | `disabled` | `disabled` REJECTS every upload (`scanner_not_configured`); `clamd` selects the `INSTREAM` adapter. There is deliberately **no pass-through adapter** |
+  | `STRUMSIGHT_MEDIA_SCANNER_SOCKET` | *(empty)* | clamd UNIX socket path; wins over host/port when set |
+  | `STRUMSIGHT_MEDIA_SCANNER_HOST` / `_PORT` | `127.0.0.1` / `3310` | clamd TCP endpoint |
+  | `STRUMSIGHT_MEDIA_SCANNER_TIMEOUT_SECONDS` | `10.0` | every socket failure — refused, silent, timed out, unparseable — is a REJECT |
+  | `STRUMSIGHT_MEDIA_AUDIO_TRANSCODER` | `disabled` | `disabled` rejects every AUDIO upload (`audio_transcoder_unavailable`); `ffmpeg` selects the external re-encoder. Images are always re-encoded in-process by Pillow (a hard dependency) |
+  | `STRUMSIGHT_MEDIA_FFMPEG_PATH` | `ffmpeg` | binary the ffmpeg adapter runs (fixed argv, no shell) |
+  | `STRUMSIGHT_MEDIA_AUDIO_MAX_DURATION_SECONDS` | `180` | hard truncation, not a trusted container duration |
+  | `STRUMSIGHT_MEDIA_MAX_IMAGE_BYTES` | `8388608` | per-kind byte cap, enforced on the bytes actually read (`Content-Length` is not trusted) |
+  | `STRUMSIGHT_MEDIA_MAX_AUDIO_BYTES` | `20971520` | per-kind byte cap for audio |
+  | `STRUMSIGHT_MEDIA_MAX_ITEMS_PER_PROFILE` | `50` | per-account live-row quota (the second, independent budget next to the per-IP throttle) |
+  | `STRUMSIGHT_MEDIA_UPLOAD_RATE_LIMIT_MAX` / `_WINDOW` | `20` / `3600` | per-IP sliding window, keyed through `client_ip_for_throttle` |
+  | `STRUMSIGHT_MEDIA_IMAGE_MAX_DIMENSION` | `2048` | longest edge of the re-encoded image |
+  | `STRUMSIGHT_MEDIA_IMAGE_QUALITY` | `82` | JPEG/WebP quality factor |
+  | `STRUMSIGHT_MEDIA_REVIEW_REQUIRED` | `false` | `true` parks a scanned + transcoded row in `review` until an operator releases it |
+
+  What the surface does with the bytes: magic-byte sniff (the filename and
+  the multipart `Content-Type` never participate) → clamd scan of the
+  ORIGINAL bytes → re-encode, so the stored bytes are the encoder's output
+  and EXIF/GPS + polyglot tails do not survive → content-addressed write.
+  Flip sequence, the volume/clamd wiring and the fail-closed probe:
+  `docs/operations/backend-live-deploy.md` §7.3.
 - **Auth throttling (round 120):** per-IP sliding-window rate limits on
   `/auth/login` (10/min) and `/auth/register` (5/min) → `429` +
   `Retry-After`. The counters are process-local: multiple workers do not share
   them. The single-process target is intentional; production scaling requires
   Redis or another shared store. The attempt is counted BEFORE the credential
   check, so a 429 never confirms a password guess.
+- **Throttling behind a reverse proxy (R14):** the bucket key comes from
+  `app/client_ip.py::client_ip_for_throttle`. It is the direct socket peer,
+  EXCEPT when that peer is listed in `STRUMSIGHT_TRUSTED_PROXY_IPS` (a JSON
+  list, empty by default) — then the first `X-Forwarded-For` hop. Without
+  this, a proxied deploy gives every caller the same key and the budgets
+  become global: measured on `casaba.app/strumsight`, where the container
+  sees the docker-bridge address for every phone and the shared 429 reaches
+  the app as a generic network error. The header is never trusted from an
+  unlisted peer (that would let anyone pick their own bucket), and the image
+  `CMD` hands the same variable to uvicorn's `--forwarded-allow-ips`, so the
+  ASGI and application layers cannot disagree. The reverse proxy must
+  OVERWRITE the header (Caddy: `header_up X-Forwarded-For {remote_host}`) —
+  the runbook is `docs/operations/backend-live-deploy.md` §5.1/§7.
+- **Login-failure diagnostics (R14):** a failed login answers a uniform
+  `401 Incorrect email or password` — deliberately identical for an unknown
+  address and a wrong password, so the response never reveals which e-mails
+  are registered. The operator gets the distinction SERVER-SIDE instead: one
+  INFO record per failure on the `app.routers.auth` logger, e.g.
+  `auth.login_failed reason=unknown_email client=203.0.113.7
+  email_hash=0748ebb7f38a` (`reason=bad_password` for the other branch, and
+  `auth.register_conflict reason=email_exists …` for a 409). The record
+  carries no e-mail and no password — `email_hash` is the first 12 hex
+  characters of `sha256(lowercased email)`, enough to see the same address
+  failing repeatedly, and comparable against a specific suspected address by
+  hashing it. `client=` is the throttle bucket key above, so failures and a
+  429 line up. Read it on a compose deploy with:
+
+  ```bash
+  docker compose --env-file runtime.env logs api | grep auth.login_failed
+  docker compose --env-file runtime.env logs --since 30m api | grep auth.
+  ```
+
+  `create_app()` attaches a stderr handler to the `app` package logger for
+  exactly this reason: uvicorn's own log config handles only `uvicorn*`
+  loggers and leaves the root without a handler, so an INFO record from the
+  application would otherwise be dropped before it ever reached
+  `docker compose logs`. For the same reason `alembic/env.py` calls
+  `fileConfig(..., disable_existing_loggers=False)` — with the default `True`,
+  one in-process migration switched off every `app.*` logger for the rest of
+  the process (measured; guarded by
+  `tests/test_auth_failure_logging.py::test_an_in_process_migration_does_not_silence_the_diagnostics`).
 - **Production database:** PostgreSQL is recommended. Set a
   `postgresql+psycopg://...` `STRUMSIGHT_DATABASE_URL` and install a compatible
   Psycopg driver in the deployment image (the driver is intentionally not a
@@ -148,6 +292,8 @@ backend/
 │   ├── models.py      # User, UserSettings
 │   ├── schemas.py     # Pydantic contracts
 │   ├── security.py    # bcrypt + JWT
+│   ├── ratelimit.py   # in-memory sliding-window limiter
+│   ├── client_ip.py   # trusted-proxy-aware throttle key
 │   ├── deps.py        # get_current_user (HTTP bearer)
 │   └── routers/       # auth.py, settings.py
 ├── alembic/           # versioned production schema

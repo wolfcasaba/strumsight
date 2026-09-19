@@ -32,6 +32,7 @@ import 'package:flutter/material.dart';
 
 import 'package:strumsight/core/design_system/public.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import 'community_theme_scope.dart';
 
 /// The processing-state literal the widget understands.
@@ -100,7 +101,7 @@ class CommunityMediaPlayer extends StatelessWidget {
           onTapPlay: onTapPlay,
         );
       case CommunityMediaProcessingState.rejected:
-        return const _RejectedCard();
+        return _RejectedCard(title: title);
       case CommunityMediaProcessingState.deleted:
         return const _DeletedCard();
       case CommunityMediaProcessingState.uploaded:
@@ -123,6 +124,7 @@ class _PendingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: SsSurface(
@@ -147,7 +149,7 @@ class _PendingCard extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      _pendingLabel(state),
+                      _pendingLabel(l10n, state),
                       style: theme.textTheme.bodyMedium,
                     ),
                   ),
@@ -160,29 +162,45 @@ class _PendingCard extends StatelessWidget {
     );
   }
 
-  static String _pendingLabel(CommunityMediaProcessingState state) {
+  static String _pendingLabel(
+    AppLocalizations l10n,
+    CommunityMediaProcessingState state,
+  ) {
     switch (state) {
       case CommunityMediaProcessingState.uploaded:
-        return 'Media is queued for processing.';
+        return l10n.communityMediaPendingQueued;
       case CommunityMediaProcessingState.scanning:
-        return 'Scanning for malware…';
+        return l10n.communityMediaPendingScanning;
       case CommunityMediaProcessingState.transcoding:
-        return 'Preparing playback…';
+        return l10n.communityMediaPendingTranscoding;
       case CommunityMediaProcessingState.review:
-        return 'Awaiting review.';
+        return l10n.communityMediaPendingReview;
       case CommunityMediaProcessingState.ready:
-        return 'Ready'; // unreachable in the placeholder branch
+        // Unreachable in the placeholder branch.
+        return l10n.communityMediaStateReady;
       case CommunityMediaProcessingState.rejected:
-        return 'Rejected'; // unreachable
+        // Unreachable.
+        return l10n.communityMediaStateRejected;
       case CommunityMediaProcessingState.deleted:
-        return 'Deleted'; // unreachable
+        // Unreachable.
+        return l10n.communityMediaStateDeleted;
     }
   }
 }
 
 /// The placeholder card for the rejected state.
+///
+/// The optional [title] is the caller's localized *reason* (the
+/// attachment tile maps the server's machine rejection code to a
+/// sentence). Dropping it here would leave the user with the generic
+/// "this attachment was rejected" body and no way to learn why —
+/// and it would break the widget's documented contract, which says
+/// the title is rendered above the placeholder. Absent a title the
+/// card renders exactly as before (the Kör 19 call sites).
 class _RejectedCard extends StatelessWidget {
-  const _RejectedCard();
+  const _RejectedCard({required this.title});
+
+  final String? title;
 
   @override
   Widget build(BuildContext context) {
@@ -192,9 +210,20 @@ class _RejectedCard extends StatelessWidget {
       child: SsSurface(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Text(
-            'This media was rejected and cannot be played.',
-            style: theme.textTheme.bodyMedium,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (title != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(title!, style: theme.textTheme.titleMedium),
+                ),
+              Text(
+                AppLocalizations.of(context).communityMediaRejectedBody,
+                style: theme.textTheme.bodyMedium,
+              ),
+            ],
           ),
         ),
       ),
@@ -215,7 +244,7 @@ class _DeletedCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Text(
-            'This media has been removed.',
+            AppLocalizations.of(context).communityMediaDeletedBody,
             style: theme.textTheme.bodyMedium,
           ),
         ),
@@ -276,7 +305,7 @@ class _ReadyCard extends StatelessWidget {
                   variant: SsButtonVariant.tertiary,
                   onPressed: onTapPlay,
                   icon: Icons.play_arrow,
-                  label: 'Play',
+                  label: AppLocalizations.of(context).communityMediaPlay,
                 ),
               ),
             ),

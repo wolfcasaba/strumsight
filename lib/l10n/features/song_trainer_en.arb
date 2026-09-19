@@ -1,5 +1,16 @@
 {
   "@@locale": "en",
   "setlistSessionEntry": "Run as session",
-  "setlistSessionChooseMode": "How do you want to run this set?"
+  "setlistSessionChooseMode": "How do you want to run this set?",
+  "songTrainerLoopCounterSemantics": "Loop {current} of {total}",
+  "@songTrainerLoopCounterSemantics": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "songTrainerLoopAbSet": "A–B",
+  "@songTrainerLoopAbSet": {},
+  "songTrainerLoopAbClear": "Clear A–B",
+  "@songTrainerLoopAbClear": {}
 }

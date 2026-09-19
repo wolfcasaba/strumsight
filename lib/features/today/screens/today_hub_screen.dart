@@ -24,12 +24,16 @@ import '../providers/today_providers.dart';
 ///
 /// Styled with plain Material widgets + [AppColors] (the same convention
 /// `ProgressScreen`/`SettingsScreen` use) rather than the `core/design_system`
-/// component library: those widgets require `SsDarkTheme`/`SsLightTheme` to
-/// be the app's active `ThemeData`, which the running app does not yet wire
-/// up (`StrumSightApp` still applies `AppTheme`) — using them here would
-/// crash on first frame. The two design-system pieces used below
-/// ([SsStaggeredEntrance], [SsScoreRingReveal]) are theme-agnostic by
-/// contract (they read no theme extension), so they are safe here.
+/// component library.
+///
+/// The reason this comment used to give — "those widgets require
+/// `SsDarkTheme`/`SsLightTheme` to be the app's active `ThemeData`, which
+/// `StrumSightApp` does not wire up, so using them here would crash on
+/// first frame" — is OBSOLETE (R21, audit MI8): `strumsight_app.dart`
+/// passes `SsLightTheme.data()` / `SsDarkTheme.data()` to `MaterialApp`,
+/// so the `Ss*` components are safe on this screen. What is left is a
+/// plain, still-open migration — until it happens this hub simply looks
+/// different from the `Ss*`-built screens.
 class TodayHubScreen extends ConsumerWidget {
   const TodayHubScreen({super.key, this.now});
 
@@ -93,6 +97,17 @@ class TodayHubScreen extends ConsumerWidget {
         _StatusBanner(
           icon: Icons.sync_outlined,
           label: l10n.dsStatusBadgeSyncPending,
+        ),
+      // R20 — `unreadable` is NOT `unavailable`. The state exists to say
+      // "your plan could not be read", and drawing it like "you have no
+      // plan yet" made that the one thing it could never say. The notice is
+      // conditional on `unreadable` alone, so every other state — including
+      // the empty-store `unavailable` the golden fixtures pump — renders
+      // byte-identically to before.
+      if (snapshot.availability == TodayPlanAvailability.unreadable)
+        _PlanUnreadableNotice(
+          l10n: l10n,
+          onRetry: () => ref.invalidate(todayPlanSnapshotProvider),
         ),
       // A1 — the ONLY primary (filled) button on this screen; every
       // other action below is outlined/text-styled.
@@ -283,6 +298,75 @@ class _StatusBanner extends StatelessWidget {
           const SizedBox(width: 6),
           Text(label, style: Theme.of(context).textTheme.bodySmall),
         ],
+      ),
+    );
+  }
+}
+
+/// R20 — the `unreadable` plan state gets its OWN small notice: a plan the
+/// store could not read is not a missing plan, and the R19 distinction is
+/// only real once the user can see it. Deliberately NOT the offline/sync
+/// `_StatusBanner` shape: those are informational and carry no action,
+/// while this one is an error with the single honest next step (retry the
+/// read). The retry invalidates `todayPlanSnapshotProvider` — the exact
+/// provider `todayPlanRepositoryProvider` projects — so a transient read
+/// failure resolves without leaving the tab.
+///
+/// Lives inside the hub's scrolling `ListView` and wraps its text, so hu +
+/// textScale 2.0 + landscape (the E15-R13 matrix cells) cannot overflow it.
+class _PlanUnreadableNotice extends StatelessWidget {
+  const _PlanUnreadableNotice({required this.l10n, required this.onRetry});
+
+  final AppLocalizations l10n;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final onContainer = theme.colorScheme.onErrorContainer;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        key: const ValueKey('today-hub-plan-unreadable'),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.errorContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.error_outline, size: 18, color: onContainer),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.todayHubPlanUnreadableTitle,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: onContainer,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              l10n.todayHubPlanUnreadableMessage,
+              style: theme.textTheme.bodySmall?.copyWith(color: onContainer),
+            ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const ValueKey('today-hub-plan-unreadable-retry'),
+                onPressed: onRetry,
+                child: Text(l10n.todayHubPlanUnreadableRetry),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -486,9 +570,12 @@ class _VisionCard extends StatelessWidget {
             if (visionEnabled) ...[
               const SizedBox(height: 12),
               TextButton(
-                // `push`, not `go`: the Vision screens carry no back
-                // affordance of their own, so replacing the stack would
-                // strand the user there (anti-vacuum, L403).
+                key: const ValueKey('today-hub-vision-entry'),
+                // `push`, not `go` (2026-09-07 audit): both vision routes
+                // are TOP-LEVEL, so a `go` REPLACED the stack — the camera
+                // screen arrived with `canPop == false`, no back arrow and
+                // no shell bottom bar, and the system back button was the
+                // only way out of the app.
                 onPressed: () => context.push(
                   visionSetupEnabled
                       ? AppRoutes.visionSetup

@@ -10,15 +10,33 @@ import '../../../core/foundation/app_result.dart';
 /// [LocalPracticeHistoryRepository] (keyed through the same store as the V2
 /// data layer). Loading state is reported through [AsyncValue] (Riverpod 3
 /// semantics — `.value` is nullable).
+///
+/// A read FAILURE is RETHROWN, not flattened to an empty list (M9, re-audit
+/// 2026-09-08). Until this round an unreadable history store reached every
+/// consumer as "you have never practiced" — the exact lie R18/R19/R20 closed
+/// three routes and the Today Hub against, one layer lower, at the source.
+/// The failure surfaces as `AsyncError` so each consumer can decide: the
+/// aggregated feed still falls back to V1-only, and the Progress V2
+/// composition layer turns it into a spoken, retryable error state
+/// (`progressPracticeHistoryProvider`). Same shape as
+/// `analysisRecentSummariesProvider`, which has thrown its `Failure` since
+/// E06.
+///
+/// `retry: (_, _) => null` — Riverpod 3 auto-retries a throwing
+/// `FutureProvider` with a growing backoff, which keeps `.future` pending
+/// for minutes instead of surfacing the error (measured: CI run 560,
+/// `history_unavailable_test` B1/B2 timed out at 30 s). A storage read
+/// failure is not retryable by construction; the dashboard's Retry button
+/// re-reads on demand. Same precedent as `activePracticePlanProvider`.
 final practiceHistoryV2ListProvider =
     FutureProvider<List<PracticeHistoryEntry>>((ref) async {
       final repository = ref.watch(practiceHistoryRepositoryProvider);
       final result = await repository.load();
       return switch (result) {
         Success(:final value) => value,
-        Failure() => const <PracticeHistoryEntry>[],
+        Failure(:final error) => throw error,
       };
-    });
+    }, retry: (retryCount, error) => null);
 
 /// The V1+V2 unified feed, surface as plain entries (the same shape the
 /// progress dashboard and the daily-goal provider consume).
@@ -31,7 +49,10 @@ final practiceProgressAggregatorProvider = Provider<PracticeProgressAggregator>(
 /// The synchronous aggregator result for the currently-loaded V1 log +
 /// the **latest successfully loaded** V2 list. When V2 is still loading
 /// (or has failed to load), the aggregator falls back to the V1-only data
-/// — a failed V2 load NEVER blocks the dashboard.
+/// — a failed V2 load NEVER blocks the dashboard. The failure itself is not
+/// lost by this fallback: `practiceHistoryV2ListProvider` keeps it as an
+/// `AsyncError`, and the surface that must SAY it (Progress V2) reads that
+/// error directly.
 final practiceProgressFeedProvider =
     Provider<AsyncValue<(List<PracticeEntry>, List<PracticeHistoryEntry>)>>((
       ref,

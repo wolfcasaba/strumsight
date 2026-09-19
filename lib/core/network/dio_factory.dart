@@ -20,6 +20,11 @@ final class DioFactory {
   static const Duration sendTimeout = Duration(seconds: 8);
   static const Duration receiveTimeout = Duration(seconds: 8);
 
+  /// Inter-chunk budget for the tutor's SSE stream (see
+  /// [createTutorStreamClient]). Long enough for a slow first model token,
+  /// short enough that a dead stream still fails instead of hanging.
+  static const Duration tutorStreamReceiveTimeout = Duration(seconds: 60);
+
   final String baseUrl;
   final String appVersion;
   final AppLogger logger;
@@ -55,6 +60,42 @@ final class DioFactory {
     return ApiClient(_createDio());
   }
 
+  /// The server-sent-events client the AI tutor's stream transport rides.
+  ///
+  /// It returns a raw [Dio] rather than an [ApiClient] on purpose: the tutor
+  /// turn is a long-lived `ResponseType.stream` response, and [ApiClient]'s
+  /// primitives all decode a single JSON object. Everything else is the
+  /// account client's own pipeline — the same [_createDio] path, so the
+  /// bearer token (via [AuthInterceptor]) and the correlation id travel on
+  /// every request, and the redacting log interceptor is attached.
+  ///
+  /// The one deliberate difference is [tutorStreamReceiveTimeout]: Dio's
+  /// receive timeout is the budget BETWEEN two received chunks, and the
+  /// shared 8s account budget would abort a turn whose first model token is
+  /// merely slow. The timeout is longer, never absent — a hung stream must
+  /// still fail, not hang forever.
+  Dio createTutorStreamClient({
+    required bool accountEnabled,
+    required AccessTokenReader readToken,
+    required SessionGenerationReader readSessionGeneration,
+    required UnauthorizedCallback onUnauthorized,
+  }) {
+    if (!accountEnabled) {
+      throw StateError('The tutor stream API is disabled for this build.');
+    }
+    final dio = _createDio(
+      authInterceptor: AuthInterceptor(
+        readToken: readToken,
+        readSessionGeneration: readSessionGeneration,
+        onUnauthorized: onUnauthorized,
+        logger: logger,
+      ),
+    );
+    dio.options.receiveTimeout = tutorStreamReceiveTimeout;
+    dio.options.headers['Accept'] = 'text/event-stream';
+    return dio;
+  }
+
   Dio _createDio({AuthInterceptor? authInterceptor}) {
     final dio = Dio(
       BaseOptions(
@@ -62,9 +103,18 @@ final class DioFactory {
         connectTimeout: connectTimeout,
         sendTimeout: sendTimeout,
         receiveTimeout: receiveTimeout,
-        // Error bodies are never consumed. Skipping their transformation keeps
-        // the HTTP status authoritative even if a proxy returns malformed JSON
-        // (notably, a 401 must still expire the authenticated session).
+        // Error bodies are not consumed by default. Skipping their
+        // transformation keeps the HTTP status authoritative even if a proxy
+        // returns malformed JSON (notably, a 401 must still expire the
+        // authenticated session), and keeps a body that may carry credentials
+        // out of memory.
+        //
+        // A single request may opt out per call: `ApiClient.getJson`'s
+        // `readsErrorDetail` sets `receiveDataWhenStatusError` AND
+        // `ResponseType.plain` on that one request, so its error body is
+        // readable while the transformer still never runs `jsonDecode` — a
+        // malformed body cannot become a transform exception that would
+        // strip the response, and its status, from the failure.
         receiveDataWhenStatusError: false,
         contentType: Headers.jsonContentType,
         headers: {

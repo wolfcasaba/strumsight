@@ -45,7 +45,14 @@ final class ProfileProjector {
         );
         crossedLevels.addAll(projection.crossedLevels);
       }
-      if (page.entries.isNotEmpty && page.nextCursor == cursor) {
+      // A terminal page reports `nextCursor: null` (the ledger contract,
+      // pinned by `reward_ledger_repository_test.dart` A7), and the first
+      // iteration starts from a `null` cursor — so `null == cursor` is the
+      // NORMAL shape of a ledger that fits on ONE page, not a stall (L539).
+      // Only a NON-NULL cursor that repeats itself means the pager cannot
+      // advance; the same guard as `AchievementEvaluator._buildReceiptIndex`
+      // and `rewardInboxItemsProvider`.
+      if (page.nextCursor != null && page.nextCursor == cursor) {
         throw StateError('ledger page cursor did not advance');
       }
       cursor = page.nextCursor;

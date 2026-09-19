@@ -306,6 +306,32 @@ final class HttpCommunityClubRepository implements CommunityClubRepository {
     };
   }
 
+  /// A klub tagsági listája — `GET /community/clubs/{id}/members` (javító
+  /// sáv R5, 2026-09-06).
+  ///
+  /// SZÁNDÉKOSAN nem része a `CommunityClubRepository` szerződésnek (a
+  /// `clubFeed` precedense): a szerződést hat teszt-fake valósítja meg, egy
+  /// új absztrakt metódus mindet eltörné. A végpont csak `page_size`-t
+  /// olvas, a `ClubMemberPage.next_cursor` ma mindig `null` — a lista
+  /// egyoldalas, a szerver a `CLUB_MEMBER_PAGE_SIZE_MAX`-ra vágja a
+  /// lapméretet. Egy nem tag a privát klub listájára 403/404-et kap — az
+  /// kivételként jön vissza, nem üres listaként (az üres lista azt
+  /// állítaná, hogy a klubnak nincs tagja).
+  Future<List<ClubMembership>> members({
+    required ContentId clubId,
+    required int pageSize,
+  }) async {
+    final result = await _client.getJson<List<ClubMembership>>(
+      '/community/clubs/${clubId.value}/members',
+      queryParameters: <String, Object?>{'page_size': pageSize},
+      decode: decodeClubMembershipPage,
+    );
+    return switch (result) {
+      Success(:final value) => value,
+      Failure(:final error) => throw error,
+    };
+  }
+
   @override
   Future<void> transferOwnership({
     required ContentId clubId,
@@ -408,6 +434,51 @@ CursorPage _clubPageCursor(Object? rawNextCursor) {
   throw const FormatException(
     'community club page wire: next_cursor must be a non-empty string or null',
   );
+}
+
+/// Egy `ClubMemberPage` boríték → a tagsági sorok listája.
+///
+/// Ismeretlen `role` sztring: a sor KIMARAD, nem `member`-re kerekül — egy
+/// jövőbeli, szűkebb jogú szerep tagként mutatása a szivárgás iránya
+/// (ugyanaz a döntés, mint a néző szerepénél, l. [_roleFromWire]).
+List<ClubMembership> decodeClubMembershipPage(Map<String, Object?> json) {
+  final rawItems = json['items'];
+  if (rawItems is! List) {
+    throw const FormatException(
+      'community club member page wire: items must be a list',
+    );
+  }
+  final members = <ClubMembership>[];
+  for (final raw in rawItems) {
+    if (raw is! Map<String, Object?>) {
+      throw const FormatException(
+        'community club member page wire: every item must be a JSON object',
+      );
+    }
+    final publicId = raw['public_id'];
+    final clubPublicId = raw['club_public_id'];
+    final profilePublicId = raw['profile_public_id'];
+    if (publicId is! String ||
+        clubPublicId is! String ||
+        profilePublicId is! String) {
+      throw const FormatException(
+        'community club member wire: public_id, club_public_id and '
+        'profile_public_id are required',
+      );
+    }
+    final role = _roleFromWire(raw['role']);
+    if (role == null) continue;
+    members.add(
+      ClubMembership(
+        memberPublicId: publicId,
+        clubId: ContentId(clubPublicId),
+        profilePublicId: PublicUserId(profilePublicId),
+        role: role,
+        joinedAt: _requiredTime(raw['joined_at'], 'joined_at'),
+      ),
+    );
+  }
+  return members;
 }
 
 /// A NÉZŐ szerepe a klubban — `null`, ha nem tag.

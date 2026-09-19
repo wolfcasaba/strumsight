@@ -23,9 +23,23 @@ abstract interface class FilePickerAdapter {
   Future<void> dispose();
 }
 
+/// Platform boundary for choosing a BACKING-AUDIO file.
+///
+/// Deliberately a separate port from [FilePickerAdapter] (javító sáv
+/// 2026-09-06, audit §5.2 "Hang-import folyamat"): the song-import flow must
+/// not accept audio — no importer can parse it — and the backing-track
+/// attachment must not accept notation. One picker with one accepted-type
+/// list can only be right for one of the two, which is why the shipped
+/// "Attach backing" button opened a notation-only picker and could never
+/// actually import a backing track.
+abstract interface class BackingAudioPickerAdapter {
+  Future<ImportSourceFile?> pickBackingAudioFile();
+}
+
 /// Production adapter. Platform picker objects are converted immediately to
 /// the reopenable [ImportSourceFile] contract and never reach widget state.
-final class PlatformFilePickerAdapter implements FilePickerAdapter {
+final class PlatformFilePickerAdapter
+    implements FilePickerAdapter, BackingAudioPickerAdapter {
   const PlatformFilePickerAdapter({this.limits = const ImportLimits()});
 
   /// The source budget this boundary enforces. Injected so the picker and the
@@ -130,6 +144,13 @@ final class PlatformFilePickerAdapter implements FilePickerAdapter {
     );
     return file == null ? null : await fromXFile(file, limits: audioLimits);
   }
+
+  /// [BackingAudioPickerAdapter] — the backing attachment offers exactly the
+  /// audio group [pickAudioFile] offers, and enforces the same audio budget.
+  /// The two ports stay separate so the NOTATION import can never be handed
+  /// an audio container (audit §5.2), but there is only one audio type list.
+  @override
+  Future<ImportSourceFile?> pickBackingAudioFile() => pickAudioFile();
 
   /// Converts the plugin value at the data boundary. A readable stream is a
   /// mandatory privacy-preserving contract: paths and plugin objects do not

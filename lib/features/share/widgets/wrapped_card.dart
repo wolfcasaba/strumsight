@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/design_system/public.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../l10n/app_localizations.dart';
 import '../model/weekly_recap.dart';
 
 /// The shareable 9:16 "Strum Wrapped" weekly recap card (chunk 017 rec #5).
@@ -23,6 +24,7 @@ class WrappedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final acc = recap.averageAccuracy;
     return SizedBox(
       width: width,
@@ -76,8 +78,8 @@ class WrappedCard extends StatelessWidget {
                 end: 0.4,
                 child: Column(
                   children: [
-                    const Text(
-                      'MY STRUM WEEK',
+                    Text(
+                      l10n.shareCardWrappedWeekLabel,
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 12,
@@ -116,7 +118,7 @@ class WrappedCard extends StatelessWidget {
                 start: 0.35,
                 end: 0.65,
                 child: Text(
-                  'MINUTES PLAYED',
+                  l10n.shareCardWrappedMinutesLabel,
                   style: TextStyle(
                     fontSize: 11,
                     letterSpacing: 1.5,
@@ -130,14 +132,30 @@ class WrappedCard extends StatelessWidget {
                 end: 0.8,
                 child: Row(
                   children: [
-                    Expanded(child: _chip('${recap.daysPracticed}/7', 'DAYS')),
+                    Expanded(
+                      child: _chip(
+                        '${recap.daysPracticed}/7',
+                        l10n.shareCardWrappedDaysLabel,
+                      ),
+                    ),
                     const SizedBox(width: 10),
-                    Expanded(child: _chip('${recap.strokes}', 'STRUMS')),
+                    Expanded(
+                      child: _chip(
+                        '${recap.strokes}',
+                        l10n.shareCardWrappedStrumsLabel,
+                      ),
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: acc == null
-                          ? _chip('${recap.sessions}', 'SESSIONS')
-                          : _chip('${(acc * 100).round()}%', '↓↑ ACCURACY'),
+                          ? _chip(
+                              '${recap.sessions}',
+                              l10n.shareCardWrappedSessionsLabel,
+                            )
+                          : _chip(
+                              '${(acc * 100).round()}%',
+                              l10n.shareCardWrappedAccuracyLabel,
+                            ),
                     ),
                   ],
                 ),

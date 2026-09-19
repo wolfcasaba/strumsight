@@ -209,6 +209,11 @@ void main() {
         containsAll(<String>[
           'DioFactory.createAccountClient',
           'DioFactory.createDiagnosticsClient',
+          // R9/2: the tutor's SSE client. Pinned here BECAUSE it returns a
+          // raw `Dio` rather than an `ApiClient` — the exact shape MINOR-2
+          // loosened this pattern to catch, so the pin proves the loosening
+          // still holds on a real method instead of a hypothetical one.
+          'DioFactory.createTutorStreamClient',
         ]),
       );
 
@@ -730,8 +735,12 @@ typedef DioProvider = Dio Function();
   });
 
   group('MINOR-4 — wired: false is checked in BOTH directions', () {
-    test('the real two wired:false routes (tutor_stream, community_media) '
-        'have no construction site anywhere else in lib/** today', () {
+    // R9/2: `tutor_stream` left this set — the tutor gateway selection now
+    // constructs `HttpTutorStreamTransport` in lib/**, so the route is
+    // `wired: true` and its construction site is legitimate. `community_media`
+    // is the one route still awaiting a caller; the assertion is unchanged.
+    test('the real wired:false route (community_media) has no construction '
+        'site anywhere else in lib/** today', () {
       final violations = checkWiredFalseConstructionSites(
         repositoryRoot: repository,
         inventory: realInventory(),

@@ -82,6 +82,11 @@ class TutorHomeScreen extends StatelessWidget {
                 key: const Key('tutorHomeStartCta'),
                 icon: Icons.chat,
                 label: l10n.aiTutorHomeStart,
+                // `push`, like the three side entries below (2026-09-07
+                // audit): `/tutor/chat` is a TOP-LEVEL route, so a `go`
+                // REPLACED the stack and the Chat's own back arrow (a bare
+                // `maybePop`) then had nothing to pop — a dead control on
+                // the only screen the tutor flow can be left from.
                 onPressed: () => context.push(AppRoutes.tutorChat),
               ),
               // A tutor három MELLÉK-képernyője (profil, adatvédelem,

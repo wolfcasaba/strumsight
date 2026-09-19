@@ -7,10 +7,11 @@ import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../features/practice/public.dart'
     show
-        PracticeDefinition,
+        PracticeCategory,
         PracticeDifficulty,
         nextPracticeRecommendationProvider,
         practiceCatalogProvider,
+        practiceCategoryLabel,
         practiceDefinitionDisplayTitle,
         practiceModeLabel,
         practiceNextReasonLabel;
@@ -46,8 +47,8 @@ import '../practice_area_hub_categories.dart';
 /// Styled with plain Material widgets + [AppColors] (matching
 /// `ProgressScreen`/the legacy `PracticeHubScreen`), not the
 /// `core/design_system` component library — see `today_hub_screen.dart`'s
-/// doc comment for why those widgets aren't safe under the app's current
-/// root theme.
+/// doc comment. The old "not safe under the app's root theme" reason is
+/// obsolete (R21, audit MI8); the migration itself is still open.
 class PracticeAreaHubScreen extends ConsumerWidget {
   const PracticeAreaHubScreen({super.key});
 
@@ -261,10 +262,19 @@ class PracticeAreaHubScreen extends ConsumerWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final category in _ChipCategory.values)
-                  _CategoryChip(
-                    category: category,
-                    definition: category.firstIn(catalog),
+                // R18 (audit B1) — MÉRT hiba: a csip EGYETLEN gyakorlatot
+                // nyitott (a kategória első találatát), a többi kilenc
+                // pedig a felületről elérhetetlen maradt; üres kategórián
+                // pedig letiltott vezérlő lett belőle. A csip mostantól a
+                // KATALÓGUST nyitja meg az adott célra szűrve — a
+                // `PracticeCategory.values` sorrendje szó szerint a
+                // korábbi felirat-lista sorrendje, és a feliratok ugyanazok
+                // az ARB-kulcsok, tehát a rajzolat változatlan.
+                for (final category in PracticeCategory.values)
+                  ActionChip(
+                    key: ValueKey('practice-hub-category-${category.code}'),
+                    label: Text(practiceCategoryLabel(l10n, category)),
+                    onPressed: () => _openCatalog(context, category: category),
                   ),
               ],
             ),
@@ -273,7 +283,10 @@ class PracticeAreaHubScreen extends ConsumerWidget {
               const SizedBox(height: 16),
               Text(
                 _categoryLabel(l10n, category),
-                key: ValueKey('practice-hub-category-${category.name}'),
+                // `practice-hub-group-*`, NOT `practice-hub-category-*`:
+                // that prefix belongs to the goal CHIPS above (R18), and two
+                // widgets under one key make every `find.byKey` ambiguous.
+                key: ValueKey('practice-hub-group-${category.name}'),
                 style: Theme.of(context).textTheme.labelLarge,
               ),
               const SizedBox(height: 8),
@@ -297,6 +310,47 @@ class PracticeAreaHubScreen extends ConsumerWidget {
                 const SizedBox(height: 8),
               ],
             ],
+            // R18 (audit B2/B3/B4) — a katalógus, az elemzés és a leckék
+            // belépési pontjai. MIÉRT ITT, a lista VÉGÉN: a képernyő
+            // pixelre rögzített golden-teszttel bír
+            // (`e13_r17_practice_area_hub_compact*.png`), amit ezen a boxon
+            // nem lehet újra felvenni; a látható területen bármi máshová
+            // tett vezérlő elmozdítaná a rajzolatot. A lista aljára fűzött
+            // szakasz a golden nézetablakán KÍVÜL kezdődik, tehát a mérce
+            // változatlan marad, a három cél viszont elérhetővé válik.
+            const SizedBox(height: 24),
+            Semantics(
+              header: true,
+              child: Text(
+                l10n.practiceAreaHubMoreHeading,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _QuickTool(
+                  key: const ValueKey('practice-hub-all-practices'),
+                  icon: Icons.list_alt,
+                  label: l10n.practiceAreaHubAllPractices,
+                  onPressed: () => _openCatalog(context),
+                ),
+                _QuickTool(
+                  key: const ValueKey('practice-hub-analyze'),
+                  icon: Icons.multitrack_audio_outlined,
+                  label: l10n.navAnalyze,
+                  onPressed: () => context.push(AppRoutes.practiceAnalyze),
+                ),
+                _QuickTool(
+                  key: const ValueKey('practice-hub-learn'),
+                  icon: Icons.school_outlined,
+                  label: l10n.navLearn,
+                  onPressed: () => context.push(AppRoutes.practiceLearn),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -333,6 +387,20 @@ class PracticeAreaHubScreen extends ConsumerWidget {
       l10n.practiceAreaHubDifficultyIntermediate,
     PracticeDifficulty.advanced => l10n.practiceAreaHubDifficultyAdvanced,
   };
+
+  /// Opens the full practice catalog list, optionally narrowed to one goal
+  /// [category]. `push`, not `go`: the catalog is a top-level route (not a
+  /// shell branch), so `go` would replace the shell stack and leave the user
+  /// with no way back to the hub.
+  void _openCatalog(BuildContext context, {PracticeCategory? category}) {
+    final uri = Uri(
+      path: AppRoutes.practiceCatalog,
+      queryParameters: category == null
+          ? null
+          : <String, String>{'category': category.code},
+    );
+    context.push(uri.toString());
+  }
 }
 
 /// A single-tap quick tool: icon + label, text-button weight so it never
@@ -389,44 +457,6 @@ class _QuickTool extends StatelessWidget {
 /// [scales] matches no shipped definition - the catalog has no scale
 /// content. That is expressed as an empty match (the chip renders disabled),
 /// never as a navigation to `/practice/setup` without an id.
-enum _ChipCategory {
-  warmup(['downstrokes']),
-  chords(['chordChanges', 'chordProgression']),
-  rhythm(['rhythm', 'rhythmOnly', 'eighthNotes', 'quarterNotes']),
-  scales(['scales']),
-  technique(['offBeat', 'syncopation', 'upstrokes', 'freePlay']);
-
-  const _ChipCategory(this.skillTags);
-
-  /// The `PracticeDefinition.skillTags` values that place a definition in
-  /// this category, most characteristic first - the order [firstIn] resolves
-  /// in.
-  final List<String> skillTags;
-
-  String label(AppLocalizations l10n) => switch (this) {
-    _ChipCategory.warmup => l10n.practiceAreaHubCategoryWarmup,
-    _ChipCategory.chords => l10n.practiceAreaHubCategoryChords,
-    _ChipCategory.rhythm => l10n.practiceAreaHubCategoryRhythm,
-    _ChipCategory.scales => l10n.practiceAreaHubCategoryScales,
-    _ChipCategory.technique => l10n.practiceAreaHubCategoryTechnique,
-  };
-
-  /// The definition this category's chip opens: the first catalog entry
-  /// carrying this category's most characteristic tag, falling back to its
-  /// less specific tags in [skillTags] order, or `null` when no entry carries
-  /// any of them.
-  ///
-  /// Ties within one tag are broken by the catalog's own declaration order,
-  /// which is part of the catalog contract.
-  PracticeDefinition? firstIn(List<PracticeDefinition> catalog) {
-    for (final tag in skillTags) {
-      for (final definition in catalog) {
-        if (definition.skillTags.contains(tag)) return definition;
-      }
-    }
-    return null;
-  }
-}
 
 /// One goal category chip.
 ///
@@ -438,35 +468,3 @@ enum _ChipCategory {
 /// both a [Tooltip] (long-press / hover, sighted users) and a semantics hint
 /// merged into the chip's own node, so TalkBack/VoiceOver announce the label
 /// and the reason together instead of an unexplained disabled control.
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({required this.category, required this.definition});
-
-  final _ChipCategory category;
-  final PracticeDefinition? definition;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final target = definition;
-    final chip = ActionChip(
-      label: Text(category.label(l10n)),
-      onPressed: target == null
-          ? null
-          : () => PracticeAreaHubScreen.openSetup(
-              context,
-              definitionId: target.id,
-            ),
-    );
-    if (target != null) return chip;
-
-    return Tooltip(
-      message: l10n.practiceAreaHubCategoryComingSoonTooltip,
-      child: MergeSemantics(
-        child: Semantics(
-          hint: l10n.practiceAreaHubCategoryComingSoonHint,
-          child: chip,
-        ),
-      ),
-    );
-  }
-}

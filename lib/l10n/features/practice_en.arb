@@ -1,0 +1,7 @@
+{
+  "@@locale": "en",
+  "practiceCatalogCategoryEmpty": "No built-in exercises carry this goal yet.",
+  "@practiceCatalogCategoryEmpty": {
+    "description": "Shown on the catalog listing when a goal-category chip resolves to no built-in definition. Distinct from the whole-catalog empty copy: the catalog is NOT empty, only this goal has no content. R34 (audit MI-B)."
+  }
+}

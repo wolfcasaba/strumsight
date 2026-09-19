@@ -76,9 +76,18 @@ final analysisControllerProvider =
 ///
 /// `autoDispose` so a fresh visit re-reads the index; a completed capture
 /// invalidates it explicitly ([AnalysisCaptureFlow]) because the home stays
-/// mounted underneath the pushed capture routes. A repository failure is
-/// logged and rendered as an empty list — the home screen has no error slot,
-/// and throwing here would only trigger Riverpod's provider-retry timers.
+/// mounted underneath the pushed capture routes.
+///
+/// R18 (audit M6) — a read FAILURE is not an empty list. Flattening it to
+/// `const []` made the home screen say "no earlier analyses", which is a
+/// claim the app could not have measured; the route renders the three async
+/// states as three different frames instead. The failure is still logged.
+///
+/// `retry: (_, _) => null` — Riverpod 3 retries a throwing `FutureProvider`
+/// by itself, with growing back-off, so a failing index read would restart
+/// forever and no widget test could ever `pumpAndSettle` on the error frame.
+/// The user's retry is the visible one: the route's error frame invalidates
+/// this provider.
 final recentAnalysesProvider =
     FutureProvider.autoDispose<List<AnalysisSummary>>((ref) async {
       final result = await ref.watch(analysisRepositoryProvider).list();
@@ -93,9 +102,9 @@ final recentAnalysesProvider =
                 error: error,
                 fields: <String, Object?>{'code': error.code},
               );
-          return const <AnalysisSummary>[];
+          throw error;
       }
-    });
+    }, retry: (_, _) => null);
 
 /// The capture → analysis hand-off, composed from the feature's real
 /// providers. The route builders call it; the screens never see it.
@@ -165,6 +174,27 @@ final class AnalysisCaptureFlow {
         final seed = buildCaptureSeedDocument(
           run: run,
           sampleCount: value.input.samples.length,
+          appVersion: _appVersion,
+        );
+        await _controller.analyze(seed, audio: value);
+        await _persistResult();
+    }
+  }
+
+  /// R26 (audit MI4) — an IMPORTED file starts the IDENTICAL run a
+  /// microphone capture starts: same validator, same controller, same
+  /// persistence. Only the seed differs, because the document has to say
+  /// honestly where the samples came from ([AnalysisInputSource.importedFile],
+  /// [AnalysisMode.importedRecording]).
+  Future<void> analyzeImportedFile(PcmAnalysisInput audio) async {
+    final validated = _validator.validate(audio);
+    switch (validated) {
+      case Failure<ValidatedPcmAnalysisInput>(:final error):
+        _controller.inputError(error);
+      case Success<ValidatedPcmAnalysisInput>(:final value):
+        final seed = buildImportSeedDocument(
+          audio: value.input,
+          createdAt: DateTime.now().toUtc(),
           appVersion: _appVersion,
         );
         await _controller.analyze(seed, audio: value);
@@ -288,6 +318,69 @@ AnalysisDocument buildCaptureSeedDocument({
     warnings: const <AnalysisWarning>[],
     // A seed carries no result yet; `cancelled` is the one status that can
     // never be mistaken for a finished analysis if it leaked past the runner.
+    completion: AnalysisCompletion(status: AnalysisCompletionStatus.cancelled),
+  );
+}
+
+/// The document seed for one IMPORTED file (R26, audit MI4).
+///
+/// Mirrors [buildCaptureSeedDocument] field for field; the two differences
+/// are the ones the user can see later in the saved document: the input
+/// source is the imported file, and the mode is
+/// [AnalysisMode.importedRecording]. The file NAME is deliberately absent —
+/// the index is not covered by the export allowlist that keeps
+/// `input.sourceName` out of a shared export.
+AnalysisDocument buildImportSeedDocument({
+  required PcmAnalysisInput audio,
+  required DateTime createdAt,
+  required String appVersion,
+}) {
+  final seedId = 'seed-import-${createdAt.microsecondsSinceEpoch}';
+  final duration = Duration(
+    microseconds:
+        audio.samples.length *
+        Duration.microsecondsPerSecond ~/
+        audio.sampleRate,
+  );
+  return AnalysisDocument(
+    id: seedId,
+    schemaVersion: analysisDocumentSchemaVersion,
+    createdAt: createdAt.toUtc(),
+    mode: AnalysisMode.importedRecording,
+    input: AnalysisInputSummary(
+      source: AnalysisInputSource.importedFile,
+      duration: duration,
+      sampleRate: audio.sampleRate,
+      channelCount: audio.channelCount,
+      fingerprint: seedId,
+    ),
+    provenance: AnalysisProvenance(
+      appVersion: appVersion,
+      analyzerVersion: 'seed',
+      pipelineVersion: 'seed',
+      stageVersions: const <String, String>{},
+      dspConfigHash: 'seed',
+      modelManifestIds: const <String>[],
+      inputFingerprint: seedId,
+      platform: 'seed',
+      featureFlagSnapshot: const <String, bool>{},
+    ),
+    signalQuality: SignalQualityReport(
+      overall: 0,
+      peakDbfs: 0,
+      rmsDbfs: 0,
+      noiseFloorDbfs: 0,
+      clippedSampleRatio: 0,
+      silentRatio: 0,
+      tonalness: 0,
+      measured: false,
+    ),
+    capabilities: const <CapabilityReport>[],
+    timeline: AnalysisTimeline(duration: duration),
+    metrics: const <AnalysisMetricResult>[],
+    hotspots: const <AnalysisHotspot>[],
+    insights: const <AnalysisInsight>[],
+    warnings: const <AnalysisWarning>[],
     completion: AnalysisCompletion(status: AnalysisCompletionStatus.cancelled),
   );
 }

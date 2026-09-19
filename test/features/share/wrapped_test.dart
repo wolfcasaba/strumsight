@@ -4,6 +4,8 @@ import 'package:strumsight/features/progress/model/practice_entry.dart';
 import 'package:strumsight/features/share/model/weekly_recap.dart';
 import 'package:strumsight/features/share/share_content.dart';
 import 'package:strumsight/features/share/widgets/wrapped_card.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 
 /// Round 151 — "Strum Wrapped" weekly recap (chunk 017 rec #5: the
 /// Wrapped-style recap is the category's strongest install hook).
@@ -15,6 +17,29 @@ PracticeEntry _e(int day, int seconds, {int strokes = 0, double? accuracy}) =>
       strokes: strokes,
       directionAccuracy: accuracy,
     );
+
+/// MI-H (E09, R-handoff) — pump the recap card under a localized MaterialApp
+/// so `AppLocalizations.of(context)` resolves the `shareCard*` keys added to
+/// `community_{en,hu}.arb`. The original tests pumped under a bare
+/// `MaterialApp` and asserted on English literals directly.
+Future<void> _pumpWrapped(
+  WidgetTester tester, {
+  required WeeklyRecap recap,
+  required String weekLabel,
+  Locale locale = const Locale('en'),
+}) => tester.pumpWidget(
+  MaterialApp(
+    theme: SsLightTheme.data(),
+    locale: locale,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: Scaffold(
+      body: Center(
+        child: WrappedCard(recap: recap, weekLabel: weekLabel),
+      ),
+    ),
+  ),
+);
 
 void main() {
   group('WeeklyRecap.fromEntries', () {
@@ -85,13 +110,7 @@ void main() {
       averageAccuracy: 1.0,
       streak: 365,
     );
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: WrappedCard(recap: recap, weekLabel: 'Jul 6 – Jul 12'),
-        ),
-      ),
-    );
+    await _pumpWrapped(tester, recap: recap, weekLabel: 'Jul 6 – Jul 12');
     // Overflow paints throw in tests — reaching here green IS the assert.
     expect(find.text('2100'), findsOneWidget);
     expect(find.text('25000'), findsOneWidget);
@@ -108,18 +127,41 @@ void main() {
       averageAccuracy: 0.87,
       streak: 6,
     );
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: WrappedCard(recap: recap, weekLabel: 'Jul 6 – Jul 12'),
-        ),
-      ),
-    );
+    await _pumpWrapped(tester, recap: recap, weekLabel: 'Jul 6 – Jul 12');
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
     expect(find.text('42'), findsOneWidget);
     expect(find.text('5/7'), findsOneWidget);
     expect(find.text('980'), findsOneWidget);
     expect(find.text('87%'), findsOneWidget);
-    expect(find.textContaining('6-day streak'), findsOneWidget);
+    // Streak line now resolves through l10n (MI-H) — the placeholder ICU
+    // pattern produces `6-day streak` for `en` and `6 napos sorozat` for `hu`.
+    expect(find.text(l10n.shareCardWrappedStreakLine(6)), findsOneWidget);
     expect(find.text('Jul 6 – Jul 12'), findsOneWidget);
   });
+
+  // MI-H — en and hu both render through `AppLocalizations.of(context)` and
+  // the rendered streak text must differ between locales (regression guard
+  // for the parity rule in `test/l10n/arb_parity_test.dart`).
+  for (final locale in [const Locale('en'), const Locale('hu')]) {
+    testWidgets('MI-H: WrappedCard streak line resolves through l10n '
+        '(${locale.languageCode})', (tester) async {
+      const recap = WeeklyRecap(
+        minutes: 42,
+        sessions: 9,
+        strokes: 980,
+        daysPracticed: 5,
+        bestDay: 100,
+        averageAccuracy: 0.87,
+        streak: 6,
+      );
+      await _pumpWrapped(
+        tester,
+        recap: recap,
+        weekLabel: 'Jul 6 – Jul 12',
+        locale: locale,
+      );
+      final l10n = await AppLocalizations.delegate.load(locale);
+      expect(find.text(l10n.shareCardWrappedStreakLine(6)), findsOneWidget);
+    });
+  }
 }

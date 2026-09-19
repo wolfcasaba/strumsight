@@ -441,7 +441,39 @@ Map<String, Object?> _composerArtifactFixture() {
 }
 
 Widget _composerScreen() => const PostComposerScreen();
+
+/// R21 (audit MI5) gated the composer's stub "Attach media" button behind
+/// `communityMediaEnabled`, which the default test `appConfigProvider`
+/// resolves to `false` (it is define-only in EVERY environment —
+/// `feature_flags.dart`). The composer PNGs were recorded WITH that button,
+/// so this override pins the flag ON and keeps the pixels byte-identical
+/// without a re-record (which needs the x86 box — ADR 0471 D6). The same
+/// manoeuvre as the R20 `pinnedLocales` map below.
+///
+/// DEBT: what these two PNGs pin is therefore a configuration no shipped
+/// build has. Both flag states are covered by
+/// `test/features/community/composer_audience_test.dart` (the MI5 group);
+/// when the goldens are next re-recorded on the x86 box this override
+/// should be dropped so the pins follow the shipped build again.
 List<Override> _composerOverrides() => [
+  appConfigProvider.overrideWithValue(
+    const AppConfig(
+      environment: AppEnvironment.development,
+      apiBaseUrl: AppConfig.devApiBaseUrl,
+      // The composer reads exactly ONE flag (`communityMediaEnabled`);
+      // the rest mirror the default test `appConfigProvider`, so nothing
+      // else about the cell moves.
+      flags: FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+        communityMediaEnabled: true,
+      ),
+      diagnosticsToken: AppConfig.devDiagnosticsToken,
+      buildMode: 'test',
+      appVersion: 'test',
+    ),
+  ),
   communityKeyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
   communityLoggerProvider.overrideWithValue(const NoopAppLogger()),
   communityPostRepositoryProvider.overrideWithValue(
@@ -556,6 +588,7 @@ Future<void> _pump(
   Widget home,
   List<Override> overrides, {
   double textScale = 1.0,
+  Locale locale = const Locale('en'),
 }) async {
   tester.view.physicalSize = _compactPortrait;
   tester.view.devicePixelRatio = 1.0;
@@ -569,7 +602,7 @@ Future<void> _pump(
         theme: AppTheme.dark(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        locale: const Locale('en'),
+        locale: locale,
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(
             context,
@@ -602,6 +635,13 @@ void main() {
     'comments': (_commentsScreen, _commentsOverrides),
   };
 
+  // The composer PNGs were recorded while the screen still carried its
+  // Hungarian literals, so what they pin IS the Hungarian rendering. R20
+  // lifted those literals into ARB keys whose hu values are byte-identical
+  // to them; pumping the composer in hu keeps the pins honest without a
+  // re-record (which needs the x86 box — ADR 0471 D6).
+  const pinnedLocales = <String, Locale>{'composer': Locale('hu')};
+
   for (final textScale in [1.0, 2.0]) {
     final suffix = textScale == 1.0 ? 'compact' : 'compact_scale2';
 
@@ -613,6 +653,7 @@ void main() {
           widgetBuilder(),
           overridesBuilder(),
           textScale: textScale,
+          locale: pinnedLocales[entry.key] ?? const Locale('en'),
         );
         await _expectGolden(tester, 'e13_r33_${entry.key}_$suffix');
       });

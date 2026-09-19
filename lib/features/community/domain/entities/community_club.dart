@@ -196,3 +196,38 @@ bool _sameList(List<String> a, List<String> b) {
   }
   return true;
 }
+
+/// One row of a club's roster — the server's `ClubMemberOut`
+/// (`backend/app/community/schemas/club.py`) one-for-one (javító sáv R5,
+/// 2026-09-06). `memberPublicId` is the membership row's own public id,
+/// `profilePublicId` the member's profile — the two are different
+/// identities on the wire and stay different here.
+final class ClubMembership {
+  const ClubMembership({
+    required this.memberPublicId,
+    required this.clubId,
+    required this.profilePublicId,
+    required this.role,
+    required this.joinedAt,
+  });
+
+  final String memberPublicId;
+  final ContentId clubId;
+  final PublicUserId profilePublicId;
+  final ClubRole role;
+  final DateTime joinedAt;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ClubMembership &&
+          other.memberPublicId == memberPublicId &&
+          other.clubId == clubId &&
+          other.profilePublicId == profilePublicId &&
+          other.role == role &&
+          other.joinedAt == joinedAt);
+
+  @override
+  int get hashCode =>
+      Object.hash(memberPublicId, clubId, profilePublicId, role, joinedAt);
+}

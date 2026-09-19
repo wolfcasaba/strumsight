@@ -263,6 +263,10 @@
     }
   },
   "questExpiredBadge": "Lejárt",
+  "questArchivedBadge": "Archiválva",
+  "@questArchivedBadge": {
+    "description": "Semantic label (a11y) for the archived-state icon badge on a quest card."
+  },
   "questUnavailableBadge": "A tartalom nincs telepítve",
   "questUnavailableBody": "Ehhez a küldetéshez tartozó tartalom még nincs telepítve ezen az eszközön.",
   "questExpiryToday": "Éjfélig elérhető",
@@ -588,5 +592,13 @@
   "masteryRhythmAccuracyTitle": "Ritmuspontosság",
   "masteryRhythmAccuracyDescription": "Egyenletes pengetés, pontosan az ütemre.",
   "masteryStrumConsistencyTitle": "Pengetésirány-stabilitás",
-  "masteryStrumConsistencyDescription": "Megbízható le/fel pengetésirány minden mintában."
+  "masteryStrumConsistencyDescription": "Megbízható le/fel pengetésirány minden mintában.",
+  "rewardSummaryDismiss": "Bezárás",
+  "@rewardSummaryDismiss": {},
+  "rewardSummaryEventXp": "{xp} XP",
+  "@rewardSummaryEventXp": {
+    "placeholders": {
+      "xp": {"type": "int"}
+    }
+  }
 }

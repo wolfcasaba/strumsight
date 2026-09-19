@@ -17,10 +17,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/core/design_system/components/ai/ss_provenance_badge.dart';
 import 'package:strumsight/core/design_system/components/feedback/ss_skeleton.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
@@ -208,6 +210,62 @@ Future<ProviderContainer> _pump(
   await tester.pump();
   return container;
 }
+
+/// The Chat under a MINIMAL go_router, so the back button's real target —
+/// and, since E-R29a, the consent banner's — can be measured.
+/// `/tutor/home`, `/tutor/profile` and `/tutor/privacy` are `STUB <path>`
+/// pages: these cells measure the NAVIGATION, not those screens.
+Future<GoRouter> _pumpRouted(
+  WidgetTester tester, {
+  required String initialLocation,
+  bool pushChat = false,
+  List<TutorBannerKind> banners = const <TutorBannerKind>[],
+}) async {
+  final fake = _FakeController(banners: banners);
+  addTearDown(fake.close);
+  final container = ProviderContainer(
+    overrides: [
+      ...preferenceOverrides(),
+      appConfigProvider.overrideWithValue(_config()),
+      tutorChatControllerProvider.overrideWithValue(fake),
+    ],
+  );
+  addTearDown(container.dispose);
+
+  final router = GoRouter(
+    initialLocation: initialLocation,
+    routes: <RouteBase>[
+      GoRoute(
+        path: AppRoutes.tutorChat,
+        builder: (_, _) => const TutorChatScreen(),
+      ),
+      GoRoute(path: AppRoutes.tutorHome, builder: _stub),
+      GoRoute(path: AppRoutes.tutorProfile, builder: _stub),
+      GoRoute(path: AppRoutes.tutorPrivacy, builder: _stub),
+    ],
+  );
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp.router(
+        theme: SsLightTheme.data(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        routerConfig: router,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  if (pushChat) {
+    router.push(AppRoutes.tutorChat);
+    await tester.pumpAndSettle();
+  }
+  expect(find.byType(TutorChatScreen), findsOneWidget);
+  return router;
+}
+
+Widget _stub(BuildContext _, GoRouterState state) =>
+    Scaffold(body: Text('STUB ${state.uri.path}'));
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -559,4 +617,114 @@ void main() {
       },
     );
   }
+
+  // -----------------------------------------------------------------
+  // R17 (2026-09-07 audit) — the back arrow always leads somewhere.
+  //
+  // MÉRT hiba: a gomb csupasz `Navigator.of(context).maybePop()` volt.
+  // A Tutor Home `context.go`-val nyitotta a Chatet (TOP-LEVEL útvonal,
+  // tehát a stack egyelemű lett), és ott a `maybePop` NÉMÁN nem csinál
+  // semmit — a vissza-nyíl halott vezérlő. A mély-linkelt `/tutor/chat`
+  // ugyanígy csapda.
+  // -----------------------------------------------------------------
+  group('R17 — the Chat back button', () {
+    testWidgets('a lone Chat page falls back to the Home', (tester) async {
+      final router = await _pumpRouted(
+        tester,
+        initialLocation: AppRoutes.tutorChat,
+      );
+      expect(router.canPop(), isFalse);
+
+      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(router.state.uri.path, AppRoutes.tutorHome);
+      expect(find.byType(TutorChatScreen), findsNothing);
+    });
+
+    testWidgets('a PUSHED Chat pops back to its opener', (tester) async {
+      final router = await _pumpRouted(
+        tester,
+        initialLocation: AppRoutes.tutorProfile,
+        pushChat: true,
+      );
+      expect(router.canPop(), isTrue);
+
+      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // `/tutor/profile`, not the Home — the fallback stayed out of the
+      // way where there genuinely was something to pop.
+      expect(router.state.uri.path, AppRoutes.tutorProfile);
+      expect(find.byType(TutorChatScreen), findsNothing);
+    });
+  });
+
+  // -----------------------------------------------------------------
+  // E-R29a (2026-09-08 re-audit, MAJOR M3) — the consent banner's CTA.
+  //
+  // MEASURED failure: `TutorBanner` renders a "Grant consent" button for
+  // `TutorBannerKind.consent`, but the chat screen only ever passed
+  // `onRetry`. `onConsent` stayed null, so the `TextButton` was built with
+  // a null `onPressed` — permanently disabled, on the exact screen where
+  // the student is told their consent is missing.
+  // -----------------------------------------------------------------
+  group('E-R29a — the consent banner CTA', () {
+    testWidgets('is enabled and opens the privacy (consent) screen', (
+      tester,
+    ) async {
+      final router = await _pumpRouted(
+        tester,
+        initialLocation: AppRoutes.tutorChat,
+        banners: const <TutorBannerKind>[TutorBannerKind.consent],
+      );
+
+      final cta = find.widgetWithText(
+        TextButton,
+        l10nEn().aiTutorBannerConsentAction,
+      );
+      expect(cta, findsOneWidget);
+      expect(
+        tester.widget<TextButton>(cta).onPressed,
+        isNotNull,
+        reason: 'a disabled consent CTA is the whole of MAJOR M3',
+      );
+
+      await tester.tap(cta);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(router.state.uri.path, AppRoutes.tutorPrivacy);
+      expect(
+        router.canPop(),
+        isTrue,
+        reason:
+            'push, not go — the student returns to the conversation they '
+            'were already in',
+      );
+    });
+
+    // The banner must not grant consent by itself (ADR 0132 §1/§3): it
+    // routes to the axis switch and stops there.
+    testWidgets('the error banner keeps its own, separate Retry action', (
+      tester,
+    ) async {
+      await _pumpRouted(
+        tester,
+        initialLocation: AppRoutes.tutorChat,
+        banners: const <TutorBannerKind>[TutorBannerKind.error],
+      );
+
+      expect(
+        find.widgetWithText(TextButton, l10nEn().aiTutorChatRetry),
+        findsOneWidget,
+      );
+      expect(
+        find.widgetWithText(TextButton, l10nEn().aiTutorBannerConsentAction),
+        findsNothing,
+      );
+    });
+  });
 }

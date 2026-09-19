@@ -341,6 +341,215 @@ _NOT_EXERCISED: dict[tuple[str, str], str] = {
         "a deploy switch this bring-up chain does not assume; GET "
         "/community/notifications/preferences already proves the read shape"
     ),
+    # Javító sáv 2026-09-06 R5 — the three client call sites wired that
+    # round (`docs/ui/apk-functionality-audit-2026-09-06.md` §5).
+    ("GET", "/community/bookmarks"): (
+        "a fresh account has nothing bookmarked, and no post to bookmark "
+        "exists without a second account's content; GET /community/blocked "
+        "and GET /community/muted already prove the authenticated list-read "
+        "shape"
+    ),
+    ("GET", "/community/clubs/{public_id}/members"): (
+        "requires an existing club id; no club-creation step is part of the "
+        "single-account bring-up chain"
+    ),
+    ("GET", "/community/profiles/{public_id}"): (
+        "the by-id read is the followers/following list's row lookup for a "
+        "SECOND account's profile; GET /community/profiles/me already proves "
+        "this device's authenticated profile read"
+    ),
+    # Javító sáv 2026-09-06 R11 — the two client call sites wired that round
+    # (`docs/ui/apk-functionality-audit-2026-09-06.md` §5.2: club posts and
+    # the profilePosts endpoint).
+    ("POST", "/community/posts"): (
+        "publishing a post writes durable, user-visible content into the "
+        "target deploy's community feed; a bring-up probe must not leave "
+        "content behind, and this chain has no delete-back step to undo it"
+    ),
+    ("GET", "/community/profiles/{public_id}/posts"): (
+        "meaningful only against a SECOND account's profile (the caller's "
+        "own posts are read through the same route with the owner "
+        "short-circuit, and a fresh account has none); GET "
+        "/community/profiles/me already proves this device's authenticated "
+        "community read access"
+    ),
+    # Javito sav 2026-09-06 R14 — the club feed/pinned call sites measured by
+    # R11 (`docs/ui/apk-functionality-audit-2026-09-06.md` §5.2), missing from
+    # the contract until this round.
+    ("GET", "/community/clubs/{public_id}/pinned"): (
+        "requires an existing club id; no club-creation step is part of the "
+        "single-account bring-up chain (same reason as GET "
+        "/community/clubs/{public_id}/members)"
+    ),
+    ("GET", "/community/clubs/{public_id}/feed"): (
+        "requires an existing club id; no club-creation step is part of the "
+        "single-account bring-up chain (same reason as GET "
+        "/community/clubs/{public_id}/members)"
+    ),
+    # Javito sav 2026-09-08 R27 — the community media surface. All three
+    # are `mounted` in the contract (the parity test builds the app with
+    # every optional flag on), but none can join a bring-up chain:
+    ("POST", "/community/media"): (
+        "the only multipart request in the tree, and it WRITES durable user "
+        "content the chain has no delete-back step for (the POST "
+        "/community/posts rule); it is also the one endpoint whose success "
+        "depends on infrastructure OUTSIDE the app — with the fail-closed "
+        "default STRUMSIGHT_MEDIA_SCANNER=disabled every upload is answered "
+        "201 `rejected`, so a chain step here would be red on a healthy "
+        "target that simply has not stood up clamd"
+    ),
+    ("GET", "/community/media/{public_id}"): (
+        "requires a media public_id this single-account chain has no way to "
+        "create (see POST /community/media), and its success body is bytes "
+        "rather than JSON — the duck-typed request/response client this tool "
+        "shares with production_smoke.py has no byte-body support"
+    ),
+    ("DELETE", "/community/media/{public_id}"): (
+        "requires a media public_id this single-account chain has no way to "
+        "create (see POST /community/media)"
+    ),
+    # Javito sav 2026-09-07 R16 — the 26 measured client call sites R14
+    # reported as still missing from the contract. Re-measured against `lib/**`
+    # that round; every one of them is present in the live OpenAPI schema, so
+    # each needs a classification here or `classify_contract()` fails closed.
+    #
+    # Three reason families cover all 26:
+    #   (a) the clubs surface is flag-gated (STRUMSIGHT_COMMUNITY_CLUBS_ENABLED)
+    #       and may legitimately be unmounted on a target whose account chain is
+    #       healthy — a flag-dependent step cannot be allowed to halt the chain
+    #       (ADR 0503 D2);
+    #   (b) the endpoint needs an id (club, post, comment, notification) this
+    #       single-account chain has no way to create;
+    #   (c) the endpoint WRITES durable, user-visible content and the chain has
+    #       no delete-back step to undo it (the POST /community/posts rule).
+    ("GET", "/community/feed"): (
+        "the following-feed of a fresh account with no follow edges is "
+        "degenerate (an empty page); a non-degenerate result needs a second "
+        "account's posts, and GET /community/blocked and GET /community/muted "
+        "already prove the authenticated list-read shape"
+    ),
+    ("GET", "/community/clubs"): (
+        "the clubs surface is gated by STRUMSIGHT_COMMUNITY_CLUBS_ENABLED and "
+        "may legitimately be unmounted (404) on a deploy whose account and "
+        "profile chain is healthy; a flag-dependent step must not halt the "
+        "chain (ADR 0503 D2)"
+    ),
+    ("POST", "/community/clubs"): (
+        "creating a club writes durable, user-visible state into the target "
+        "deploy's community surface and this chain has no delete-back step to "
+        "undo it (same rule as POST /community/posts); the clubs surface is "
+        "flag-gated on top of that"
+    ),
+    ("GET", "/community/clubs/{public_id}"): (
+        "requires an existing club id; no club-creation step is part of the "
+        "single-account bring-up chain (same reason as GET "
+        "/community/clubs/{public_id}/members)"
+    ),
+    ("PATCH", "/community/clubs/{public_id}"): (
+        "requires an existing club id AND mutates another owner's club "
+        "metadata; a bring-up probe must not edit content it did not create"
+    ),
+    ("POST", "/community/clubs/{public_id}/join"): (
+        "requires an existing club id, and a join request leaves durable "
+        "membership state (or a pending request an owner has to triage) behind "
+        "on the target deploy"
+    ),
+    ("POST", "/community/clubs/{public_id}/leave"): (
+        "requires an existing membership, which itself requires the join "
+        "endpoint above"
+    ),
+    ("POST", "/community/clubs/{public_id}/invites"): (
+        "requires an existing club the caller may administer AND a second "
+        "account to invite; the single-account chain has neither"
+    ),
+    ("POST", "/community/clubs/{public_id}/owner"): (
+        "transfers ownership to a SECOND account — irreversible from the "
+        "caller's side and impossible with one account"
+    ),
+    ("DELETE", "/community/clubs/{public_id}/members/{target_public_id}"): (
+        "requires an existing club with a second account as a member to "
+        "remove; the single-account chain has none"
+    ),
+    ("GET", "/community/posts/{public_id}"): (
+        "requires an existing post id; the chain publishes none (POST "
+        "/community/posts is itself out of scope precisely so the probe leaves "
+        "no content behind)"
+    ),
+    ("PATCH", "/community/posts/{public_id}"): (
+        "requires a post the caller authored; see GET "
+        "/community/posts/{public_id} — this chain creates none"
+    ),
+    ("DELETE", "/community/posts/{public_id}"): (
+        "requires a post the caller authored; see GET "
+        "/community/posts/{public_id} — this chain creates none"
+    ),
+    ("PUT", "/community/posts/{post_public_id}/reaction"): (
+        "requires an existing, visible post id; a fresh single account can see "
+        "none, and reacting writes durable state onto another author's content"
+    ),
+    ("DELETE", "/community/posts/{post_public_id}/reaction"): (
+        "requires an existing reaction from the endpoint above"
+    ),
+    ("GET", "/community/posts/{post_public_id}/comments"): (
+        "requires an existing, visible post id; see PUT "
+        "/community/posts/{post_public_id}/reaction"
+    ),
+    ("POST", "/community/posts/{post_public_id}/comments"): (
+        "requires an existing, visible post id, and publishing a comment "
+        "writes durable, user-visible content this chain has no delete-back "
+        "step to undo"
+    ),
+    ("PATCH", "/community/comments/{public_id}"): (
+        "requires a comment the caller authored, which requires the comment "
+        "creation endpoint above"
+    ),
+    ("DELETE", "/community/comments/{public_id}"): (
+        "requires a comment the caller authored, which requires the comment "
+        "creation endpoint above"
+    ),
+    ("POST", "/community/bookmarks/{post_public_id}"): (
+        "requires an existing, visible post id to bookmark; a fresh "
+        "single-account deploy has none reachable"
+    ),
+    ("DELETE", "/community/bookmarks/{post_public_id}"): (
+        "requires an existing bookmark from the endpoint above"
+    ),
+    ("GET", "/community/notifications"): (
+        "a fresh account's inbox is empty — every notification in this "
+        "backend is raised by a SECOND account's action (follow, comment, "
+        "reaction, invite); GET /community/blocked and GET /community/muted "
+        "already prove the authenticated list-read shape"
+    ),
+    ("POST", "/community/notifications/{public_id}/read"): (
+        "requires an existing notification id, which requires a second "
+        "account's action to raise"
+    ),
+    ("POST", "/community/notifications/{public_id}/read-up-to"): (
+        "requires an existing notification id, which requires a second "
+        "account's action to raise"
+    ),
+    ("GET", "/community/notifications/preferences"): (
+        "the preference map of a freshly created profile carries defaults "
+        "only, so the read is degenerate; GET /community/profiles/me already "
+        "proves this device's authenticated community read access"
+    ),
+    ("PUT", "/community/notifications/preferences"): (
+        "writes durable per-profile delivery preferences, and the wire shape "
+        "needs a category/level pair the tool would have to hardcode against a "
+        "server-side enum that can drift; PUT /settings already proves the "
+        "authenticated write path"
+    ),
+    # Javito sav 2026-09-08 R36 — R33's content-report call site
+    # (`HttpCommunityPostRepository.submitReport`). `mounted`: the reports
+    # router is registered into the community aggregate unconditionally.
+    ("POST", "/community/reports"): (
+        "filing a report writes durable moderation state (a row a human "
+        "moderator has to triage) against a post or comment the "
+        "single-account bring-up chain never creates, and the chain has no "
+        "delete-back step to withdraw it (the POST /community/posts rule); "
+        "a target_id the chain could invent answers 404, which would make "
+        "the step red on a healthy deploy"
+    ),
 }
 
 

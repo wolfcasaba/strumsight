@@ -69,7 +69,9 @@ door today, not dead code.
 **Population update (2026-09-06, review MAJOR-4):** the measured population
 is now **97**, not 96 — `tool/ui_inventory.dart`'s filter was widened from
 `_screen.dart` to `_screen(_v\d+)?.dart`, which admitted
-`setlist_list_screen_v2.dart`. It measures `unreachable` (§3.4, §6). The
+`setlist_list_screen_v2.dart`. It measured `unreachable` until R10
+(2026-09-07) registered `/setlists/v2`; it now measures `reachable` (§3.4,
+§6). The
 counts in the table above are the E15-R03 snapshot and are NOT re-derived
 here; the machine-measured §6 table below is the live one.
 
@@ -212,11 +214,13 @@ round, unscheduled.
   since) — same on 2026-09-02; pushed from the setlist detail since E17-R03
   (`keep` in §6).
 - `lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart`
-  (`SetlistListScreenV2`, legacy) — same. It was INVISIBLE to the tool until
+  (`SetlistListScreenV2`) — was the same. It was INVISIBLE to the tool until
   2026-09-06: `tool/ui_inventory.dart`'s population filter matched only
   `_screen.dart`, so a `_screen_v2.dart` file never entered the measurement
   at all. Widening the filter is what made this row honest — the screen did
-  not become unreachable, it had simply never been counted.
+  not become unreachable, it had simply never been counted. **Resolved
+  2026-09-07 (R10):** `/setlists/v2` is registered, so it measures
+  `reachable`; §6 now records it as `keep`.
 - `lib/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart`
   (`PracticePlanPreviewScreen`, already migrated) — same on 2026-09-02;
   pushed from the Tutor chat since E17-R04 (`keep` in §6).
@@ -343,7 +347,7 @@ catch.
 | `lib/features/share/screens/share_preview_screen.dart` | `SharePreviewScreen` | yes | no | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
 | `lib/features/share/screens/strum_reel_screen.dart` | `StrumReelScreen` | yes | no | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
 | `lib/features/share/screens/wrapped_preview_screen.dart` | `WrappedPreviewScreen` | yes | no | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
-| `lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart` | `SetlistListScreenV2` | no | no | unreachable | — | — | Entered the measured population on 2026-09-06 when the inventory filter was widened to `_screen(_v\d+)?.dart`; legacy, with no route and no measured construction site anywhere in lib/. |
+| `lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart` | `SetlistListScreenV2` | yes | no | keep | — | — | R10 (2026-09-07) registered `/setlists/v2` and built the tap-to-session flow, so the screen is reachable from an unconditional route. It resolves design-system spacing tokens (`SsSpacing`), so the `grep -q design_system` migration measure counts it migrated; the component-level `SsCard`/`SsButton` swap is still owed and is blocked on re-recording the `e13_r23_setlist_list_*` goldens on x86_64. |
 | `lib/features/song_trainer/presentation/screens/setlist_session_screen.dart` | `SetlistSessionScreen` | yes | no | keep | — | — | Pushed from `SetlistDetailScreen` since E17-R03 (`setlist_detail_screen.dart`, one launcher, mode as a parameter) under `songTrainerV2Enabled`; imperative channel, so not flag-gated by ADR 0471 D4. Design-system native, so no migration round is owed. Measured 2026-09-15. |
 | `lib/features/song_trainer/presentation/screens/song_editor_screen.dart` | `SongEditorScreen` | yes | yes | migrate | E15-R09 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/song_trainer/presentation/screens/song_import_preview_screen.dart` | `SongImportPreviewScreen` | yes | no | migrate | E15-R09 | — | Legacy, reachable — Ch15 design-system migration. |

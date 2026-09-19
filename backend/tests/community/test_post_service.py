@@ -38,16 +38,13 @@ import threading
 import uuid
 from collections.abc import Iterator
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pytest
-from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from alembic import command
 from app.community.models.post import CommunityPost
 from app.community.models.profile import CommunityProfile
 from app.community.routers.posts import router as posts_router
@@ -55,17 +52,7 @@ from app.community.services import post_service
 from app.config import Settings
 from app.database import enable_sqlite_foreign_keys, get_db
 from app.security import create_access_token, hash_password
-
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]
-_ALEMBIC_INI = _BACKEND_ROOT / "alembic.ini"
-_ALEMBIC_DIR = _BACKEND_ROOT / "alembic"
-
-
-def _alembic_config() -> Config:
-    cfg = Config(str(_ALEMBIC_INI))
-    cfg.set_main_option("script_location", str(_ALEMBIC_DIR))
-    return cfg
-
+from tests.migration_template import apply_head_schema
 
 # ---------------------------------------------------------------------------
 # Fixtures — engine + session factory + app + client, mirroring the
@@ -79,8 +66,7 @@ def session_factory(tmp_path, monkeypatch) -> Iterator[sessionmaker[Session]]:
     db_url = f"sqlite:///{db_path}"
     monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", db_url)
 
-    cfg = _alembic_config()
-    command.upgrade(cfg, "head")
+    apply_head_schema(db_path)
     engine = create_engine(db_url, connect_args={"check_same_thread": False})
     enable_sqlite_foreign_keys(engine)
     factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -449,6 +435,47 @@ def test_create_idempotency_real_violation_probe(tmp_path, monkeypatch) -> None:
                     deleted_at TEXT
                 )
                 """
+            )
+        )
+        # javító sáv R27 — the create/read response now embeds the
+        # post's READY media attachments, so the probe's hand-built
+        # schema needs the table the projection reads. Mirrors the
+        # e09_r28_0021 migration's shape (no FK to community_posts by
+        # design — see models/media_upload.py).
+        conn.execute(
+            text(
+                """
+                CREATE TABLE community_media_uploads (
+                    id INTEGER PRIMARY KEY,
+                    public_id CHAR(32) NOT NULL UNIQUE,
+                    profile_id INTEGER NOT NULL,
+                    post_id INTEGER,
+                    attach_position INTEGER NOT NULL DEFAULT 0,
+                    kind VARCHAR(16) NOT NULL,
+                    state VARCHAR(32) NOT NULL DEFAULT 'pending',
+                    rejection_code VARCHAR(64),
+                    content_type VARCHAR(64) NOT NULL,
+                    content_sha256 VARCHAR(64),
+                    source_sha256 VARCHAR(64) NOT NULL,
+                    size_bytes INTEGER NOT NULL DEFAULT 0,
+                    source_size_bytes INTEGER NOT NULL,
+                    width INTEGER,
+                    height INTEGER,
+                    duration_ms INTEGER,
+                    scanner VARCHAR(32),
+                    scanned_at TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    ready_at TEXT,
+                    deleted_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX ix_community_media_uploads_post_position "
+                "ON community_media_uploads (post_id, attach_position)"
             )
         )
         conn.execute(

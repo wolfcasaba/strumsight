@@ -1,21 +1,45 @@
 import 'package:flutter/material.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/setlists/setlist_controller.dart';
 import '../../domain/models/song_id.dart';
 import '../../domain/models/song_setlist.dart';
 import '../widgets/setlist_item_availability_badge.dart';
 
+/// The Setlist V2 list.
+///
+/// **Design-system adoption is deliberately PARTIAL here (R10, 2026-09-07),
+/// and the reason is measurable, not a preference.** The screen's rendering
+/// is pinned pixel-for-pixel by two committed goldens —
+/// `test/ui/goldens/goldens/e13_r23_setlist_list_compact.png` and
+/// `…_compact_scale2.png` (`test/ui/goldens/e13_r23_screens_golden_test.dart`)
+/// — which are RECORDED on x86_64 via `tools/golden-x86.sh record`
+/// (ADR 0426). Swapping `Card`/`ListTile`/`FilledButton` for `SsCard`/
+/// `SsButton` changes those pixels, and re-recording them is not something
+/// this round can do. So this round takes the part that is pixel-neutral:
+/// every spacing value with an exact [SsSpacing] token now resolves from
+/// that scale instead of a magic number (the two off-scale values — the
+/// 6 px `Wrap` gap and the 2 px missing-song offset — stay literal
+/// precisely because moving them to the nearest token would move pixels),
+/// and the component swap is left to the E15 owner round that can also
+/// re-record the goldens.
 final class SetlistListScreenV2 extends StatefulWidget {
   const SetlistListScreenV2({
     super.key,
     required this.controller,
     required this.clock,
+    this.onOpenSetlist,
   });
 
   final SetlistController controller;
   final DateTime Function() clock;
+
+  /// Opens the ordered session for a tapped setlist. `null` keeps the list
+  /// read-only (direct widget tests, goldens) — the tile then has no tap
+  /// handler at all rather than a handler that does nothing.
+  final ValueChanged<SongSetlist>? onOpenSetlist;
 
   @override
   State<SetlistListScreenV2> createState() => _SetlistListScreenV2State();
@@ -95,12 +119,14 @@ final class _SetlistListScreenV2State extends State<SetlistListScreenV2> {
           ),
           final values => ListView.builder(
             key: const Key('setlist-list-window'),
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(SsSpacing.space4),
             itemCount: values.length,
             itemBuilder: (context, index) {
               final setlist = values[index];
+              final open = widget.onOpenSetlist;
               return Card(
                 child: ListTile(
+                  onTap: open == null ? null : () => open(setlist),
                   title: Text(setlist.name),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,7 +134,7 @@ final class _SetlistListScreenV2State extends State<SetlistListScreenV2> {
                     children: <Widget>[
                       Text(l10n.setlistV2ItemCount(setlist.items.length)),
                       if (setlist.items.isNotEmpty) ...[
-                        const SizedBox(height: 4),
+                        const SizedBox(height: SsSpacing.space1),
                         Wrap(
                           key: Key('setlist-readiness-${setlist.id}'),
                           spacing: 6,
@@ -262,10 +288,10 @@ final class _SetlistEditorSheetState extends State<_SetlistEditorSheet> {
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.fromLTRB(
-          16,
-          16,
-          16,
-          16 + MediaQuery.viewInsetsOf(context).bottom,
+          SsSpacing.space4,
+          SsSpacing.space4,
+          SsSpacing.space4,
+          SsSpacing.space4 + MediaQuery.viewInsetsOf(context).bottom,
         ),
         child: SingleChildScrollView(
           child: Column(
@@ -277,13 +303,13 @@ final class _SetlistEditorSheetState extends State<_SetlistEditorSheet> {
                     : l10n.setlistV2Edit,
                 style: Theme.of(context).textTheme.titleLarge,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: SsSpacing.space4),
               TextField(
                 key: const Key('setlist-editor-name'),
                 controller: _name,
                 decoration: InputDecoration(labelText: l10n.setlistV2Name),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: SsSpacing.space4),
               Text(
                 l10n.setlistV2Items,
                 style: Theme.of(context).textTheme.titleMedium,
@@ -318,7 +344,7 @@ final class _SetlistEditorSheetState extends State<_SetlistEditorSheet> {
                 icon: const Icon(Icons.add),
                 label: Text(l10n.setlistV2AddSong),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: SsSpacing.space4),
               FilledButton(
                 key: const Key('setlist-editor-save'),
                 onPressed: _save,

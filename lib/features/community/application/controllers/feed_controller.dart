@@ -497,6 +497,30 @@ class FeedController extends Notifier<FeedState> {
   Future<void> retry({int pageSize = defaultPageSize}) =>
       load(pageSize: pageSize);
 
+  /// Drop one post from the visible feed and from the local snapshot
+  /// (R33, M10 — the report sheet's "Hide from feed" shortcut).
+  ///
+  /// This is deliberately the LOCAL half of the safety action: the report
+  /// row stays on the server (the moderation queue still sees it), and the
+  /// post itself is not deleted — hiding is the reporter's own view, not a
+  /// moderation verdict. The id stays in [_seenIds], so a `loadMore` inside
+  /// the same session cannot re-add it; a full `refresh` re-reads the
+  /// server's list and the post CAN come back, which is the honest
+  /// behaviour — the durable remedies are mute and block, and the sheet
+  /// offers both right next to this one.
+  ///
+  /// A no-op when the id is not on screen (a comment target, a stale card).
+  Future<void> hideLocally(ContentId postId) async {
+    final current = state;
+    final remaining = <CommunityPost>[
+      for (final post in current.items)
+        if (post.id != postId) post,
+    ];
+    if (remaining.length == current.items.length) return;
+    state = current.copyWith(items: remaining);
+    await _persistCache(remaining);
+  }
+
   // ---- internal helpers ------------------------------------------------
 
   /// Apply a freshly-fetched first page to the state. Replaces any cache

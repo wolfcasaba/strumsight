@@ -6,6 +6,7 @@ import '../../../core/storage/storage_providers.dart';
 import '../application/achievement_evaluator.dart';
 import '../application/daily_challenge_service.dart'
     show DailyChallengeInstance;
+import '../application/profile_projector.dart';
 import '../application/streak_service.dart';
 import '../data/gamification_repository.dart';
 import '../data/gamification_storage_schema.dart';
@@ -47,6 +48,15 @@ final gamificationRewardLedgerRepositoryProvider =
         logger: ref.watch(appLoggerProvider),
       );
     });
+
+/// Rebuilds the profile (total XP + level) from the ledger, the only source
+/// the profile snapshot may be written from.
+final gamificationProfileProjectorProvider = Provider<ProfileProjector>((ref) {
+  return ProfileProjector(
+    curve: ref.watch(levelCurveProvider),
+    ledger: ref.watch(gamificationRewardLedgerRepositoryProvider),
+  );
+});
 
 /// Single source of truth for level thresholds (moved verbatim out of the
 /// router — ADR 0496 §1 forbids a baked `LevelCurve` living in the router).

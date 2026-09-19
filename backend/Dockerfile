@@ -30,4 +30,13 @@ EXPOSE 8000
 # upgrade head` runs before uvicorn on every container start. The runtime
 # traffic gate (app/main.py, ADR 0449 D1) is the second, always-on layer —
 # it refuses business traffic even if this step were ever skipped.
-CMD ["sh", "-c", "python -m alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+#
+# Proxy headers (R14): the ASGI layer honours `X-Forwarded-For`/`-Proto` only
+# from the SAME trusted hops the app-level throttle key uses
+# (`STRUMSIGHT_TRUSTED_PROXY_IPS`, app/client_ip.py) — one variable, no way
+# for the two layers to disagree. `tr` turns the JSON list the app requires
+# (`["172.18.0.1"]`) into the comma-separated list uvicorn expects
+# (`172.18.0.1`), and passes an already-comma-separated value through
+# unchanged. Unset/empty keeps uvicorn's own default (127.0.0.1) — i.e. no
+# new trust — and `--forwarded-allow-ips` NEVER gets a `*`.
+CMD ["sh", "-c", "python -m alembic upgrade head && forwarded=$(printf '%s' \"${STRUMSIGHT_TRUSTED_PROXY_IPS:-}\" | tr -d '[]\" ') && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips \"${forwarded:-127.0.0.1}\""]

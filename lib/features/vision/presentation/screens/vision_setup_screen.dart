@@ -118,6 +118,15 @@ class _VisionSetupScreenState extends ConsumerState<VisionSetupScreen> {
                     unawaited(controller.requestCameraPermission()),
               ),
               VisionSetupStep.ready => _ReadyStep(
+                // R18 (audit B8) — MÉRT hiba: a „kész" lépés egyetlen gombja
+                // a geometria-kalibráció volt, magára a munkamenetre semmi
+                // nem vezetett, és a Today hub is mindig a beállításra megy,
+                // amíg a `visionSetupEnabled` be van kapcsolva — így az
+                // `AppRoutes.visionSession` a szállított felületről
+                // elérhetetlen volt. `push`, nem `go`: a munkamenet-képernyő
+                // maga NEM kezel visszalépést (nincs `pop`-ja), tehát `go`
+                // után a felhasználó ott ragadna.
+                onStartSession: () => context.push(AppRoutes.visionSession),
                 onOpenGeometry: geometryEnabled
                     ? () => context.push(AppRoutes.visionGuitarGeometry)
                     : null,
@@ -289,7 +298,14 @@ class _PermissionStep extends StatelessWidget {
 }
 
 class _ReadyStep extends StatelessWidget {
-  const _ReadyStep({this.onOpenGeometry});
+  const _ReadyStep({required this.onStartSession, this.onOpenGeometry});
+
+  /// The step's PRIMARY action: the camera session the whole setup exists
+  /// to prepare. `AppRoutes.visionSession` is registered under the plain
+  /// `visionEnabled` gate, which is a precondition of this screen being
+  /// rendered at all, so this is never a control pointing at a missing
+  /// route.
+  final VoidCallback onStartSession;
 
   /// `null`, ha a gitár-geometria útvonala NINCS regisztrálva (a két flag
   /// bármelyike ki). Ilyenkor a gomb nem jelenik meg — nem tiltva, hanem
@@ -306,6 +322,12 @@ class _ReadyStep extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(l10n.visionSetupReadyBody),
+          const SizedBox(height: SsSpacing.space4),
+          SsButton(
+            key: const Key('vision-setup-start-session'),
+            label: l10n.visionSetupStartSession,
+            onPressed: onStartSession,
+          ),
           if (onOpenGeometry != null) ...[
             const SizedBox(height: SsSpacing.space4),
             SsButton(
@@ -325,6 +347,15 @@ class _AudioOnlyStep extends StatelessWidget {
   const _AudioOnlyStep({this.unsupportedDevice = false});
 
   final bool unsupportedDevice;
+
+  void _leaveAudioOnly(BuildContext context) {
+    final router = GoRouter.of(context);
+    if (router.canPop()) {
+      router.pop();
+    } else {
+      router.go(AppRoutes.today);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -346,7 +377,11 @@ class _AudioOnlyStep extends StatelessWidget {
           SsButton(
             key: const Key('vision-audio-only-continue'),
             label: l10n.visionSetupAudioOnlyContinue,
-            onPressed: () {},
+            // Javító sáv 2026-09-06 (R4): this was `() {}` — an enabled
+            // button that did nothing. "Continue audio-only" leaves the
+            // vision setup: back to where it was opened from, or to Today
+            // when the setup was the first location (a `go` from the hub).
+            onPressed: () => _leaveAudioOnly(context),
           ),
         ],
       ),

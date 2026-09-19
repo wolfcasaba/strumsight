@@ -3,6 +3,7 @@
 import bcrypt
 import pytest
 
+from app import security
 from app.security import hash_password, verify_password
 
 
@@ -78,6 +79,26 @@ def test_hash_password_rejects_overlong_utf8_input():
 
     with pytest.raises(ValueError, match="72 UTF-8 bytes"):
         hash_password(password)
+
+
+def test_production_cost_factor_hashes_and_verifies(production_password_hashing):
+    """Pin the bcrypt work factor every deployment runs with.
+
+    The suite itself hashes at a cheap cost — `tests/conftest.py` rebinds
+    `app.security.PASSWORD_HASH_ROUNDS` for the pytest process only, because
+    at the production cost the fixtures alone cost minutes. This test asks
+    the `production_password_hashing` fixture to put the real value back, so
+    the shipped cost factor is asserted (not merely assumed) and a hash minted
+    at it still round-trips through `verify_password`.
+    """
+    assert production_password_hashing == 12
+    assert security.PASSWORD_HASH_ROUNDS == 12
+
+    hashed = hash_password("sixstrings")
+
+    assert hashed.startswith("$2b$12$"), hashed[:7]
+    assert verify_password("sixstrings", hashed) is True
+    assert verify_password("wrong-password", hashed) is False
 
 
 def test_verify_password_keeps_legacy_72_byte_truncation_compatibility():

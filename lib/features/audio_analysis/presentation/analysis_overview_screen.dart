@@ -6,6 +6,7 @@ import '../../../app/routing/app_route.dart';
 import '../../../core/design_system/public.dart';
 import '../domain/analysis_document.dart';
 import 'controllers/overview_view_model.dart';
+import 'insight_action_route.dart';
 import 'widgets/insight_card.dart';
 import 'widgets/labels_adapter.dart';
 import 'widgets/metric_card.dart';
@@ -64,6 +65,10 @@ class _AnalysisOverviewBody extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.list_alt),
             tooltip: l10n.analysisOverviewSeeAllInsights,
+            // R30 (re-audit #2 B2) — `push`, NEM `go`: a részletek az
+            // áttekintés FÖLÉ kerülnek, tehát a vissza-út ide vezet. A `go`
+            // az áttekintést is eldobta, és a részletek „Bezárás" gombjának
+            // már nem volt mit poppolnia.
             onPressed: () => context.push(
               AppRoutes.analysisMetricDetail,
               extra: OverviewDetailsPayload(
@@ -126,7 +131,14 @@ class _AnalysisOverviewBody extends StatelessWidget {
               if (viewModel.insights.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 8),
                 for (final insight in viewModel.insights) ...<Widget>[
-                  InsightCard(card: insight),
+                  // R22 (audit MI3): the CTA is no longer `onPressed: null`
+                  // — the coarse persisted action maps to a registered
+                  // route (`insight_action_route.dart`).
+                  InsightCard(
+                    card: insight,
+                    onAction: (action) =>
+                        context.push(insightActionRoute(action)),
+                  ),
                   const SizedBox(height: 8),
                 ],
               ],

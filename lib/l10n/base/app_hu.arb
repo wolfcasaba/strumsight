@@ -3162,7 +3162,6 @@
   "@practicePlanStatusNoActiveLabel": {},
   "practicePlanStatusPlannedLabel": "Tervezett alkalom",
   "@practicePlanStatusPlannedLabel": {},
-
   "todayHubTitle": "Ma",
   "todayHubNewUserTitle": "Vágjunk bele",
   "todayHubNewUserMessage": "Az első gyakorlás csak pár percet vesz igénybe.",
@@ -3175,14 +3174,13 @@
   "todayHubNoPlanMessage": "Még nincs terved — indulj a Gyakorlásba, hogy elkezdd.",
   "todayHubViewProgressCta": "Fejlődés megtekintése",
   "todayHubVisionCardTitle": "Vizuális gyakorlás",
-  "todayHubVisionCardMessage": "Használd a kamerát az ujjazat visszajelzéséhez.",
+  "todayHubVisionCardMessage": "Ellenőrizd a kamerával a képkivágást és a fényt játék előtt.",
   "todayHubVisionUnavailableReason": "A vizuális gyakorláshoz támogatott eszköz kell, és ebben a buildben még nem érhető el.",
   "todayHubPrivacyTitle": "Alapból privát",
   "todayHubPrivacyNoAccount": "Nem kell fiók",
   "todayHubPrivacyOffline": "Teljesen offline működik",
   "todayHubPrivacyNoAds": "Nincs reklám, nincs előfizetés",
   "todayHubPrivacyAudioLocal": "A hangod nem hagyja el a telefont",
-
   "practiceAreaHubRecommendedTitle": "Neked ajánlott",
   "practiceAreaHubRecommendedMessage": "Indíts egy, a jelenlegi szintedhez válogatott gyakorlást.",
   "practiceAreaHubRecommendedCta": "Ajánlott gyakorlás indítása",
@@ -3201,7 +3199,6 @@
   "@practiceAreaHubCategoryComingSoonHint": {
     "description": "Screen-reader hint announced with a disabled practice-category chip, spelling out WHY it cannot be activated (the tooltip is sighted-only feedback)."
   },
-
   "profileHubTitle": "Profil",
   "profileHubLocalOnlyTitle": "Helyi profil",
   "profileHubLocalOnlyMessage": "Fiók nélkül használod a StrumSightot — minden ezen az eszközön marad.",
@@ -3214,7 +3211,6 @@
   "profileHubCommunityDisabledReason": "A közösségi funkciók ebben a buildben még nem érhetők el.",
   "profileHubCommunityEnabledMessage": "Kapcsolódj más játékosokhoz, és oszd meg a fejlődésed.",
   "profileHubAchievementsSectionTitle": "Eredmények",
-
   "libraryV2Title": "Könyvtár",
   "libraryV2SearchLabel": "Keresés a könyvtárban",
   "libraryV2FilterAll": "Összes",
@@ -3351,7 +3347,6 @@
     "description": "Feed-card / bookmark-row action that opens the post's comment thread."
   },
   "communityHubLeaderboard": "Ranglista",
-
   "songLibraryEmptyPracticeHint": "A le/fel pengetés gyakorlatok a Gyakorló hubon várnak — a könyvtár a teljes dalokért van.",
   "songLibraryRestoreSeeds": "Gyakorló dalok visszaállítása",
   "songLibraryRestoreSeedsDone": "{count} gyakorló dal visszaállítva.",
@@ -3380,5 +3375,30 @@
   "songImportAudioAnalyzing": "Akkordok és pengetések felismerése\u2026",
   "songImportAudioSaving": "Piszkozat dal létrehozása\u2026",
   "songEditorDraftBannerTitle": "Piszkozat \u2014 nézd át, mielőtt gyakorolsz",
-  "songEditorDraftBannerBody": "Ez a dal egy hangfájlból származik. Az akkordok, a pengetések és a tempó becslések, nem átirat: ellenőrizd őket, és javítsd, ami hibás."
+  "songEditorDraftBannerBody": "Ez a dal egy hangfájlból származik. Az akkordok, a pengetések és a tempó becslések, nem átirat: ellenőrizd őket, és javítsd, ami hibás.",
+  "authEmailTakenHint": "Van már fiókod? Válts alább bejelentkezésre.",
+  "setlistRunnerTitle": "Szettlista lejátszása",
+  "setlistRunnerBody": "Játszd le a szettet sorban — minden dal a Dal-trénerben nyílik meg, és a szett a befejezés után lép tovább.",
+  "songTrainerLaunchFailed": "A menet nem indult el — a dal megváltozott a beállítás óta. Nyisd meg újra.",
+  "tutorPlanPreviewEntryTitle": "Gyakorlásterv javaslata",
+  "tutorPlanPreviewEntryBody": "A céljaidból tervvázlatot készít, amit átnézhetsz, szerkeszthetsz és aktiválhatsz.",
+  "planSetupGenerationFailed": "A tervet nem sikerült elkészíteni. A válaszaid megvannak — próbáld újra a Befejezést.",
+  "todayPlanActionFailed": "A módosítást nem sikerült menteni. A terv változatlan.",
+  "todayPlanSwapNoAlternative": "A mai gyakorlathoz nincs azonos készségű alternatíva.",
+  "@todayPlanSwapNoAlternative": {},
+  "practicePlanStatusBadgeSemantic": "Állapot",
+  "@practicePlanStatusBadgeSemantic": {
+    "description": "Semantic label (a11y) for the status icon rendered next to a day-status label on the today plan screen."
+  },
+  "tutorPlanCatalogEmpty": "Ezen az eszközön még nincs elérhető gyakorlat, ezért nem építhető gyakorlási terv.",
+  "tutorPlanDraftRationale": "Az eszközön elérhető gyakorlatokból, a választott gyakorlási hosszra építve.",
+  "tutorPlanDraftTitle": "{minutes} perces gyakorlási terv",
+  "@tutorPlanDraftTitle": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "tutorPlanNotBuildable": "Ez a gyakorlási terv most nem készíthető elő."
 }

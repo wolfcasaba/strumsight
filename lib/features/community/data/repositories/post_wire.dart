@@ -13,8 +13,11 @@
 /// `created_at` `FormatException` — az a válasz nem poszt.
 library;
 
+import '../../domain/entities/community_bookmark.dart';
+import '../../domain/entities/community_media.dart';
 import '../../domain/entities/community_post.dart';
 import '../../domain/entities/community_reaction.dart';
+import '../../domain/entities/community_report_receipt.dart';
 import '../../domain/entities/moderation_state.dart';
 import '../../domain/policies/community_audience.dart';
 import '../../domain/repositories/community_page.dart';
@@ -91,6 +94,12 @@ CommunityPost decodeCommunityPost(Map<String, Object?> json) {
       bookmarkedAt: null,
       myReaction: reactionKindFromWire(json['viewer_reaction'] as String?),
     ),
+    // A csatolt médiák (javító sáv R27). A szerver mindkét felületen —
+    // a `PostOut`-on és a `FeedPostItem`-en — ugyanazt a `media`
+    // tömböt küldi, ezért a KÖZÖS dekóder olvassa ki: ha a feed és a
+    // poszt-detail külön értelmezné, a csatolmány az egyik képernyőn
+    // megjelenne, a másikon nem.
+    media: decodeCommunityMediaList(json['media']),
   );
 }
 
@@ -176,4 +185,79 @@ DateTime? _resourceVersionAsEditedAt(Map<String, Object?> json) {
 int _count(Object? raw) {
   if (raw is int) return raw < 0 ? 0 : raw;
   return 0;
+}
+
+// ---- könyvjelzők (javító sáv R5, 2026-09-06) ----------------------------
+
+/// Egy `BookmarkOut` → [CommunityBookmark].
+///
+/// A `bookmark_id` a kurzor-kulcs (belső sor-azonosító), a
+/// `post_public_id` a mélylink kulcsa, az `is_tombstone` a §A3 felület. A
+/// hiányzó kötelező mező `FormatException` — az a válasz nem könyvjelző.
+CommunityBookmark decodeCommunityBookmark(Map<String, Object?> json) {
+  final id = json['bookmark_id'];
+  final postId = json['post_public_id'];
+  if (id is! int || postId is! String || postId.isEmpty) {
+    throw const FormatException(
+      'community bookmark wire: bookmark_id and post_public_id are required',
+    );
+  }
+  return CommunityBookmark(
+    id: id,
+    postId: ContentId(postId),
+    createdAt: _requiredTime(json['created_at'], 'created_at'),
+    // A hiányzó zászló NEM sírkő: a szerver mindig küldi, egy régi vagy
+    // hiányos válasz a bejegyzést élőként mutatja — a sírkő-render a
+    // szigorúbb, nem a biztonságosabb irány (a sor eltávolítható marad).
+    isTombstone: json['is_tombstone'] == true,
+  );
+}
+
+/// Egy `BookmarkListResponse` boríték → [CommunityPage].
+CommunityPage<CommunityBookmark> decodeCommunityBookmarkPage(
+  Map<String, Object?> json,
+) {
+  final rawItems = json['items'];
+  if (rawItems is! List) {
+    throw const FormatException(
+      'community bookmark page wire: items must be a list',
+    );
+  }
+  return CommunityPage<CommunityBookmark>(
+    items: [
+      for (final raw in rawItems)
+        if (raw is Map<String, Object?>)
+          decodeCommunityBookmark(raw)
+        else
+          throw const FormatException(
+            'community bookmark page wire: every item must be a JSON object',
+          ),
+    ],
+    cursor: communityCursorFromWire(json['next_cursor']),
+  );
+}
+
+/// Egy `POST /community/reports` sanitizált válasza → [CommunityReportReceipt].
+///
+/// A szerver `build_sanitized_response`-a hat kulcsot ad vissza; a kliens
+/// KETTŐT olvas ki. A `target_type` / `target_id` / `category` visszhang,
+/// amit a hívó amúgy is ismer, a `created_at` pedig ma sehol nem
+/// jelenik meg — egy fel nem használt mező beolvasása csak azt sugallná,
+/// hogy valahol meg is jelenik.
+///
+/// A hiányzó `report_public_id` `FormatException`: nyugta nélkül nem
+/// mondhatjuk a bejelentőnek, hogy a bejelentés megérkezett.
+CommunityReportReceipt decodeCommunityReportReceipt(Map<String, Object?> json) {
+  final publicId = json['report_public_id'];
+  if (publicId is! String || publicId.isEmpty) {
+    throw const FormatException(
+      'community report wire: report_public_id must be a non-empty string',
+    );
+  }
+  return CommunityReportReceipt(
+    reportPublicId: publicId,
+    // A hiányzó zászló „friss sor"-t jelent: a duplikátum-jelzés a
+    // ritkább ág, és a bejelentő ugyanazt a köszönő nézetet látja.
+    deduplicated: json['deduplicated'] == true,
+  );
 }

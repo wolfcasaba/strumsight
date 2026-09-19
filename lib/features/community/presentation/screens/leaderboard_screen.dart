@@ -279,7 +279,7 @@ class _RankRow extends StatelessWidget {
               Icons.verified,
               color: Theme.of(context).colorScheme.primary,
               size: textScaler.scale(20),
-              semanticLabel: 'Verified',
+              semanticLabel: localizations.communityChallengeResultVerifiedIcon,
             ),
           ],
         ),

@@ -34,6 +34,10 @@ export 'domain/value_objects/public_user_id.dart';
 export 'domain/entities/community_challenge.dart';
 export 'domain/entities/community_club.dart';
 export 'domain/entities/community_comment.dart';
+// A csatolt média entitása (javító sáv R27). Azért van itt, mert a
+// `CommunityPost.media` mezőjének típusa — egy barrel-en át olvasó
+// hívó a poszt csatolmányait máskülönben csak `dynamic`-ként látná.
+export 'domain/entities/community_media.dart';
 export 'domain/entities/community_post.dart';
 export 'domain/entities/community_profile.dart';
 export 'domain/entities/community_reaction.dart';
@@ -62,6 +66,16 @@ export 'domain/repositories/social_graph_repository.dart';
 // `domain/` alkönyvtárra vonatkozik (a teszt azt a könyvtárat járja be), a
 // presentation-réteg természetesen Fluttert használ.
 // ---------------------------------------------------------------------------
+// A kapu-állapot (MI-A / MI-L, R33). A Profil-központ Közösség-alcíme a
+// MÉRT kapu-állapotot mondja ki — „elérhető" helyett „a szerveren ki van
+// kapcsolva" —, és a kapu-vezérlő az egyetlen hely, ahol ez az állapot
+// létezik. Csak az olvasáshoz szükséges három név megy ki.
+export 'application/controllers/profile_controller.dart'
+    show
+        CommunityGateStatus,
+        CommunityProfileState,
+        communityProfileControllerProvider;
+
 export 'presentation/screens/bookmarks_screen.dart' show BookmarksScreen;
 export 'presentation/screens/clubs/club_detail_screen.dart'
     show ClubDetailScreen;

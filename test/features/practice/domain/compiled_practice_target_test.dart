@@ -143,6 +143,125 @@ void main() {
       );
     });
   });
+
+  group('CompiledPracticeTarget.musicalPosition (piecewise inverse)', () {
+    test('two loop paths of a 2x target yield the same BeatPosition at the '
+        'same in-pass offset', () {
+      final target = _target(
+        tempo: const Tempo(120),
+        musicalDuration: const Duration(seconds: 4),
+        loopCount: 2,
+        barBoundaries: const [
+          Duration.zero,
+          Duration(seconds: 2),
+          Duration(seconds: 4),
+        ],
+      );
+
+      final firstHalf = target.musicalPosition(
+        const Duration(milliseconds: 500),
+      );
+      final secondHalf = target.musicalPosition(
+        const Duration(milliseconds: 2500),
+      );
+
+      expect(firstHalf, isNotNull);
+      expect(secondHalf, isNotNull);
+      expect(firstHalf, secondHalf);
+    });
+
+    test('returns null past the musical end (ring-out and beyond are '
+        'undefined)', () {
+      final target = _target(
+        tempo: const Tempo(120),
+        musicalDuration: const Duration(seconds: 2),
+        ringOutDuration: const Duration(seconds: 2),
+        totalDuration: const Duration(seconds: 6),
+      );
+
+      expect(
+        target.musicalPosition(const Duration(seconds: 2)),
+        isNull,
+        reason: 't == musicalDuration is the ring-out boundary',
+      );
+      expect(
+        target.musicalPosition(const Duration(seconds: 3)),
+        isNull,
+        reason: 'inside the ring-out bar',
+      );
+      expect(
+        target.musicalPosition(const Duration(seconds: 5)),
+        isNull,
+        reason: 'past the session end',
+      );
+    });
+
+    test('returns null before the musical origin (negative elapsed is '
+        'undefined)', () {
+      final target = _target(
+        tempo: const Tempo(120),
+        musicalDuration: const Duration(seconds: 2),
+      );
+
+      expect(target.musicalPosition(const Duration(milliseconds: -1)), isNull);
+      expect(
+        target.musicalPosition(Duration.zero - const Duration(seconds: 1)),
+        isNull,
+      );
+    });
+
+    test('returns null for an empty target (no musical content)', () {
+      final target = _target(
+        tempo: const Tempo(120),
+        events: const [],
+        musicalDuration: Duration.zero,
+        ringOutDuration: const Duration(seconds: 2),
+        totalDuration: const Duration(seconds: 4),
+        barBoundaries: const [Duration.zero, Duration(seconds: 2)],
+        expectedChordSegments: const [],
+      );
+
+      expect(target.musicalPosition(Duration.zero), isNull);
+      expect(target.musicalPosition(const Duration(milliseconds: 500)), isNull);
+    });
+
+    test('single-measure, no-loop target maps every in-pass instant to the '
+        'corresponding BeatPosition', () {
+      final target = _target(
+        tempo: const Tempo(120),
+        musicalDuration: const Duration(seconds: 2),
+        loopCount: 1,
+        loopRange: const PracticeLoopRange(startBar: 0, endBarExclusive: 1),
+      );
+
+      expect(target.passDuration(), const Duration(seconds: 2));
+      expect(target.musicalPosition(Duration.zero), const BeatPosition(0));
+      expect(
+        target.musicalPosition(const Duration(milliseconds: 500)),
+        const BeatPosition(480),
+        reason:
+            '500 ms at 120 BPM is one quarter beat (480 ticks at 480 '
+            'PPQ)',
+      );
+      expect(
+        target.musicalPosition(const Duration(seconds: 1)),
+        const BeatPosition(960),
+        reason: '1 s at 120 BPM is two quarter beats (960 ticks)',
+      );
+      expect(
+        target.musicalPosition(
+          const Duration(milliseconds: 1999, microseconds: 999),
+        ),
+        isNotNull,
+        reason: 'just inside the musical region — defined',
+      );
+      expect(
+        target.musicalPosition(const Duration(seconds: 2)),
+        isNull,
+        reason: 'exactly at musicalDuration is the ring-out boundary',
+      );
+    });
+  });
 }
 
 const _event = CompiledTargetEvent(

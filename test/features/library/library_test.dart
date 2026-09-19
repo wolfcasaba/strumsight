@@ -196,8 +196,9 @@ void main() {
       await tester.pumpAndSettle();
 
       // The default (non-production) shell's last bottom-nav destination
-      // is Profile (labelled with profileHubTitle since the hibavadászat
-      // round, home_shell.dart).
+      // is Profile. R18 (audit M10) gave it a dedicated `navProfile` key:
+      // it used to borrow `tutorProfileTitle` ("Tutor profile"), which
+      // named a screen the destination does not open.
       await tester.tap(find.text('Profile'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Library'));

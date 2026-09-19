@@ -20,6 +20,25 @@ import '../../domain/policy/scheduling_policy.dart';
 import '../../domain/service/plan_repairer.dart';
 import '../../domain/service/plan_validator.dart';
 
+/// M12 (HANDOFF §5.2 (D)) — the preview-only terminal result of a generation
+/// run. The orchestrator's [preview] method assembles, validates and
+/// (optionally) repairs a draft plan, but **never** activates it: activation
+/// belongs to the caller, after the user explicitly confirms the preview.
+/// Returning both the assembled draft and its validation context keeps the
+/// preview screen's `PlanPreviewController` in sync with the inputs that
+/// produced the plan — same shape as `PlanPreviewScreen.withPlan`'s
+/// constructor and the same contract `PracticePlanPreviewArgs` already
+/// declares (`plan_preview_args.dart`).
+final class GenerationPreview {
+  const GenerationPreview({
+    required this.plan,
+    required this.validationContext,
+  });
+
+  final AdaptivePracticePlan plan;
+  final PlanValidationContext validationContext;
+}
+
 /// The activation boundary for a completed plan.
 ///
 /// This round does not implement persistence; a later repository can own this
@@ -102,6 +121,66 @@ final class GenerationOrchestrator {
   /// intentionally a no-op.
   void cancel(GenerationRequestId requestId) =>
       _runs[requestId]?.source.cancel();
+
+  /// M12 (HANDOFF §5.2 (D)) — assembles, validates and (when needed)
+  /// repairs a draft plan **without** activating it.
+  ///
+  /// This is the construction site the rest of `lib/` had no entry point
+  /// for: it returns a [GenerationPreview] carrying the assembled plan
+  /// alongside the [PlanValidationContext] it was assembled against, so a
+  /// caller can hand the two together to `PlanPreviewScreen` via
+  /// [PracticePlanPreviewArgs] (already declared in
+  /// `presentation/plan_preview_args.dart`). Activation is the preview
+  /// controller's `confirmConfirmed()` job — separating the two means a
+  /// user who navigates AWAY from the preview never triggers a hidden
+  /// activation (the same rule the [generate] path's "no partial
+  /// activation" property preserves on the auto-activating flow).
+  ///
+  /// The progress stream is still updated through [GenerationStage] for
+  /// consistency with [generate], but the `activating` checkpoint is
+  /// deliberately OMITTED — there is no activation on this path. A
+  /// cancellation cooperates the same way as on [generate].
+  Future<AppResult<GenerationPreview>> preview(
+    GenerationPlanInput input,
+  ) async {
+    final source = _GenerationCancellationSource();
+    try {
+      await _checkpoint(input.request.id, GenerationStage.assembling, source);
+      var plan = _assemblePlan(input);
+
+      await _checkpoint(input.request.id, GenerationStage.validating, source);
+      var validation = validator.validate(plan, input.validationContext);
+      if (!validation.isActivatable) {
+        await _checkpoint(input.request.id, GenerationStage.repairing, source);
+        final repaired = repairer.repair(plan, input.validationContext);
+        if (!repaired.succeeded || repaired.plan == null) {
+          return Failure<GenerationPreview>(
+            ValidationFailure(cause: repaired.remainingIssues),
+          );
+        }
+        plan = repaired.plan!;
+        validation = validator.validate(plan, input.validationContext);
+        if (!validation.isActivatable) {
+          return Failure<GenerationPreview>(
+            ValidationFailure(cause: validation.issues),
+          );
+        }
+      }
+      return Success<GenerationPreview>(
+        GenerationPreview(
+          plan: plan,
+          validationContext: input.validationContext,
+        ),
+      );
+    } on _GenerationCancelledException {
+      return const Failure<GenerationPreview>(CancelledFailure());
+    } catch (error, stackTrace) {
+      if (error is AppFailure) return Failure<GenerationPreview>(error);
+      return Failure<GenerationPreview>(
+        UnknownFailure(cause: error, stackTrace: stackTrace),
+      );
+    }
+  }
 
   Future<AppResult<AdaptivePracticePlan>> _run(
     GenerationPlanInput input,

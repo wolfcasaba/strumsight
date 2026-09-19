@@ -112,7 +112,7 @@ void main() {
       // Switch away via the real navigation destination (goBranch), not
       // router.go — tapping is what a user does, and it's the path that
       // would break silently if the wiring used context.go instead.
-      await tester.tap(find.text('Song library'));
+      await tester.tap(find.text('Songs'));
       await tester.pumpAndSettle();
       expect(find.byType(ChordLibraryScreen), findsNothing);
 

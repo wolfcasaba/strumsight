@@ -47,12 +47,15 @@ a privacy-relevant code change and the check is red, trust the check, not the pr
 | account_api_community_post_repository | comment_body (a komment szabad szövege + `parent_public_id` — createComment/updateComment) |
 | account_api_community_post_repository | reaction_kind (a reakció típusa — PUT /community/posts/{id}/reaction `kind`) |
 | account_api_community_post_repository | idempotency_key / resource_version (írás-kísérlet azonosítója és optimista verzió) |
+| account_api_community_post_repository | community_media_bytes (a felhasználó által választott kép nyers bájtjai — POST /community/media multipart `file`) |
+| account_api_community_post_repository | media_ids (a poszthoz csatolt médiák publikus azonosítói — POST /community/posts `media_ids`) |
 | account_api_community_club_repository | club_name (a klub neve — createClub `name`) |
 | account_api_community_club_repository | club_description (a klub szabad szövegű leírása — createClub/updateClub `description`) |
 | account_api_community_club_repository | club_visibility (a klub láthatósága — `visibility` wire-érték) |
 | account_api_community_club_repository | target_public_id (meghívott, illetve új tulajdonos publikus profil-azonosítója — inviteMember `target_public_id`, transferOwnership `target_public_id`) |
 | account_api_community_club_repository | club_membership_action (csatlakozás/kilépés/tag-eltávolítás cél-azonosítói az útvonalban — /join, /leave, /members/{id}) |
 | account_api_community_club_repository | idempotency_key (írás-kísérlet azonosítója) |
+| tutor_stream | tutor_turn_message (student free-text message + the assembled, redacted context snapshot the prompt builder renders) |
 <!-- data-inventory-crosscheck:end -->
 
 ### Reading the table
@@ -80,11 +83,48 @@ a privacy-relevant code change and the check is red, trust the check, not the pr
   idempotency key / resource version that exists only to stop a double submit or a lost update.
   Nothing here is sent unless you are signed in and you explicitly compose, edit or react — with
   no signed-in account, the repository resolves to the disabled variant, which sends nothing.
+  Since the javító sáv R27 round the route also carries **an image you explicitly attach** in the
+  composer, plus the ids of the images a post is published with. Three things about that are worth
+  stating plainly. (1) It is never automatic: the bytes leave the device only after you tap
+  "Attach media" and pick a file. (2) The server does **not** store the file you sent — it
+  re-encodes the picture from the decoded pixels, so the EXIF block a phone camera writes,
+  **including GPS coordinates**, is not part of what is stored or ever served back. (3) The
+  affordance is behind the `communityMediaEnabled` flag, which is **off in every shipped build**
+  today, so unless you are running a build that explicitly turns it on, the button is not there at
+  all and nothing on this path can leave your device.
 - **account_api_community_club_repository** — Community clubs. Same transport and session gate as
   above, with its own fields: the **club name and free-text description** you write, the club's
   visibility setting, the public profile id of whoever you invite or hand ownership to, the
   membership actions you take (join, leave, remove a member), and the same write-integrity
   idempotency key. Again: signed out, nothing on this route leaves the device.
+- **tutor_stream** — the AI tutor's cloud turn (javító sáv 3, 2026-09-07; cloud flag +
+  capability gate 2026-09-08; the provider named 2026-09-08, R29b). When you send a message to
+  the tutor, the message text and a redacted, on-device-assembled context snapshot go to the
+  StrumSight backend's `/tutor/stream` endpoint and from there to the configured model
+  provider. **Five** gates, all re-checked on every turn and all fail-closed: your explicit
+  **model-use consent** on the Tutor privacy screen (the request object is never even built
+  without it), the build's own `aiTutorCloudEnabled` rollout flag, an enabled account layer, a
+  live signed-in session (the same bearer token and 401 handling as `account_api`), and the
+  server's own answer at `/tutor/capability` — a backend still running its default, canned
+  provider is never presented to you as a cloud tutor. With any gate closed the tutor answers
+  from the local, on-device gateway and nothing leaves the phone.
+- **Who the third party is, when there is one.** The model provider this project has chosen is
+  **MiniMax (its M3 model, reached over an Anthropic-compatible Messages API)**. It becomes a
+  processor of your tutor messages only once the backend's operator has configured it — until
+  then the backend answers from a canned, offline provider and nothing leaves the StrumSight
+  server. What MiniMax receives is exactly the message and the redacted context snapshot above:
+  no e-mail, no account or device identifier, no audio. Its own retention and training policy,
+  and the region it processes in, are governed by MiniMax's API terms and the operator's
+  account — this repository does not measure either, which is why the operator has to check
+  both before switching the provider on. The full row, including that operator duty, is
+  `tutor_stream` in [`docs/privacy/data-inventory.yaml`](../privacy/data-inventory.yaml).
+- **Whether the cloud tutor is live in YOUR build depends on which build you got.** Production
+  builds cannot open it at all — `aiTutorCloudEnabled` stays `false` there
+  (`docs/release/ga-scope.md` — postponed behind the open `R-PRIV-01` blocker). The
+  **development tester artifact ships with the rollout flag ON** (2026-09-08, R29a: with it off
+  the Coach could not answer at all), so on that build the four remaining gates are what decide
+  every single turn — and the first of them is your own model-use consent, which is **off until
+  you grant it** on the Tutor privacy screen. Nothing reaches MiniMax before you do.
 
 ## The diagnostics report you can send us — two independent layers
 

@@ -19,23 +19,38 @@
 /// ``processingState`` literal directly and asserts the
 /// rendered face. The test harness is a minimal
 /// ``MaterialApp`` wrapper so the widget's ``Theme.of(context)``
-/// and ``Card`` rendering work; no providers, no localization
-/// (the widget renders English-only placeholder strings today
-/// — the i18n lift is a future round, like the Kör 15
-/// reaction-bar precedent).
+/// and ``Card`` rendering work; no providers.
+///
+/// R21 (audit M9): the widget's English placeholder strings moved into
+/// ``lib/l10n/features/community_{en,hu}.arb``, so the harness now
+/// installs the localization delegates and every assertion reads the
+/// expected text from the ARB (``lookupAppLocalizations``) instead of
+/// repeating the literal — a copy edit can no longer silently pass a
+/// test that pins the old wording.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:strumsight/features/community/presentation/widgets/community_media_player.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
+
+/// The English strings the widget renders — the same source the widget
+/// itself reads, so the assertions cannot drift from the ARB.
+final _l10n = lookupAppLocalizations(const Locale('en'));
 
 /// Minimal harness — the widget reads ``Theme.of(context)`` and
 /// uses ``Card`` + ``CircularProgressIndicator`` / ``Icon`` / ``Text``,
-/// all of which need a ``MaterialApp`` ancestor. No providers, no
-/// localization.
+/// all of which need a ``MaterialApp`` ancestor. No providers; the
+/// localization delegates are installed because the widget's copy is
+/// ARB-backed (R21).
 Widget _harness(Widget child) {
-  return MaterialApp(home: Scaffold(body: child));
+  return MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    locale: const Locale('en'),
+    home: Scaffold(body: child),
+  );
 }
 
 void main() {
@@ -68,7 +83,7 @@ void main() {
 
         // The "Play" button is the player-affordance — the
         // pending face MUST NOT render it (A2 invariant).
-        expect(find.text('Play'), findsNothing);
+        expect(find.text(_l10n.communityMediaPlay), findsNothing);
 
         // The pending face renders a CircularProgressIndicator
         // — proves the placeholder branch is taken.
@@ -90,17 +105,14 @@ void main() {
       await tester.pumpAndSettle();
 
       // No "Play" affordance.
-      expect(find.text('Play'), findsNothing);
+      expect(find.text(_l10n.communityMediaPlay), findsNothing);
       // No CircularProgressIndicator (the pending face is
       // distinct from the rejected face — a buggy
       // implementation that reused the pending face for
       // rejected would have the spinner here).
       expect(find.byType(CircularProgressIndicator), findsNothing);
       // The rejected-card text is rendered.
-      expect(
-        find.text('This media was rejected and cannot be played.'),
-        findsOneWidget,
-      );
+      expect(find.text(_l10n.communityMediaRejectedBody), findsOneWidget);
     },
   );
 
@@ -116,8 +128,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Play'), findsNothing);
-    expect(find.text('This media has been removed.'), findsOneWidget);
+    expect(find.text(_l10n.communityMediaPlay), findsNothing);
+    expect(find.text(_l10n.communityMediaDeletedBody), findsOneWidget);
   });
 
   testWidgets('ready media renders the player card with the Play affordance', (
@@ -133,7 +145,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // The "Play" button IS rendered (the ready face).
-    expect(find.text('Play'), findsOneWidget);
+    expect(find.text(_l10n.communityMediaPlay), findsOneWidget);
     // The play icon is rendered.
     expect(find.byIcon(Icons.play_arrow), findsOneWidget);
     // No spinner (the player face is distinct).
@@ -153,7 +165,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Play'));
+    await tester.tap(find.text(_l10n.communityMediaPlay));
     await tester.pumpAndSettle();
     expect(tapped, 1);
   });

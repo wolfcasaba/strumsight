@@ -130,6 +130,7 @@ class QuestCard extends StatelessWidget {
                   title: title,
                   completed: completed,
                   archived: archived,
+                  l10n: l10n,
                 ),
                 const SizedBox(height: 8),
                 _QuestProgress(
@@ -273,11 +274,13 @@ class _QuestHeader extends StatelessWidget {
     required this.title,
     required this.completed,
     required this.archived,
+    required this.l10n,
   });
 
   final String title;
   final bool completed;
   final bool archived;
+  final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context) {
@@ -296,7 +299,7 @@ class _QuestHeader extends StatelessWidget {
           Icon(
             Icons.check_circle_outline,
             key: const Key('quest-completed-badge'),
-            semanticLabel: 'completed',
+            semanticLabel: l10n.questCompletedBadge,
             size: 20,
             color: theme.colorScheme.primary,
           )
@@ -304,7 +307,7 @@ class _QuestHeader extends StatelessWidget {
           Icon(
             Icons.archive_outlined,
             key: const Key('quest-archived-badge'),
-            semanticLabel: 'archived',
+            semanticLabel: l10n.questArchivedBadge,
             size: 20,
             color: theme.colorScheme.outline,
           ),

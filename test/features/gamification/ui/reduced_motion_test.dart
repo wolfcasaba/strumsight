@@ -161,7 +161,7 @@ void main() {
           find.byKey(const Key('reward-summary-event-xp')),
           findsOneWidget,
         );
-        expect(find.text('15 XP'), findsOneWidget);
+        expect(find.text(_english().rewardSummaryEventXp(15)), findsOneWidget);
       },
     );
 

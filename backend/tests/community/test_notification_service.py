@@ -59,14 +59,11 @@ import threading
 import uuid
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import pytest
-from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from alembic import command
 from app.community import notifications
 from app.community.models.notification import (
     NOTIFICATION_TYPE_COMMENT,
@@ -86,17 +83,7 @@ from app.community.policies.access_policy import CommunityAudience
 from app.community.services.post_service import create_post
 from app.database import enable_sqlite_foreign_keys
 from app.security import hash_password
-
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]
-_ALEMBIC_INI = _BACKEND_ROOT / "alembic.ini"
-_ALEMBIC_DIR = _BACKEND_ROOT / "alembic"
-
-
-def _alembic_config() -> Config:
-    cfg = Config(str(_ALEMBIC_INI))
-    cfg.set_main_option("script_location", str(_ALEMBIC_DIR))
-    return cfg
-
+from tests.migration_template import apply_head_schema
 
 # ---------------------------------------------------------------------------
 # Fixtures — file-backed SQLite engine with the full alembic chain
@@ -111,8 +98,7 @@ def session_factory(tmp_path, monkeypatch) -> Iterator[sessionmaker[Session]]:
     db_url = f"sqlite:///{db_path}"
     monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", db_url)
 
-    cfg = _alembic_config()
-    command.upgrade(cfg, "head")
+    apply_head_schema(db_path)
     # A 30-second busy timeout is the L421 backstop: the
     # A3 race test serialises two writers via the
     # ``_before_commit`` barrier INSIDE the service, and

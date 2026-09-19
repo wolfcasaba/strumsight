@@ -61,6 +61,7 @@ final class SongTrainerScreen extends ConsumerStatefulWidget {
     this.onPause,
     this.onResume,
     this.onSeek,
+    this.onSpeedChanged,
     this.onSectionSelected,
     this.onABEntered,
     this.onABClear,
@@ -84,6 +85,12 @@ final class SongTrainerScreen extends ConsumerStatefulWidget {
   final VoidCallback? onPause;
   final VoidCallback? onResume;
   final ValueChanged<Duration>? onSeek;
+
+  /// Live backing-rate handler. `null` renders the speed slider inert — the
+  /// route supplies one only when the owned controller can actually honour a
+  /// rate change ([SongTrainerController.canChangeBackingRate]).
+  final ValueChanged<double>? onSpeedChanged;
+
   final ValueChanged<SongSectionId>? onSectionSelected;
   final ValueChanged<List<int>>? onABEntered;
   final VoidCallback? onABClear;
@@ -194,6 +201,39 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
     super.dispose();
   }
 
+  // Route mode: the transport buttons drive the owned controller unless the
+  // caller injected its own callbacks (the test harnesses do). Before the
+  // javító sáv the route passed none, so pause / resume / seek were inert.
+  VoidCallback? _ownedPause() {
+    final owned = _ownedController;
+    if (owned == null) return null;
+    return () => unawaited(owned.pause());
+  }
+
+  VoidCallback? _ownedResume() {
+    final owned = _ownedController;
+    if (owned == null) return null;
+    return () => unawaited(owned.resume());
+  }
+
+  ValueChanged<Duration>? _ownedSeek() {
+    final owned = _ownedController;
+    if (owned == null) return null;
+    return (position) => unawaited(owned.seek(position));
+  }
+
+  /// Javító sáv 2026-09-06 (audit §5.2): the speed slider shipped with
+  /// `onChanged: null`, so it was an inert control. It gets a real handler
+  /// exactly when the owned controller can honour one — which, since R13,
+  /// includes a SCORED session: the controller re-times the judged Practice
+  /// target and the backing audio together, at a bar boundary, so the two
+  /// cannot drift apart ([SongTrainerController.canChangeBackingRate]).
+  ValueChanged<double>? _ownedSpeed() {
+    final owned = _ownedController;
+    if (owned == null || !owned.canChangeBackingRate) return null;
+    return (rate) => unawaited(owned.setPlaybackRate(rate));
+  }
+
   Widget _buildScaffold(BuildContext context, SongTrainerState? current) {
     final status = current?.status ?? SongTrainerStatus.idle;
     final leftHanded = ref.read(leftHandedProvider);
@@ -218,9 +258,10 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
         strumEvents: widget.strumEvents,
         noteEvents: widget.noteEvents,
         sections: widget.sections,
-        onPause: widget.onPause,
-        onResume: widget.onResume,
-        onSeek: widget.onSeek,
+        onPause: widget.onPause ?? _ownedPause(),
+        onResume: widget.onResume ?? _ownedResume(),
+        onSeek: widget.onSeek ?? _ownedSeek(),
+        onSpeedChanged: widget.onSpeedChanged ?? _ownedSpeed(),
         onSectionSelected: widget.onSectionSelected,
         onABEntered: widget.onABEntered,
         onABClear: widget.onABClear,
@@ -234,10 +275,10 @@ final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
         chordEvents: widget.chordEvents,
         strumEvents: widget.strumEvents,
         noteEvents: widget.noteEvents,
-        onPlay: widget.onPlay,
-        onPause: widget.onPause,
-        onResume: widget.onResume,
-        onSeek: widget.onSeek,
+        onPlay: widget.onPlay ?? _ownedResume(),
+        onPause: widget.onPause ?? _ownedPause(),
+        onResume: widget.onResume ?? _ownedResume(),
+        onSeek: widget.onSeek ?? _ownedSeek(),
       ),
       SongTrainerStatus.completed ||
       SongTrainerStatus.cancelled => _CompletedBody(state: current!),
@@ -320,6 +361,7 @@ final class _RunningBody extends StatelessWidget {
     required this.onPause,
     required this.onResume,
     required this.onSeek,
+    required this.onSpeedChanged,
     required this.onSectionSelected,
     required this.onABEntered,
     required this.onABClear,
@@ -337,6 +379,7 @@ final class _RunningBody extends StatelessWidget {
   final VoidCallback? onPause;
   final VoidCallback? onResume;
   final ValueChanged<Duration>? onSeek;
+  final ValueChanged<double>? onSpeedChanged;
   final ValueChanged<SongSectionId>? onSectionSelected;
   final ValueChanged<List<int>>? onABEntered;
   final VoidCallback? onABClear;

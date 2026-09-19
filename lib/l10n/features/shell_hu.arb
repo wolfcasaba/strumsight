@@ -1,0 +1,44 @@
+{
+  "@@locale": "hu",
+  "navSongs": "Dalok",
+  "@navSongs": {
+    "description": "Adaptive shell navigation label for the Songs destination (the destination renders the songbook list, not the Song Trainer library)."
+  },
+  "navProfile": "Profil",
+  "@navProfile": {
+    "description": "Adaptive shell navigation label for the Profile destination (the destination renders the profile hub, not the tutor profile)."
+  },
+  "practiceAreaHubMoreHeading": "További eszközök",
+  "@practiceAreaHubMoreHeading": {
+    "description": "Section heading on the practice area hub above the entries that open the full practice catalog, the analysis tool and the lesson library."
+  },
+  "practiceAreaHubAllPractices": "Összes gyakorlat",
+  "@practiceAreaHubAllPractices": {
+    "description": "Opens the full practice catalog list from the practice area hub."
+  },
+  "practiceCatalogCategoryHeading": "Kategória: {category}",
+  "@practiceCatalogCategoryHeading": {
+    "description": "Heading of the practice catalog list when it is filtered to one goal category.",
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  },
+  "visionSetupStartSession": "Kamerás munkamenet indítása",
+  "@visionSetupStartSession": {
+    "description": "Primary call to action on the camera setup ready step; opens the vision session."
+  },
+  "shellDataErrorMessage": "Ezt most nem sikerült betölteni.",
+  "@shellDataErrorMessage": {
+    "description": "Shown by a route that failed to load its data, instead of an empty state that would claim there is nothing to show."
+  },
+  "shellDataRetry": "Újra",
+  "@shellDataRetry": {
+    "description": "Retry action next to shellDataErrorMessage."
+  },
+  "progressEvidenceUnavailable": "Ez a munkamenet nincs a könyvtáradban.",
+  "@progressEvidenceUnavailable": {
+    "description": "Shown when a skill-detail evidence row cannot be resolved to a library item, instead of silently opening the library list."
+  }
+}

@@ -99,6 +99,95 @@ docker compose --env-file runtime.env down        # leállítás (a volume MEGMA
 a `docker.service` pedig `enabled` — a stack a box újraindulása után magától
 feláll.
 
+### 5.1 A megbízható proxy-hop beállítása (R14)
+
+**A probléma (mért, audit §5.4):** a login/register throttle (10/perc,
+5/perc) a kliens IP-jére számol, de a Caddy → `127.0.0.1:8010` topológiában a
+konténer MINDEN hívót ugyanazon a címen lát, ezért a keret az összes
+felhasználóra közös; a 429 az appban „hálózati hiba"-ként jelenik meg. A
+javítás az `X-Forwarded-For` első hopja — de KIZÁRÓLAG akkor, ha a közvetlen
+socket-peer egy kimondottan megbízhatónak jelölt cím
+(`backend/app/client_ip.py`); a fejlécet feltétel nélkül elhinni annyi, mint
+a throttle-t megszüntetni (bárki választhatna magának vödröt).
+
+**1. Mérd meg a hopot** (ne tippeld — hálózati módtól függ):
+
+```bash
+cd /home/ubuntu/strumsight-deploy
+# a) a konténer által látott forráscím a naplóból (bármely hibás belépés után):
+docker compose --env-file runtime.env logs api | grep auth.login_failed | tail -3
+#    -> "... client=172.18.0.1 ..." — bridge módban a docker-átjáró címe
+
+# b) ugyanez a hálózat felől, hívás nélkül:
+docker network inspect "$(docker compose --env-file runtime.env ps -q api \
+  | xargs docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}')" \
+  -f '{{ (index .IPAM.Config 0).Gateway }}'
+```
+
+Publikált porton (`ports: 127.0.0.1:8010:8000`) a docker-proxy NAT-ol, ezért
+a bridge-átjáró címe látszik; `network_mode: host` esetén `127.0.0.1`.
+
+**2. Írd be a `runtime.env`-be** (JSON-lista, mint a CORS-nál; üres *string*
+bootoláskor JSON-hiba, ezért vagy hagyd ki a kulcsot, vagy `[]`):
+
+```
+STRUMSIGHT_TRUSTED_PROXY_IPS=["172.18.0.1"]
+```
+
+Ugyanez az érték megy az uvicorn `--forwarded-allow-ips` kapcsolójába is (a
+`backend/Dockerfile` `CMD`-je alakítja át vesszős listává), így az ASGI- és
+az alkalmazásréteg nem tud egymásnak ellentmondani. Csak konkrét címek —
+tartomány és `*` soha.
+
+**3. A Caddy ÍRJA FELÜL a fejlécet.** A `reverse_proxy` alapból HOZZÁFŰZI a
+peer címét a hívó által küldött `X-Forwarded-For`-hoz, tehát felülírás nélkül
+a hívó elé tudná tenni a saját, hamis első hopját:
+
+```
+handle_path /strumsight/* {
+    reverse_proxy 127.0.0.1:8010 {
+        header_up X-Forwarded-For {remote_host}
+    }
+}
+```
+
+`sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy`.
+Ha ez a sor nincs meg, NE vegyél fel megbízható hopot: a közös vödrű throttle
+kisebb baj, mint a bárki által megkerülhető.
+
+**4. Indíts újra és ellenőrizd** — a `runtime.env` változása új konténert
+igényel (a `restart` a régi környezettel indulna):
+
+```bash
+docker compose --env-file runtime.env up -d
+curl -s http://127.0.0.1:8010/health/ready              # {"status":"ready"}
+docker compose --env-file runtime.env logs --since 5m api | grep auth.login_failed
+#    -> a "client=" mező már a TELEFON címe, nem a docker-átjáróé
+```
+
+### 5.2 Bejelentkezési hibák olvasása (R14)
+
+A `401` szándékosan egyforma az ismeretlen e-mailre és a rossz jelszóra (a
+regisztrált címek halmaza nem szivároghat). Az ok a szerver naplójában van,
+e-mail és jelszó NÉLKÜL — az e-mail helyett egy egyirányú ujjlenyomat
+(`sha256(kisbetűs e-mail)` első 12 hexa jegye):
+
+```bash
+docker compose --env-file runtime.env logs --since 1h api | grep auth.
+# auth.login_failed reason=unknown_email client=203.0.113.7 email_hash=0748ebb7f38a
+# auth.login_failed reason=bad_password  client=203.0.113.7 email_hash=1c9a…
+# auth.register_conflict reason=email_exists client=203.0.113.7 email_hash=1c9a…
+```
+
+`reason=unknown_email` → ilyen fiók nincs (a felhasználó másik címmel
+regisztrált, vagy elgépelte); `reason=bad_password` → a fiók megvan, a jelszó
+nem egyezik; `register_conflict` → a cím már foglalt. Egy gyanított címet így
+lehet a naplóhoz kötni (a napló maga sosem tartalmazza):
+
+```bash
+printf '%s' 'valaki@example.com' | sha256sum | cut -c1-12
+```
+
 ## 6. Mért eredmény (2026-09-05)
 
 | Mérés | Eredmény |
@@ -116,9 +205,15 @@ A próba-fiók a mérés után törölve; a `POST /auth/login` vele `401`-et ad.
 
 ## 7. Amit ez a telepítés NEM kapcsol be
 
-- **`STRUMSIGHT_COMMUNITY_ENABLED=false`** — a 13 community router nincs
-  felcsatolva. A bekapcsolás az `E17-R13` tárgya, a Flutter-oldali
-  repository-k (`E17-R08`..`E17-R11`) elkészülte UTÁN.
+- **`STRUMSIGHT_COMMUNITY_ENABLED=false`** — a community routerek nincsenek
+  felcsatolva. A Flutter-oldali repository-k (`E17-R08`..`E17-R11`) azóta
+  elkészültek, a bekapcsolás pontos lépéssora a lenti **§7.1**.
+- **`STRUMSIGHT_TUTOR_ENABLED=false`** — az AI tutor útvonalai
+  (`/tutor/capability`, `/tutor/stream`, `/tutor/turn`) nincsenek felcsatolva,
+  a kliens 404-et kap. A bekapcsolás pontos lépéssora a lenti **§7.2**; ez az
+  EGYETLEN felület, amelyhez harmadik fél is hozzájut adathoz — a
+  modellszolgáltató, a termék döntése szerint a **MiniMax (M3)** —, ezért külön
+  kulcsot ÉS külön adatvédelmi döntést igényel.
 - **`STRUMSIGHT_DIAGNOSTICS_ENABLED=false`** és
   **`STRUMSIGHT_APK_DOWNLOAD_ENABLED=false`** — a Lab-felületek sötétek.
   A diagnosztika bekapcsolása nem-alapértelmezett `STRUMSIGHT_DIAG_TOKEN`-t is
@@ -126,6 +221,420 @@ A próba-fiók a mérés után törölve; a `POST /auth/login` vele `401`-et ad.
 - **A detektálás továbbra is 100%-ban on-device.** Ez a szolgáltatás fiókot és
   beállítás-szinkront ad; hangot sosem lát, és az app kijelentkezve teljesen
   használható.
+
+### 7.1 A community felület bekapcsolása — pontos lépéssor
+
+Titok nem kell hozzá, csak kapcsolók. A kapcsolók függetlenek egymástól
+(`backend/app/community/__init__.py`): a mester-kapcsoló nélkül egyik
+al-kapcsoló sem csatol fel semmit.
+
+**1. Kulcsok a `runtime.env`-be** (a fájl `0600`, nem verziókövetett):
+
+```
+STRUMSIGHT_COMMUNITY_ENABLED=true              # mester: a 15 router felcsatolása
+STRUMSIGHT_COMMUNITY_WRITES_ENABLED=true       # poszt/komment/social-graph írás
+STRUMSIGHT_COMMUNITY_CLUBS_ENABLED=true        # a clubs router (mind-vagy-semmi)
+STRUMSIGHT_COMMUNITY_LEADERBOARD_ENABLED=true  # a leaderboards router
+STRUMSIGHT_COMMUNITY_MEDIA_ENABLED=false       # a média-router; a lépéssor: §7.3
+```
+
+`STRUMSIGHT_ENV=prod` mellett a community readiness Postgres-t követel
+(`community_requires_postgres`); ez a stack Postgres-en fut, tehát teljesül.
+A `handles` és a `privacy` router szándékosan felcsatolatlan marad (ADR 0497
+D6, hitelesítés nélküli írás-felület) — ezeket ez a kapcsoló SEM hozza fel.
+
+**2. Újraindítás** — módosított env új konténert igényel:
+
+```bash
+cd /home/ubuntu/strumsight-deploy
+docker compose --env-file runtime.env up -d
+```
+
+**3. Készenlét és felcsatolás-ellenőrzés** (a `/health/ready` a community
+migrációs fejét is nézi, ha a mester-kapcsoló be van kapcsolva):
+
+```bash
+curl -s http://127.0.0.1:8010/health/ready
+# {"status":"ready"}   — nem-ready esetén a "reason" mondja meg, mi hiányzik
+#                        (community_requires_postgres | migration_mismatch | …)
+
+# felcsatolt-e a router? token nélkül 403 = FEL van csatolva, 404 = NINCS
+# (mérve: a bekapcsolás előtt mind a négy 404, utána mind 403)
+for p in /community/profiles/me /community/feed /community/clubs \
+         /community/leaderboards/00000000-0000-0000-0000-000000000000; do
+  printf '%s -> ' "$p"
+  curl -s -o /dev/null -w '%{http_code}\n' "http://127.0.0.1:8010$p"
+done
+# a leaderboards útvonalnak KELL az id: a csupasz /community/leaderboards
+# bekapcsolva is 404 — az al-kapcsoló állapotát a fenti, id-s út mutatja
+
+# ugyanez kívülről, a Caddy útvonalán:
+curl -s -o /dev/null -w '%{http_code}\n' https://casaba.app/strumsight/community/profiles/me
+```
+
+**4. Mit mutat a Flutter development APK.** A `build-apk.yml` csak
+`STRUMSIGHT_ENV=development`-et ad, és a `FeatureFlags.forShippedBuild`
+development alatt a community felületeket (írás, klubok, ranglista) BE-re
+oldja fel — a kliensoldali kapu tehát már ma nyitva van, a szerver volt
+zárva:
+
+| | Közösség fül a development APK-ban |
+|---|---|
+| **Flip előtt** (`STRUMSIGHT_COMMUNITY_ENABLED=false`) | „Community is not enabled on this server yet" kártya + Retry (R12, `community_availability.dart`): minden `/community/**` a FastAPI csupasz 404-ét adja, mert a router fel sem csatolódik |
+| **Flip után** | a valódi kapu-lánc: kijelentkezve „Sign in to use Community", belépve, profil nélkül „Create your Community profile", profillal a feed/klub/ranglista képernyők élő adattal |
+
+A Retry gomb szándékosan újrapróbál — a flip után a KÖVETKEZŐ hívás már
+sikerül, új APK nem kell. Ha a flip után is az „on this server yet" kártya
+jön, a router nem csatolódott fel: a 3. lépés `curl`-je 404-et ad, és a
+`/health/ready` `reason` mezője mondja meg, miért.
+
+**Visszakapcsolás** ugyanígy: a kulcsokat `false`-ra, `up -d`, és a kliens
+visszaesik az „on this server yet" kártyára — adat nem vész el, csak a
+felület tűnik el.
+
+### 7.2 Az AI tutor provider bekapcsolása — pontos lépéssor
+
+**A tutor providere a MiniMax M3** (terméktulajdonosi döntés, R29b). A MiniMax
+egy **Anthropic-kompatibilis** Messages API-t szolgál ki
+(`https://api.minimax.io/anthropic`, alatta a `/v1/messages` út) — ugyanaz a
+kéréstest, ugyanazok az SSE-keretek, ugyanaz az `anthropic-version` fejléc —,
+ezért a backend NEM kapott második adaptert: az R23-as
+`AnthropicProviderGateway` fut, csak más **profillal**
+(`AnthropicCompatibleProfile`, `backend/app/tutor/provider_gateway.py`). A
+profil pontosan KÉT dolgot dönt el — a base URL-t és azt, melyik fejléc viszi
+a kulcsot; a táblázat többi oszlopa a hozzá tartozó konfiguráció:
+
+| profil | base URL (alapérték) | a kulcs fejléce | allowlist-bejegyzés | `/tutor/capability` `provider` / `model` |
+|---|---|---|---|---|
+| `minimax` | `https://api.minimax.io/anthropic/v1` | `Authorization: Bearer <kulcs>` | `{"minimax": ["MiniMax-M3"]}` | `minimax` / `MiniMax-M3` |
+| `anthropic` | `https://api.anthropic.com/v1` | `x-api-key: <kulcs>` | `{"anthropic": ["<modell>"]}` | `anthropic` / `<modell>` |
+| `openai` | `https://api.openai.com/v1` | `Authorization: Bearer <kulcs>` (Chat Completions) | `{"openai": ["<modell>"]}` | `openai` / `<modell>` |
+| `fake` | — (nincs socket) | — | `{"fake": ["fake-model"]}` | `fake` / `fake-model` |
+
+A `Bearer` séma a repó SAJÁT MiniMax-eszközeiből MÉRT tény
+(`tools/mm-round.sh`: `ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic` +
+`ANTHROPIC_AUTH_TOKEN`), nem feltételezés. Hogy a MiniMax elfogadja-e emellett
+az `x-api-key`-t is, ebben a repóban nincs megmérve — az adapter ezért a
+mértet küldi, és **csak azt az egyet**: kérésenként pontosan egy példány
+hagyja el a folyamatot a titokból.
+
+**A modell-azonosító `MiniMax-M3`.** A `MiniMax-M3[1m]` a Claude Code
+kontextusablak-utótagja, NEM API-modellnév — ha az kerül a
+`STRUMSIGHT_TUTOR_MODEL`-be, az allowlist-ellenőrzés bootoláskor elhasal
+(ez a szándék: a hiba ne a diák első kérdésénél derüljön ki).
+
+**R23 előtt ez a kapcsoló félrevezető volt:** a `main.py` FELTÉTEL NÉLKÜL
+`FakeProviderGateway()`-t épített, tehát a tutor bekapcsolva is konzervdobozos
+választ adott, akárhogy állt a `STRUMSIGHT_TUTOR_PROVIDER`. R23 óta a
+composition root (`backend/app/main.py::_build_tutor_gateway`) a konfigurált
+adaptert építi, a `fake` pedig az alapértelmezés és a visszaesési út marad.
+
+**Négy kulcsot kell állítani, és mind a négy kötelező** — bármelyik hiánya
+bootolás közben elhasal (`_guard_tutor_provider`), nem futásidőben, nem
+csendben:
+
+| Kulcs | Érték | Miért |
+|---|---|---|
+| `STRUMSIGHT_TUTOR_PROVIDER` | `minimax` | melyik ADAPTER/profil épül; `fake` az alapértelmezés |
+| `STRUMSIGHT_TUTOR_MODEL` | `MiniMax-M3` | a konkrét modell-azonosító |
+| `STRUMSIGHT_TUTOR_ALLOWED_PROVIDERS` | `{"minimax": ["MiniMax-M3"]}` | a JSON allowlist — a registry ehhez validál |
+| `STRUMSIGHT_TUTOR_API_KEY` | a MiniMax API-kulcs | a szerveren marad, a kliens SOSEM látja |
+
+A provider és az allowlist szándékosan KÉT külön kulcs: az első azt mondja meg,
+melyik adapter létezik, a második azt, mi van engedélyezve. Az allowlist
+alapértéke `{"fake": ["fake-model"]}` marad — egy elgépelt provider- vagy
+modellnév tehát nem „majdnem működik", hanem meg sem indul.
+
+Az ötödik, OPCIONÁLIS kulcs a `STRUMSIGHT_TUTOR_MINIMAX_BASE_URL`: csak akkor
+kell, ha a MiniMax elé saját proxy/gateway kerül. Üresen hagyva a fenti
+alapérték érvényes, és a végpont, ahová a kérés ténylegesen megy,
+`https://api.minimax.io/anthropic/v1/messages` (az adapter a base URL-hez
+`/messages`-t fűz — ezért végződik a base URL `/v1`-re).
+
+**1. Kulcsok a `runtime.env`-be** (a fájl `0600`, nem verziókövetett):
+
+```
+STRUMSIGHT_TUTOR_PROVIDER=minimax
+STRUMSIGHT_TUTOR_MODEL=MiniMax-M3
+STRUMSIGHT_TUTOR_ALLOWED_PROVIDERS={"minimax": ["MiniMax-M3"]}
+STRUMSIGHT_TUTOR_API_KEY=…            # a titokkezelőből, sosem kézzel ide
+STRUMSIGHT_TUTOR_ENABLED=true
+```
+
+A négy kulcs egyetlen `up -d`-ben megy fel; ha mégis lépésenként haladsz,
+**a kulcs + a provider + az allowlist megy előbb, és a
+`STRUMSIGHT_TUTOR_ENABLED=true` legutoljára.** A veszélyes köztes állapot az
+`ENABLED=true` + `PROVIDER=minimax` **kulcs nélkül**: ilyenkor a
+`_guard_tutor_provider` `RuntimeError`-t dob, a folyamat el sem indul, és mivel
+a `docker compose up -d` a régi konténert már leállította, nem „csak a tutor"
+esik ki, hanem a bejelentkezés is. (Az `ENABLED=true` önmagában, még `fake`
+providerrel, ártalmatlan: a konzervdobozos válasz jön fel.)
+
+**2. Újraindítás** — módosított env új konténert igényel:
+
+```bash
+cd /home/ubuntu/strumsight-deploy
+docker compose --env-file runtime.env up -d
+docker compose --env-file runtime.env logs --since 2m api | tail -20
+```
+
+Ha a folyamat nem jön fel, a napló utolsó sora MEGMONDJA, melyik kulcs
+hiányzik — a hibaüzenetek a kulcs NEVÉT írják ki, az ÉRTÉKÉT soha.
+
+**3. Ellenőrzés — a capability-végpont most őszintén válaszol:**
+
+```bash
+curl -s http://127.0.0.1:8010/tutor/capability
+# {"enabled":true,"version":"v1","streaming":false,
+#  "provider":"minimax","model":"MiniMax-M3"}
+#
+# flip ELŐTT: 404 (a router fel sem csatolódik)
+# flip UTÁN, de fake providerrel: "provider":"fake","model":"fake-model"
+```
+
+Ez a válasz nem csak operátori kényelem: a kliens ugyanezt a végpontot kérdezi
+le (`tutorCloudCapabilityProvider`), és ha a szerver `fake`-et mond — vagy a
+tutor ki van kapcsolva —, a helyi, eszközön futó stubot választja, tehát egy
+konzervdobozos választ SOHA nem mutat felhő-tutor válaszaként.
+
+A válasz a kulcsot **nem** tartalmazza, és nem is tartalmazhatja: a
+`TutorCapabilityResponse` egy zárt allowlist-séma, a kulcs egyetlen mezőjének
+sem forrása. A `provider`/`model` nem titok — pont attól használható a flip
+ellenőrzésére kívülről is:
+
+```bash
+curl -s https://casaba.app/strumsight/tutor/capability
+```
+
+Egy valódi turn hitelesítést kíván (`POST /tutor/stream`, bearer JWT), tehát a
+végponti füst-próba a telefonról vagy egy próba-fiókkal megy — a
+`tool/release/live_backend_smoke.py` szándékosan kihagyja a tutort.
+
+**4. Ha a provider hibázik: mit mond a napló.** A kliens felé minden
+provider-hiba UGYANAZ marad (`502` / `provider_error` SSE-keret, időtúllépésnél
+`504` / `provider_timeout`) — a hibatest, a kulcs és a prompt SOSEM megy ki és
+naplóba sem kerül. Az operátor viszont osztályozva látja, mi történt:
+
+```bash
+docker compose --env-file runtime.env logs api | grep 'Tutor provider call failed'
+# Tutor provider call failed (classification=configuration, http_status=401)
+```
+
+| `classification` | Mi váltja ki | Teendő |
+|---|---|---|
+| `configuration` | HTTP `401`/`403` (kulcs rossz vagy visszavont), `404` (rossz modell-azonosító vagy base URL), illetve az `authentication_error`/`permission_error`/`not_found_error`/`billing_error` stream-keretek | operátori hiba — újrapróbálás NEM segít; ellenőrizd a kulcsot és a `STRUMSIGHT_TUTOR_MODEL`-t |
+| `busy` | HTTP `429`, `529` és minden `5xx`, illetve a `rate_limit_error`/`overloaded_error`/`api_error` keret | átmeneti — a felhasználó újrapróbálhatja; ha tartós, a provider-oldali kvótát nézd |
+| `invalid_request` | HTTP `400`/`413`/`422`, illetve `invalid_request_error`/`request_too_large` | a kérés alakja/mérete — a lenti 5. pont limitkulcsait nézd |
+| `timeout` | `STRUMSIGHT_TUTOR_TIMEOUT_SECONDS` letelt, vagy a provider `timeout_error` keretet küldött | emeld a timeoutot vagy csökkentsd a `MAX_OUTPUT_BYTES`-t |
+| `transport` | kapcsolat/TLS/protokoll hiba (a cél-URL-t tartalmazó kivételszöveg eldobva) | hálózat/DNS a konténerből |
+| `malformed_response` / `incomplete_response` | nem SSE-válasz, hibás JSON-keret, vagy `message_stop` nélkül záruló stream | a csonka válasz zárt hibával esik el, nem rövid válaszként megy ki |
+
+A `http_status=None` azt jelenti, hogy HTTP-státusz nem is született (időtúllépés,
+kapcsolat-hiba), nem azt, hogy elveszett.
+
+**5. Költség és korlátok.** A meglévő kapuk a providertől függetlenül élnek, és
+a flip után VALÓDI pénzt védenek — érdemes a bekapcsolással egy menetben
+átnézni őket:
+
+| Kulcs | Alapérték | Mit korlátoz |
+|---|---|---|
+| `STRUMSIGHT_TUTOR_MAX_OUTPUT_BYTES` | `2000` | a válasz hossza; ebből számolódik a provider `max_tokens` értéke is (~4 bájt/token, tehát 500 token) |
+| `STRUMSIGHT_TUTOR_MAX_REQUEST_BYTES` | `4000` | egy üzenet mérete |
+| `STRUMSIGHT_TUTOR_MAX_HISTORY_MESSAGES` | `20` | a felküldött előzmény hossza |
+| `STRUMSIGHT_TUTOR_MAX_CONTEXT_BYTES` | `8000` | az összeállított kontextus mérete |
+| `STRUMSIGHT_TUTOR_RATE_LIMIT_MAX` / `_WINDOW` | `30` / `60` | kérés/perc felhasználónként |
+| `STRUMSIGHT_TUTOR_DAILY_TOKEN_LIMIT` | `50000` | napi token-budget felhasználónként |
+| `STRUMSIGHT_TUTOR_TIMEOUT_SECONDS` | `30.0` | a provider-hívás időkorlátja (túllépve zárt hibával, `provider_timeout` SSE-kerettel esik el) |
+
+A limiterek **folyamat-lokálisak** (ugyanaz a mérés, mint az auth-throttle-nál,
+`backend/README.md`): több worker esetén nem osztoznak a számlálón, tehát a
+tényleges napi plafon ~worker-számszor nagyobb. Egyetlen workerre méretezz,
+vagy tedd a limitet közös tárba, mielőtt a számla ezt méri meg helyetted.
+A tényleges provider-oldali `output_tokens` minden turn után egy INFO sorba
+kerül (`Tutor provider stream completed (provider=minimax, output_tokens=…)`)
+— a profil neve (konfiguráció, nem titok) és egy szám, semmi más:
+
+```bash
+docker compose --env-file runtime.env logs api | grep 'Tutor provider stream'
+```
+
+**6. Adatvédelem — mi hagyja el a szervert.** Ez a flip a StrumSight EGYETLEN
+olyan útvonala, ahol felhasználói szöveg harmadik félhez kerül, és a harmadik
+fél NEVE ezzel a flippel dől el: **MiniMax (M3, Anthropic-kompatibilis
+Messages API)**. A `docs/privacy/data-inventory.yaml` `tutor_stream` sora írja
+le, mi megy fel a kliensről: a tanuló szabadszöveges üzenete + a prompt-építő
+által összeállított, redaktált kontextus-pillanatkép, `legal_basis: consent`, a
+kliensoldali kapu a `TutorConsent.modelUseGranted`. A szerver ezt a két dolgot
+adja tovább a providernek — a kontextus a Messages API `system` mezőjében, az
+üzenet és az előzmény a `messages` tömbben —, semmi mást: nincs benne
+felhasználó-azonosító, e-mail, eszközazonosító vagy hangadat (a detektálás
+100%-ban on-device marad, §7).
+
+**Amit a flip ELŐTT az operátornak meg kell néznie**, mert ez a repó nem méri:
+a MiniMax saját megőrzési és tanítási politikája a felküldött szövegre, és az
+a régió, ahol a MiniMax-fiók feldolgoz. Mindkettő a fiók tulajdonságától függ,
+nem a kódtól — a `data-inventory.yaml` `tutor_stream` sora ezért mondja ki
+külön, mit garantál a KÓD (a kliens nem tart másolatot a nyitott beszélgetés
+memóriabeli állapotán túl; a backend a prompt tartalmát sehol nem naplózza) és
+mit kell az operátornak ELLENŐRIZNIE.
+
+A backend a prompt-tartalmat SEHOL nem naplózza (a napló csak a felhasználó
+azonosítóját és token-számokat lát), és a provider hibatestje sosem kerül sem
+naplóba, sem a kliens felé — a `ProviderError`/`ProviderTimeoutError`
+provider-semleges, redaktált kivétel, amit a router `502`/`504`-re, a
+stream-transzport pedig `provider_error`/`provider_timeout` SSE-keretre képez.
+
+> **Az R23 nyitott tétele LEZÁRVA (R24, majd R29b).** Az adat-leltár
+> `tutor_stream` sora korábban csak „backend (the configured
+> STRUMSIGHT_API_URL host)"-ot mondott, tehát a harmadik fél mint
+> adatfeldolgozó hiányzott belőle. Az R24 behúzta a harmadik-fél-hopot a
+> `storage`/`retention` mezőkbe, az R29b pedig a tényleges providert nevezi
+> meg benne (MiniMax M3) — ugyanígy a `docs/beta/tester-consent.md` prózája és
+> a `docs/store/data-safety.yaml` `tutor_turn_message` kategóriája. A flip
+> előtt tehát nincs leltár-adósság; ami marad, az a fenti operátori
+> ellenőrzés (MiniMax-oldali megőrzés + régió).
+
+**Visszakapcsolás (két fokozat, mindkettő egy `up -d`):**
+
+1. `STRUMSIGHT_TUTOR_PROVIDER=fake` — a routerek maradnak, a
+   `/tutor/capability` őszintén `"provider":"fake"`-et mond, a kliens ettől a
+   helyi stubra vált, és **egyetlen bájt sem megy a MiniMaxhoz**. Ez a
+   visszavonás legkisebb lépése: a bejelentkezés és a beállítás-szinkron
+   érintetlen marad.
+2. `STRUMSIGHT_TUTOR_ENABLED=false` — a `/tutor/*` routerek le is csatolódnak,
+   a kliens 404-et kap, és ugyanúgy a helyi stubra esik vissza.
+
+Mindkét irány adatvesztés nélküli: a beszélgetés a készüléken él, a backend a
+turnökből semmit nem tárol.
+
+**Alternatív providerek.** A `minimax` a termék döntése, de az adapter
+profil-alapú, ezért az `anthropic` (Anthropic Messages API, `x-api-key`) és az
+`openai` (Chat Completions) változatlanul választható: a fenti lépéssor
+ugyanaz, csak a négy kulcs értéke más (a profil-táblázat a szakasz elején), és
+`anthropic`/`openai` esetén a base URL felülbírálása a
+`STRUMSIGHT_TUTOR_ANTHROPIC_BASE_URL` / `STRUMSIGHT_TUTOR_OPENAI_BASE_URL`
+kulcson megy. A providerváltás egyben ADATVÉDELMI változás: a
+`data-inventory.yaml` `tutor_stream` sora, a `tester-consent.md` és a
+`data-safety.yaml` a MiniMaxot NEVESÍTI, tehát más providerre váltva ezeket is
+át kell írni, mielőtt a flip élesbe megy.
+
+### 7.3 Community média-feltöltés bekapcsolása — pontos lépéssor
+
+**A kapcsoló R27 előtt ÜRESEN állt.** A `STRUMSIGHT_COMMUNITY_MEDIA_ENABLED`
+a Kör 1 óta létezett, de nem csatolt fel semmit: a Kör 18/19 aláírt-URL-es
+szolgáltatás (`services/media_upload_service.py`) sosem kapott routert, és a
+hozzá képzelt objektum-tároló nem része ennek a deploynak. R27 óta a kapcsoló
+egy VALÓDI felületet kapuz — `POST/GET/DELETE /community/media` —, amely a
+bájtokat közvetlenül a backendbe tölti, ott újrakódolja és egy helyi köteten
+tárolja.
+
+**A két alapértelmezés SZÁNDÉKOSAN fail-closed.** A flag felkapcsolása
+önmagában NEM tesz elfogadhatóvá egyetlen feltöltést sem:
+
+| kapcsoló | alapértelmezés | mit csinál |
+|---|---|---|
+| `STRUMSIGHT_MEDIA_SCANNER` | `disabled` | a *disabled* adapter MINDEN feltöltést elutasít (`scanner_not_configured`). Nincs átengedő („pass-through") adapter: egy vírusirtó, ami ránézés nélkül mond tisztát, rosszabb a semminél, mert a sor, az üzemeltető és az audit onnantól azt olvassa, hogy a bájtokat átvizsgálták. |
+| `STRUMSIGHT_MEDIA_AUDIO_TRANSCODER` | `disabled` | minden HANG-feltöltés elutasítva (`audio_transcoder_unavailable`). A kép újrakódolása a folyamaton belül, Pillow-val történik (kemény függőség); a hanghoz külső kódoló kell, amit ez a repó nem szállít. |
+
+Kép-feltöltéshez tehát clamd KELL. Hang-feltöltéshez clamd ÉS egy `ffmpeg`.
+
+**1. Kötet és clamd** (a kötet a konténeren kívül él, hogy egy image-csere ne
+vigye el a felhasználók tartalmát):
+
+```bash
+# a) a médiakötet — csak a szolgáltatás felhasználója olvassa
+sudo install -d -o 10001 -g 10001 -m 0700 /srv/strumsight/media
+
+# b) clamd UNIX socketen (hálózati kitettség nélkül); a socketet
+#    ugyanabba a névtérbe kell bekötni, ahol az api fut
+sudo apt-get install -y clamav-daemon && sudo freshclam
+sudo systemctl enable --now clamav-daemon
+ls -l /var/run/clamav/clamd.ctl        # ennek léteznie kell
+```
+
+**2. Kulcsok a `runtime.env`-be:**
+
+```
+STRUMSIGHT_COMMUNITY_ENABLED=true
+STRUMSIGHT_COMMUNITY_WRITES_ENABLED=true
+STRUMSIGHT_COMMUNITY_MEDIA_ENABLED=true        # a media router felcsatolása
+STRUMSIGHT_MEDIA_ROOT=/srv/strumsight/media    # a tartalom-címzett tároló gyökere
+STRUMSIGHT_MEDIA_SCANNER=clamd                 # a fail-closed alapértelmezés feloldása
+STRUMSIGHT_MEDIA_SCANNER_SOCKET=/var/run/clamav/clamd.ctl   # ha üres: host/port
+# STRUMSIGHT_MEDIA_SCANNER_HOST / _PORT        # csak ha nincs UNIX socket
+# STRUMSIGHT_MEDIA_SCANNER_TIMEOUT_SECONDS=10
+# STRUMSIGHT_MEDIA_MAX_IMAGE_BYTES=8388608     # 8 MiB
+# STRUMSIGHT_MEDIA_MAX_AUDIO_BYTES=20971520    # 20 MiB — csak transcoderrel él
+# STRUMSIGHT_MEDIA_MAX_ITEMS_PER_PROFILE=50    # fiókonkénti élő sor-kvóta
+# STRUMSIGHT_MEDIA_UPLOAD_RATE_LIMIT_MAX=20    # IP-nkénti csúszóablak…
+# STRUMSIGHT_MEDIA_UPLOAD_RATE_LIMIT_WINDOW=3600  # …másodpercben
+# STRUMSIGHT_MEDIA_IMAGE_MAX_DIMENSION=2048    # a hosszabb él az újrakódolás után
+# STRUMSIGHT_MEDIA_IMAGE_QUALITY=82
+# STRUMSIGHT_MEDIA_REVIEW_REQUIRED=false       # true: a kész sor `review`-ban parkol
+# STRUMSIGHT_MEDIA_AUDIO_TRANSCODER=ffmpeg     # csak ha van ffmpeg a konténerben
+# STRUMSIGHT_MEDIA_FFMPEG_PATH=ffmpeg
+# STRUMSIGHT_MEDIA_AUDIO_MAX_DURATION_SECONDS=180
+```
+
+A compose-fájlban a kötetet és a socketet is be kell kötni:
+
+```yaml
+    volumes:
+      - /srv/strumsight/media:/srv/strumsight/media
+      - /var/run/clamav/clamd.ctl:/var/run/clamav/clamd.ctl
+```
+
+**3. Migráció, majd újraindítás** — az `e09_r28_0021` revízió hozza létre a
+`community_media_uploads` táblát:
+
+```bash
+cd /home/ubuntu/strumsight-deploy
+docker compose --env-file runtime.env run --rm api alembic upgrade head
+docker compose --env-file runtime.env up -d
+curl -s http://127.0.0.1:8010/health/ready     # {"status":"ready"}
+```
+
+**4. Felcsatolás- és fail-closed-ellenőrzés.** A kapu REGISZTRÁCIÓS: flip
+előtt az útvonal nem is létezik, tehát a csupasz 404 és a hitelesítési 403
+különbsége mondja meg az állapotot.
+
+```bash
+# felcsatolt-e? token nélkül 403 = FEL van csatolva, 404 = NINCS
+curl -s -o /dev/null -w '%{http_code}
+' -X POST http://127.0.0.1:8010/community/media
+
+# a fail-closed alapértelmezés PRÓBÁJA (csináld meg, MIELŐTT a scanner=clamd
+# sort beteszed): a válasz 201, a törzsben state=rejected +
+# rejection_code=scanner_not_configured — ez a helyes, biztonságos állapot,
+# nem hiba
+curl -s -H "Authorization: Bearer $TOKEN" \
+     -F 'file=@/tmp/probe.jpg' http://127.0.0.1:8010/community/media
+
+# clamd bekapcsolása után ugyanez: state=ready, és a bájtok visszakérhetők
+curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $TOKEN" \
+     http://127.0.0.1:8010/community/media/$PUBLIC_ID
+```
+
+**Amit a felület a bájtokkal tesz** (a három korábban nyitott threat-model
+tétel, `docs/security/community-threat-model.md` §6.2):
+
+1. **méret** — a kaput a ténylegesen beolvasott bájtok döntik el, nem a
+   `Content-Length` fejléc;
+2. **magic-byte** — a fájlnév és a multipart `Content-Type` SEMMIT nem
+   befolyásol; nyolc engedélyezett formátum van, minden más elutasítva, és az
+   SVG/HTML külön kódot kap;
+3. **vírusirtó** — clamd `INSTREAM` az EREDETI bájtokon (nem az újrakódolt
+   kimeneten: azt a támadó sosem küldte);
+4. **újrakódolás** — a tárolt bájt az `enkóder` kimenete, tehát EXIF/GPS,
+   ICC, XMP és a fájl végére fűzött „polyglot" függelék nem éli túl;
+5. **tárolás** — tartalom-címzett (`<sha256[0:2]>/<sha256[2:4]>/<sha256>`),
+   így egyetlen kérés-mező sem lesz útvonal-szegmenssé.
+
+**Visszakapcsolás.** `STRUMSIGHT_COMMUNITY_MEDIA_ENABLED=false`, `up -d` — az
+útvonalak eltűnnek, a kliens visszaesik a szöveg-only szerkesztőre. A
+`STRUMSIGHT_MEDIA_ROOT` kötetet **ne töröld**: a migráció visszavonása (`alembic
+downgrade -1`) is csak a TÁBLÁT ejti, a felhasználók fájljait szándékosan
+érintetlenül hagyja, hogy egy újra-felhúzás a bájtokat a helyükön találja.
 
 ## 8. Egy MÉRT hibaosztály, amit ez a telepítés tárt fel
 

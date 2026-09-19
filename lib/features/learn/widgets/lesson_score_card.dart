@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// A shareable 9:16 "lesson complete" brag card — score, stars, combo — that
 /// carries the moat + install link (RAG chunks 013 + 014). Self-contained dark
 /// brand look so the exported PNG reads the same everywhere.
+///
+/// MI-H (E09, R-handoff): card copy used to be English-only — a Hungarian
+/// user shared an English card. The card now reads every label through
+/// `AppLocalizations.of(context)` (the `shareCard*` keys live in
+/// `community_{en,hu}.arb`). The brand wordmark "StrumSight" and the
+/// `↓↑` glyph stay as-is — they're brand/glyph content, not copy.
 class LessonScoreCard extends StatelessWidget {
   const LessonScoreCard({
     super.key,
@@ -29,6 +36,7 @@ class LessonScoreCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return SizedBox(
       width: width,
       height: height,
@@ -73,9 +81,9 @@ class LessonScoreCard extends StatelessWidget {
                 ],
               ),
               const Spacer(),
-              const Text(
-                'LESSON COMPLETE',
-                style: TextStyle(
+              Text(
+                l10n.shareCardLessonCompleteLabel,
+                style: const TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 12,
                   letterSpacing: 2,
@@ -121,9 +129,16 @@ class LessonScoreCard extends StatelessWidget {
               const Spacer(),
               Row(
                 children: [
-                  Expanded(child: _chip('$hits/$total', 'HITS')),
+                  Expanded(
+                    child: _chip('$hits/$total', l10n.shareCardLessonHitsLabel),
+                  ),
                   const SizedBox(width: 12),
-                  Expanded(child: _chip('$maxCombo', 'BEST COMBO')),
+                  Expanded(
+                    child: _chip(
+                      '$maxCombo',
+                      l10n.shareCardLessonBestComboLabel,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
@@ -141,7 +156,7 @@ class LessonScoreCard extends StatelessWidget {
                   const SizedBox(width: 7),
                   Flexible(
                     child: Text(
-                      'Graded on my strum direction',
+                      l10n.shareCardLessonMoatLine,
                       style: TextStyle(
                         fontSize: 10,
                         color: _ink.withValues(alpha: 0.7),

@@ -32,7 +32,10 @@ void main() {
     // four are asserted, the fifth is not required here.
     expect(find.text('Today'), findsWidgets);
     expect(find.text('Practice hub'), findsWidgets);
-    expect(find.text('Song library'), findsWidgets);
+    // R18 (audit M10) — dedicated nav keys: the Songs destination used to
+    // be labelled "Song library" (the Song Trainer library's title) and
+    // Profile "Tutor profile", both naming a screen the tap does not open.
+    expect(find.text('Songs'), findsWidgets);
     expect(find.text('Profile'), findsWidgets);
   });
 }

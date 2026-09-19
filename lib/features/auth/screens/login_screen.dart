@@ -4,13 +4,16 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/routing/app_route.dart';
 import '../../../core/design_system/public.dart';
+import '../../../core/foundation/app_failure.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
 import '../presentation/auth_failure_message.dart';
 import '../providers/auth_providers.dart';
 import '../theme/auth_theme_scope.dart';
 
-/// Sign-in / create-account screen. Pushed from Settings; pops on success.
+/// Sign-in / create-account screen. Pushed from Settings and from the
+/// Profile hub; on success it pops back there, or — when it was reached by
+/// a stack-replacing `go()` — lands on the profile home instead.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -24,6 +27,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _password = TextEditingController();
   bool _isSignUp = false;
 
+  /// How many submissions THIS screen has started. Every failure the
+  /// controller publishes belongs to exactly one of them.
+  int _submissions = 0;
+
+  /// The submission whose failure the user has already answered — by
+  /// toggling the mode, or by editing a field after the attempt failed.
+  ///
+  /// [AuthController] keeps its honest `AsyncError` (this screen never fakes
+  /// an `AsyncData(null)` "logged out fine" state); only the SCREEN stops
+  /// repainting a message the user has moved on from — the measured defect
+  /// was a sign-up 409 still shown on the sign-in form, and vice versa.
+  /// Because a new attempt raises [_submissions], the marker can never
+  /// outlive the submission it dismissed: the NEXT failure is always shown,
+  /// even one carrying the same code or the very same (const-canonical)
+  /// failure instance.
+  int? _dismissedSubmission;
+
   @override
   void dispose() {
     _email.dispose();
@@ -31,24 +51,46 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  /// "Continue without an account" (A1, ADR 0292 norm) always has to leave
-  /// this screen. Every in-app entry point now PUSHES this route (Settings
-  /// always did; the profile hub's `go()` was the navigation bug the
-  /// 2026-09-16 owner report hit, fixed in `profile_hub_screen.dart`), so
-  /// `maybePop` is the normal path. The `go()` fallback stays for the entries
-  /// that can still arrive with an empty stack — a `/login` deep link, or
-  /// `onException`'s reset — where `maybePop` would silently no-op and strand
-  /// the user here (javító kör 1, F4).
-  Future<void> _continueWithoutAccount() async {
+  /// The single way OUT of this screen, shared by both exits: "continue
+  /// without an account" (A1, ADR 0292 norm) and a successful sign-in.
+  ///
+  /// The screen is reached two ways: PUSHED (from Settings and from the
+  /// Profile hub, a real route to pop back to) and via a `go()` that
+  /// REPLACED the stack (a `/login` deep link), which leaves nothing to pop
+  /// (javító kör 1, F4). `maybePop` alone silently no-ops on the second
+  /// path, stranding the user here — and a bare `pop()` there throws
+  /// `GoError: There is nothing to pop`, which is exactly what a successful
+  /// sign-in did. The `go()` fallback only fires when there genuinely was
+  /// nothing to pop.
+  Future<void> _leaveScreen() async {
     final popped = await Navigator.of(context).maybePop();
     if (!popped && mounted) {
       context.go(AppRoutes.profileHome);
     }
   }
 
+  /// Hides the failure currently on screen WITHOUT touching the controller.
+  ///
+  /// Called when the user changes what they are doing (mode toggle, or an
+  /// edit in either field): the visible message answers the PREVIOUS attempt
+  /// and from here on would only contradict the form in front of the user.
+  void _dismissVisibleError() {
+    if (_dismissedSubmission == _submissions) return;
+    if (!ref.read(authControllerProvider).hasError) return;
+    setState(() => _dismissedSubmission = _submissions);
+  }
+
+  void _toggleMode() {
+    _dismissVisibleError();
+    setState(() => _isSignUp = !_isSignUp);
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
+    // A fresh attempt — whatever was dismissed belonged to an older one, so
+    // this attempt's outcome is shown no matter what came before it.
+    setState(() => _submissions++);
     final controller = ref.read(authControllerProvider.notifier);
     final email = _email.text.trim();
     final password = _password.text;
@@ -65,10 +107,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final palette = context.palette;
     final auth = ref.watch(authControllerProvider);
     final loading = auth.isLoading;
+    final showError = auth.hasError && _dismissedSubmission != _submissions;
 
-    // Pop back to Settings the moment a session exists.
+    // Leave the moment a session exists — back to whatever pushed this
+    // screen, or to the profile home when nothing did.
     ref.listen(authControllerProvider, (_, next) {
-      if (next.value != null && context.mounted) context.pop();
+      if (next.value != null && context.mounted) _leaveScreen();
     });
 
     return AuthThemeScope(
@@ -113,6 +157,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               TextFormField(
                                 controller: _email,
                                 enabled: !loading,
+                                onChanged: (_) => _dismissVisibleError(),
                                 keyboardType: TextInputType.emailAddress,
                                 autofillHints: const [AutofillHints.email],
                                 textInputAction: TextInputAction.next,
@@ -132,6 +177,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               TextFormField(
                                 controller: _password,
                                 enabled: !loading,
+                                onChanged: (_) => _dismissVisibleError(),
                                 obscureText: true,
                                 autofillHints: const [AutofillHints.password],
                                 textInputAction: TextInputAction.done,
@@ -145,7 +191,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     ? null
                                     : l10n.authPasswordTooShort,
                               ),
-                              if (auth.hasError) ...[
+                              if (showError) ...[
                                 const SizedBox(height: 16),
                                 // Only the stable, localised failure code ever
                                 // reaches the UI (authFailureMessage) — no raw
@@ -159,6 +205,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     color: colors.danger,
                                   ),
                                 ),
+                                if (_isEmailTaken(auth.error)) ...[
+                                  const SizedBox(height: 8),
+                                  // A 409 has exactly ONE obvious next step,
+                                  // and the toggle right below performs it —
+                                  // say so instead of leaving a dead end.
+                                  Text(
+                                    l10n.authEmailTakenHint,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 13,
+                                      color: palette.ink,
+                                    ),
+                                  ),
+                                ],
                               ],
                               const SizedBox(height: 24),
                               SsButton(
@@ -174,11 +235,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 label: _isSignUp
                                     ? l10n.authToggleToSignIn
                                     : l10n.authToggleToSignUp,
-                                onPressed: loading
-                                    ? null
-                                    : () => setState(
-                                        () => _isSignUp = !_isSignUp,
-                                      ),
+                                onPressed: loading ? null : _toggleMode,
                               ),
                             ],
                           ),
@@ -191,7 +248,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         key: const Key('authContinueWithoutAccount'),
                         variant: SsButtonVariant.tertiary,
                         label: l10n.authContinueWithoutAccount,
-                        onPressed: loading ? null : _continueWithoutAccount,
+                        onPressed: loading ? null : _leaveScreen,
                       ),
                     ],
                   ),
@@ -204,3 +261,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 }
+
+/// True when the visible failure is the sign-up 409 — "that e-mail is already
+/// registered". The one failure on this screen with an obvious next step.
+bool _isEmailTaken(Object? error) =>
+    error is AppFailure && error.code == FailureCode.validationEmailTaken;

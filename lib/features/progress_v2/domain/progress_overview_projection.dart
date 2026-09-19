@@ -38,11 +38,13 @@ final class ProgressOverviewProjection {
     required List<MilestoneOverviewEntry> milestones,
     required ProgressTrend trend,
     required List<MetricVersionSegment> metricSegments,
+    bool isUnavailable = false,
   }) => ProgressOverviewProjection._(
     isOffline: isOffline,
     milestones: List.unmodifiable(milestones),
     trend: trend,
     metricSegments: List.unmodifiable(metricSegments),
+    isUnavailable: isUnavailable,
   );
 
   const ProgressOverviewProjection._({
@@ -50,6 +52,7 @@ final class ProgressOverviewProjection {
     required this.milestones,
     required this.trend,
     required this.metricSegments,
+    required this.isUnavailable,
   });
 
   /// True when local progress exists that has not synced to the account
@@ -60,7 +63,20 @@ final class ProgressOverviewProjection {
   final ProgressTrend trend;
   final List<MetricVersionSegment> metricSegments;
 
+  /// True when the practice history could NOT be read (M9, re-audit
+  /// 2026-09-08) — resolved by the caller from
+  /// `progressPracticeHistoryProvider`, never read here.
+  ///
+  /// Distinct from [isNewUser] on purpose: an unreadable store leaves every
+  /// milestone without evidence, so without this bit the dashboard would
+  /// greet a user with years of practice as a beginner. Defaults to `false`,
+  /// so every fixture that hands this projection a plain history keeps its
+  /// exact previous meaning.
+  final bool isUnavailable;
+
   /// True when not one milestone has any evidence yet — the dashboard's new
-  /// user state (§3 scope).
+  /// user state (§3 scope). Only meaningful when [isUnavailable] is false:
+  /// "no evidence" is a fact about the user solely when the history was
+  /// actually read.
   bool get isNewUser => milestones.every((entry) => !entry.hasEvidence);
 }

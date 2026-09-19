@@ -25,6 +25,8 @@ import 'package:strumsight/features/library_v2/screens/library_item_detail_scree
 import 'package:strumsight/features/library_v2/screens/unified_library_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
+import '../../support/preference_store.dart';
+
 /// `_AnalysisDetailBody` always references `analysisRepositoryProvider`
 /// (for the export action) even when a test never taps export — this fake
 /// only needs to exist, never to be called, in every cell here.
@@ -117,6 +119,9 @@ Future<GoRouter> _pumpRouter(WidgetTester tester) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        // M6 (re-audit 2026-09-08): the analysis detail body restores its
+        // persisted note from `keyValueStoreProvider`, which has no default.
+        ...preferenceOverrides(),
         libraryV2SourcesProvider.overrideWithValue([
           _FakeSource(LibraryItemType.analysis, [_analysisItem]),
           _FakeSource(LibraryItemType.practice, [_practiceItem]),

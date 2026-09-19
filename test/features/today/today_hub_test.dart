@@ -4,12 +4,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/app/config/app_config.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/features/streak/public.dart';
 import 'package:strumsight/features/strum_challenge/public.dart';
+import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/features/today/domain/today_plan_repository.dart';
 import 'package:strumsight/features/today/domain/today_plan_snapshot.dart';
 import 'package:strumsight/features/today/providers/today_providers.dart';
@@ -97,6 +99,53 @@ Widget _host({
     home: TodayHubScreen(now: now ?? DateTime(2026, 8, 25)),
   ),
 );
+
+/// The hub under a MINIMAL go_router, so the Vision entry's real stack
+/// effect can be measured. The target is a `STUB <path>` page — this cell
+/// measures the NAVIGATION, not the camera screen.
+Widget _routerHost(GoRouter router, {bool visionSetupEnabled = false}) {
+  return ProviderScope(
+    overrides: [
+      ...preferenceOverrides(),
+      appConfigProvider.overrideWithValue(
+        AppConfig(
+          environment: AppEnvironment.development,
+          apiBaseUrl: AppConfig.devApiBaseUrl,
+          flags: FeatureFlags(
+            accountEnabled: false,
+            diagnosticsEnabled: false,
+            labModeAvailable: false,
+            visionEnabled: true,
+            visionSetupEnabled: visionSetupEnabled,
+          ),
+          diagnosticsToken: AppConfig.devDiagnosticsToken,
+          buildMode: 'test',
+          appVersion: 'test',
+        ),
+      ),
+    ],
+    child: MaterialApp.router(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      routerConfig: router,
+    ),
+  );
+}
+
+GoRouter _visionRouter() => GoRouter(
+  initialLocation: AppRoutes.today,
+  routes: <RouteBase>[
+    GoRoute(
+      path: AppRoutes.today,
+      builder: (_, _) => TodayHubScreen(now: DateTime(2026, 8, 25)),
+    ),
+    GoRoute(path: AppRoutes.visionSetup, builder: _stub),
+    GoRoute(path: AppRoutes.visionSession, builder: _stub),
+  ],
+);
+
+Widget _stub(BuildContext _, GoRouterState state) =>
+    Scaffold(body: Text('STUB ${state.uri.path}'));
 
 void main() {
   group('a plan that names a curriculum rung', () {
@@ -228,6 +277,13 @@ void main() {
         ),
       );
     });
+
+    testWidgets('plan unreadable (R20)', (tester) async {
+      await expectOnePrimaryCta(
+        tester,
+        const TodayPlanSnapshot(availability: TodayPlanAvailability.unreadable),
+      );
+    });
   });
 
   group('A4 — the hub never touches a microphone/camera/wakelock API', () {
@@ -335,7 +391,12 @@ void main() {
       await tester.pumpWidget(_host(visionEnabled: true));
       await tester.pump();
 
-      expect(find.textContaining('Use your camera for guided'), findsOneWidget);
+      // R32 — the card no longer promises finger-placement feedback: the
+      // session measures setup quality (framing, lighting, calibration).
+      expect(
+        find.textContaining('check your framing and lighting'),
+        findsOneWidget,
+      );
       expect(
         find.widgetWithText(TextButton, 'Vision practice'),
         findsOneWidget,
@@ -420,6 +481,101 @@ void main() {
         find.text('Your first practice session takes just a few minutes.'),
         findsOneWidget,
       );
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // R17 (2026-09-07 audit) — the Vision entry PUSHES.
+  //
+  // MÉRT hiba: `context.go` egy TOP-LEVEL útvonalra lépett, tehát
+  // KICSERÉLTE a stacket: a kamerás képernyő `canPop == false`-szal
+  // érkezett, vissza-nyíl és héj-alsósáv nélkül — csak a rendszer
+  // vissza-gombja (az appból kilépve) vezetett vissza.
+  // -------------------------------------------------------------------
+  group('R17 — the Vision entry can be returned from', () {
+    for (final cell in const <({bool setupEnabled, String path})>[
+      (setupEnabled: true, path: AppRoutes.visionSetup),
+      (setupEnabled: false, path: AppRoutes.visionSession),
+    ]) {
+      testWidgets('the entry pushes ${cell.path}', (tester) async {
+        final router = _visionRouter();
+        await tester.pumpWidget(
+          _routerHost(router, visionSetupEnabled: cell.setupEnabled),
+        );
+        await tester.pumpAndSettle();
+
+        final cta = find.byKey(const ValueKey('today-hub-vision-entry'));
+        await tester.ensureVisible(cta);
+        await tester.pumpAndSettle();
+        await tester.tap(cta);
+        await tester.pumpAndSettle();
+
+        expect(router.state.uri.path, cell.path);
+        expect(tester.takeException(), isNull);
+        // The measure: the camera screen HAS a way back.
+        expect(router.canPop(), isTrue);
+        router.pop();
+        await tester.pumpAndSettle();
+        expect(router.state.uri.path, AppRoutes.today);
+      });
+    }
+  });
+
+  // -------------------------------------------------------------------
+  // R20 (2026-09-07 audit) — `unreadable` is its OWN visual state.
+  //
+  // R19 added `TodayPlanAvailability.unreadable` plus the repository that
+  // produces it, precisely so "we could not read your plan" would stop
+  // masquerading as "you have no plan". The hub then rendered BOTH the
+  // same way, so on screen the distinction still did not exist. These
+  // cells pin the notice to `unreadable` ALONE — which is also why the
+  // e13_r17 / e13_r36 / e15_r01 / e15_r13 fixtures (empty store =>
+  // `unavailable`) keep rendering exactly as before.
+  // -------------------------------------------------------------------
+  group('R20 — an unreadable plan is not a missing plan', () {
+    const notice = ValueKey('today-hub-plan-unreadable');
+    const retry = ValueKey('today-hub-plan-unreadable-retry');
+
+    testWidgets('unreadable renders the notice and a working retry', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          plan: const TodayPlanSnapshot(
+            availability: TodayPlanAvailability.unreadable,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byKey(notice), findsOneWidget);
+      expect(find.byKey(retry), findsOneWidget);
+
+      await tester.tap(find.byKey(retry));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('unavailable renders no notice', (tester) async {
+      await tester.pumpWidget(
+        _host(
+          plan: const TodayPlanSnapshot(
+            availability: TodayPlanAvailability.unavailable,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byKey(notice), findsNothing);
+    });
+
+    testWidgets('the production default on an empty store shows no notice', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_host());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(notice), findsNothing);
     });
   });
 }

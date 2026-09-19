@@ -13,8 +13,9 @@
 
 ## What data the planner stores
 
-The planner owns three on-device key namespaces, each fully isolated from
-each other and from any other feature of the app (ADR 0259 §3, ADR 0267):
+The planner owns the on-device key namespaces below, each fully isolated
+from each other and from any other feature of the app (ADR 0259 §3,
+ADR 0267):
 
 | Namespace pattern                                          | Owner                                                      | Purpose                                                                 |
 |------------------------------------------------------------|------------------------------------------------------------|-------------------------------------------------------------------------|
@@ -22,8 +23,9 @@ each other and from any other feature of the app (ADR 0259 §3, ADR 0267):
 | `ss.practice_generator.plan.active_pointer` + `.active.<…>` | `LocalPracticePlanRepository`                              | The currently active plan's pointer + the immutable plan record         |
 | `ss.practice_generator.plan.archive.<planId>.revisions.<…>` / `.outcomes.<…>` / `…index` | `LocalPracticePlanRepository`             | Bounded, newest-first history of every plan revision and outcome        |
 | `ss.practice_generator.generation_draft`                   | `GenerationDraftRepository`                                | Single resumable wizard draft (separate key namespace)                 |
+| `ss.practice_generator.catch_up.offered`                    | `StoredCatchUpNoticeLog`                                   | Bounded list of acknowledged `<planId>/<revisionId>` keys — a UI acknowledgement, never learner content |
 
-Evidence derived from those outcomes lives in a fourth, **separate** storage
+Evidence derived from those outcomes lives in a **separate** storage
 port — `PracticeEvidenceRepository` (ADR 0260 §5). Evidence carries only
 derived measurements and a `sourceOutcomeId` provenance pointer back to the
 outcome that produced it. The evidence store is **deliberately expiry-
@@ -38,6 +40,7 @@ record, and no automatic job ever deletes evidence.
 | Wizard drafts                              | `saveDraft` / `clearDraft`  | Replaced on the next save; not auto-evicted.                                                   |
 | Archived revisions / outcomes per plan     | Bounded index               | Capped at 50 revisions and 200 outcomes per plan by `PracticePlanHistoryPolicy`; the oldest entries are evicted when the cap is exceeded. |
 | Skill evidence                             | `PracticeEvidenceRepository`| Never auto-deleted. Expiry is a **query-time** concern (ADR 0260 §5).                          |
+| Catch-up explainer acknowledgements         | `StoredCatchUpNoticeLog`    | Bounded to the 20 newest `<planId>/<revisionId>` keys, newest-first; the oldest are trimmed on the next write. Never auto-deleted otherwise. |
 
 The retention described above is the same on disk whether the planner is
 enabled or disabled. No background job, no scheduled task, and no quiet
@@ -86,6 +89,19 @@ The delete operation is **structurally** scoped. It must never reach:
 The acceptance gate verifies this: writing an unrelated key
 (`learning.history.record.1`) before the delete must show the key **still
 present** afterwards (test matrix §6.1 third row).
+
+The catch-up acknowledgement key
+(`ss.practice_generator.catch_up.offered`, added by E07-R35) is kept too:
+neither `DeletePracticePlanningData` nor `ExportPracticePlanningData`
+reads or removes it. That is a deliberate scope decision, not an
+oversight. The key holds nothing but opaque `<planId>/<revisionId>`
+acknowledgement pairs — no learner-authored text, no measurement, no
+outcome — so there is nothing in it to export and nothing in it that a
+delete would erase on a learner's behalf. Its only effect after a delete
+is that the non-shaming catch-up explainer may be offered once more,
+which is the safe direction (ADR 0269 §5). Widening the delete / export
+circle to cover it is a **Change control** decision (below), not
+something a later round may do silently.
 
 ## What "Export planning data" produces
 

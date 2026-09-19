@@ -26,11 +26,16 @@
 # `community_post_*` / `community_club_*` / `community_write_integrity`
 # kategóriákat.
 #
-# `wired: false` route-ok mezői (`tutor_stream`.tutor_turn_message,
-# `community_media`.community_media_bytes) `leaves_device: false` — ma
-# semmilyen production kódút nem küldi őket a hálózatra, ezért nincs itt
-# hozzájuk data-safety kategória; a `leaves_device` mező automatikusan zöldre
-# vált a fedezet-ellenőrzésben (nem "true", tehát nem követel kategóriát).
+# A `wired: false` route-ok mezői (ma egyedül `community_media`.community_media_bytes)
+# `leaves_device: false` — semmilyen production kódút nem küldi őket a hálózatra,
+# ezért nincs hozzájuk data-safety kategória; a `leaves_device` mező automatikusan
+# zöldre vált a fedezet-ellenőrzésben (nem "true", tehát nem követel kategóriát).
+# A `tutor_stream` 2026-09-07 (javító sáv 3, R9/2) óta `wired: true` /
+# `leaves_device: true` — a `tutor_turn_message` kategóriája a fájl végén.
+# R24 (2026-09-08): a kategória `shared: true` marad, de a megosztás címzettje
+# most NEVESÍTVE van — a harmadik fél feldolgozó (Anthropic, Claude API) csak
+# akkor kap adatot, ha az üzemeltető a `fake` providerről valódira váltott;
+# a kliensoldali `aiTutorCloudEnabled` kapu minden szállított buildben `false`.
 #
 # Restricted YAML subset — package:yaml NÉLKÜL olvasva
 # (test/tooling/store_package_test.dart saját olvasója), 2-space lista-elem
@@ -252,6 +257,34 @@ categories:
       - route: account_api_community_club_repository
         field: "club_membership_action (csatlakozás/kilépés/tag-eltávolítás cél-azonosítói az útvonalban — /join, /leave, /members/{id})"
 
+  # Javító sáv R27 (2026-09-08) — a szerkesztő „Média csatolása" útja. A
+  # `communityMediaEnabled` kliens-flag a szállított buildekben KI van
+  # kapcsolva, tehát ma egyetlen felhasználó sem tud képet feltölteni; a
+  # kategóriák mégis itt vannak, mert a Play adatbiztonsági nyilatkozata
+  # arról szól, mit KÉPES gyűjteni a kód, és egy flag build-idejű döntés,
+  # nem az adat tulajdonsága.
+  - id: community_media_image
+    label: "Community post: image you attach"
+    play_category: "Photos or videos"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "A picture you explicitly pick in the Community composer and attach to a post. Sent only after you tap \"Attach media\" and choose a file, while signed in. The server does not keep the file you sent: it re-encodes the image from the decoded pixels, so the camera's EXIF block — GPS coordinates included — is not part of what is stored or served back (threat model A6.2.4). Behind the communityMediaEnabled flag, which is false in every shipped build today."
+    references:
+      - route: account_api_community_post_repository
+        field: "community_media_bytes (a felhasználó által választott kép nyers bájtjai — POST /community/media multipart `file`)"
+
+  - id: community_media_attachment_ids
+    label: "Community post: attached media ids"
+    play_category: "App activity"
+    collected: true
+    shared: false
+    optional: true
+    purpose: "The ids of the images a post is published with, so the server can bind the already-uploaded pictures to the post at publish time. No file content — the ids alone."
+    references:
+      - route: account_api_community_post_repository
+        field: "media_ids (a poszthoz csatolt médiák publikus azonosítói — POST /community/posts `media_ids`)"
+
   - id: community_write_integrity
     label: "Community write-integrity identifiers"
     play_category: "App info and performance"
@@ -264,3 +297,14 @@ categories:
         field: "idempotency_key / resource_version (írás-kísérlet azonosítója és optimista verzió)"
       - route: account_api_community_club_repository
         field: "idempotency_key (írás-kísérlet azonosítója)"
+
+  - id: tutor_turn_message
+    label: "AI tutor: your message and its context snapshot"
+    play_category: "App activity"
+    collected: true
+    shared: true
+    optional: true
+    purpose: "The free-text message you send to the AI tutor plus the redacted, on-device-assembled context snapshot the prompt builder renders, sent to the StrumSight backend's /tutor/stream and relayed to the configured model provider. When the operator has configured a real provider, that provider is a third-party processor: MiniMax (M3, over its Anthropic-compatible Messages API) — see the tutor_stream row of docs/privacy/data-inventory.yaml for what it receives and what the operator must verify about its retention and processing region; with the backend's default (fake) provider nothing leaves the StrumSight backend. Only with explicit model-use consent (Tutor privacy screen), the build's aiTutorCloudEnabled rollout flag (never openable in production; open in the development tester artifact since R29a), an enabled account layer, a live signed-in session and a /tutor/capability answer naming a real provider — with any gate closed the tutor answers from the local on-device gateway (javító sáv 3, 2026-09-07, R9/2; cloud flag + capability gate R24, 2026-09-08; MiniMax named R29b)."
+    references:
+      - route: tutor_stream
+        field: "tutor_turn_message (student free-text message + the assembled, redacted context snapshot the prompt builder renders)"
