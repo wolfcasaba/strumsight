@@ -29047,3 +29047,113 @@ szabály nem a műszert utasítja el, hanem azt mondja meg, **mekkora hatást tu
 kimutatni**: a Klangio@70 cellán nagyjából a 0,08-as szóráson felül.
 
 Lásd még [[L681]], [[L685]], [[L687]], ADR 0554, ADR 0575, ADR 0578, ADR 0580.
+
+### L656 — A pipeline-on KÍVÜL landolt bekötés őrizetlen: a kör igazi hiánya nem a kód volt, hanem a mérce (E17-R02, 2026-09-19)
+
+**Mérve.** Az E17-R02 briefje (`main @ b17e08ef`) azt írta elő, hogy kösse be a
+három capture-képernyőt. A pre-flight újramérése (`main @ 4c12083c`) viszont ezt
+találta: a bekötés MÁR a `main`-en van, a pipeline-on kívüli `050e45028`
+(2026-09-05) committól — brief, review, ADR és **gépi őr nélkül**. A leltár
+`reachable: true` + `flagGated: true`-t mért mindhárom képernyőre, miközben a
+`AppRoutes.analysisCapture|analysisRecord|analysisProcessing` hármasra a teljes
+`test/` fában **nulla** cella hivatkozott.
+
+Az őrizetlen bekötésben a pre-flight azonnal talált egy MÉRT hibát is: a
+kezdőlap `onOpenAnalysis` ága `AnalysisSummary`-t adott a timeline route-nak,
+amely `AnalysisDocument`-et kér ([ADR 0241](adr/0241-analysis-overview-presentation-boundary.md)
+§1) — a koppintás tehát MINDIG a fail-closed Live útra vitt. Egy őrcella ezt a
+landolás pillanatában elkapta volna.
+
+**A tanulság.** Ha egy brief mért alapja elmozdult, és a kör terméke időközben
+más úton landolt, a kör NEM tárgytalan: a hiányzó bizonyíték maga a munka. A
+`S15` lint-lelet feloldása ezért nem „a kör kész", hanem a §0.0 revízió, amely
+kimondja, mi maradt igaz és hol van a kör EGYETLEN döntési helye.
+
+**Őrteszt:** `test/features/audio_analysis/capture_wiring_test.dart` (A1–A6, 7 cella).
+
+### L657 — Az „átmenet végigmegy" cella zölden átengedi a `watch` → `read` regressziót: a KÉPERNYŐ TÍPUSA nem bizonyítja, hogy az állapot látszik is (E17-R02 review, 2026-09-19)
+
+**Mérve.** Az E17-R02 első implementációja után a review eldobható próbája a
+`app_router.dart` processing-route-builderében ennyit írt át:
+
+```dart
+final state = ref.watch(analysisControllerProvider);   // eredeti
+final state = ref.read(analysisControllerProvider);    // a próba
+```
+
+`read` mellett a képernyő az ELSŐ build állapotán ragad (soha nem lép
+`AnalysisAnalyzing` → `AnalysisCancelled`/`AnalysisCompleted`-re), tehát a
+felvevő-ág a feldolgozó-képernyőn zsákutcába fut. A kör kapuja mégis **mind a 7
+cellán zöld maradt**: a cella a controller állapotát a `container`-ből olvasta,
+a képernyőt pedig `find.byType`-pal kereste — és a STATEFUL widget-példány a
+regresszió alatt is a helyén marad.
+
+Ez az [L654](#l654) testvére: ott a `router.state.uri.path` volt a hamis tanú,
+itt a widget TÍPUSA. **A javítás:** az állapotváltás UTÁN a cella a törzs
+TARTALMÁT méri (`analysis-processing-cancelled-title` és
+`analysis-processing-restart` jelen, `analysis-processing-step` eltűnt) — a
+`watch` → `read` rontás így `+4 -1`-gyel pirosra vált, függetlenül
+reprodukálva az izolált review-klónban.
+
+**Őrteszt:** `test/features/audio_analysis/capture_wiring_test.dart`::`A2 — home to recording to processing, real providers`.
+
+### L658 — A „természetes belépési pont" premisszája NÉVAZONOSSÁGON állt, nem méren: két diszjunkt setlist-világ, és a bekötendő képernyő a MÁSIKHOZ tartozott (E17-R03 / H3, önjavító kör, 2026-09-19)
+
+**Mérve** (`main @ 3ffde512`, a kör pre-flightjában, motor indulása ELŐTT). Az
+E17-R03 briefje ezt állította: *„a `SetlistDetailScreen` (ami a
+`SetlistSessionScreen` természetes belépési pontja) imperatívan MÁR elérhető"* —
+és az `allowed_paths` `lib`-oldala pontosan három fájl volt, köztük a legacy
+részlet-képernyő. A premissza a KÉT KÉPERNYŐ NEVÉBŐL jött (`Setlist…` +
+`Setlist…`), nem mérésből. A tényleges tree:
+
+| | legacy (`songs`) | V2 (`song_trainer`) |
+|---|---|---|
+| modell | `Setlist{id,name,songIds}` | `SongSetlist{id,name,items:[SongSetlistItem{SongId,…}]}` |
+| azonosító | `'${microsecondsSinceEpoch}_$seq'` | `SongId` (seed-id / dokumentum-id) |
+| belépés | `SetlistListScreen` → `SetlistDetailScreen` (**reachable**) | `SetlistListScreenV2` (**unreachable**) |
+
+A `SetlistSessionScreen.setlist` mezője `SongSetlist`, a részlet-képernyő legacy
+`Setlist`-et tart, és a két ID-tér diszjunkt. Ráadásul a V2 setlist-tárnak
+**nulla produkciós írója** volt (`grep -rn "SongSetlist(" lib` → konstruktor,
+dekódoló, az elérhetetlen szerkesztő, és a `lib`-ből sehonnan nem hívott
+`LegacySetlistAdapter.persistV2`) — ez az [L606](#l606)/[L652](#l652)
+hibaosztály harmadik előfordulása.
+
+**A csapda, ami a „kis javítást" is megette.** A legacy-projekciós kifutás sem
+volt járható: a runner a `LearnScreen`-t futtatta volna, amely csak `lesson`-t
+vesz át és **semmit nem ad vissza** — minden `SetlistItemResult` kitalált lett
+volna, miközben a legacy részlet-képernyőnek már van működő `_playAll` útja.
+
+**Az új, MÉRT tény, amit egyik korábbi kör sem vett észre.** A V2 lista
+bekötése önmagában pirosra viszi a `test/tooling/screen_reachability_test.dart`
+**A3** celláját: az minden *elérhető ÉS nem design-rendszerre migrált*
+képernyőtől `migrate`/`retire` verdiktet + `^E15-R\d+$` gazda-kört követel a
+`docs/ui/retirement-plan.md`-ben. A `setlist_list_screen_v2.dart`-ban `0` db
+`design_system` van, és **minden E15-ös kör `done`** — gazdát nem lehet
+őszintén beírni. Ugyanazzal a logikával szimulálva:
+
+```
+NOW   ownerless: []
+AFTER wiring ownerless: ['…/screens/setlist_list_screen_v2.dart']
+```
+
+Vagyis a bekötés SIKERE zárta volna ki a kört a merge-ből — pontosan az
+[L612](#l612) alakja, csak itt nem egy önjavító őr, hanem egy fejezet-szintű
+mérce felől. A feloldás: a lista bekötése és design-migrációja UGYANAZ a kör.
+A `retirement-plan.md` §3.2 saját mondata megfordítva mondja ki, miért:
+*„design tokens are moot on a screen nobody can open"* — amint megnyitható,
+számítanak.
+
+**A tanulság.** Egy bekötő kör briefjének a belépési pontot a **típusból** kell
+levezetnie (mit vesz át a képernyő konstruktora), nem a névhasonlóságból; és a
+„ki írja ma ezt a tárat" grepet a §2-nek mérnie kell, mert egy író nélküli tár
+fölé kötött UI mindig kitalált adatot mutat. Amikor pedig egy kör ELÉRHETŐVÉ
+tesz egy képernyőt, a mércét a **landolás UTÁNI** állapotra kell szimulálni:
+ami ma zöld, attól lesz piros, hogy a kör sikerül.
+
+**Őrteszt:** `tools/tests/test_e17_r03_setlist_session_scope.py` (9 cella; a
+revízió előtti briefen 7 piros). A két élő-fa cellája a KÖVETELT VÉGÁLLAPOTOT
+méri (a katalógus vagy nem deklarál setlist-route-ot, vagy pontosan a pinnelt
+alakot `AppRoutes` konstansként; és amint a router megnevezi a
+`SetlistListScreenV2`-t, a képernyőnek vinnie kell a design-rendszert) — így a
+kör sikere nem fordul a saját őre ellen ([L612](#l612)).

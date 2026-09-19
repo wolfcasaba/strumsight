@@ -1,5 +1,19 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔀 INTEGRÁCIÓ 2026-09-19 (2. menet): a main három friss commitja az E18-vonalba
+
+Miközben az `integration/e18` a kapun állt, a pipeline három commitot tolt az
+`origin/main`-re (`c0e06a2e` E17-R02, `3ffde512` docs, `ba8233af` HEAL E17-R03).
+`--no-ff` merge, 5 ütközés, mind SZEMANTIKUSAN feloldva.
+
+| Ütközés | Döntés |
+|---|---|
+| `app_router.dart` | az E18-oldal marad: EGY Analysis V2 felvevő-folyam él (`/analysis` → `/analysis/recording` → `/analysis/processing`). A main most újra behozott `/analysis/capture` + `/analysis/record` blokkja NEM támadt fel: ugyanazt a három képernyőt köti be, de gyengébben (a `analysisRecord` ág nem menti az eredményt, a hibát fail-closed redirect nyeli el) |
+| `_openStoredAnalysis()` (a #602 navigációs javítása) | a segédfüggvény automatikusan bemergelődött, majd TÖRÖLVE: a túlélő `onOpenAnalysis` ág már betölti a dokumentumot ÉS őszinte hibaüzenetet mutat (`analysisHomeOpenFailed`) a #602 néma fail-closed redirectje helyett — a viselkedés megvan, erősebb formában |
+| `test/features/audio_analysis/capture_wiring_test.dart` (add/add) | mindkét oldal MEGÍRTA ugyanazt az E17-R02 gépi őrt. Az E18-é marad (valódi PCM, mentés, „legutóbbi" lista, lease-mérés), és a main #602-es celláiból a nála MEGLÉVŐ TÖBBLET átportolva a túlélő route-nevekre: `A1/A3` (a három route csak a zászló mögött él, a `/analyze` érintetlen), `A4` (a három képernyő tiszta prezentáció + konstruktor-szerződés), `A6` (a „korábbi elemzés" a BETÖLTÖTT dokumentumot nyitja; hibán marad a home + üzenet) |
+| `tools/tests/test_e17_r03_setlist_session_scope.py` (#603) | változatlanul átvéve, a setlist-session V2-natív bekötés terve és gépi őre megmarad |
+| `docs/LESSONS.md`, `docs/sdd/program-completion-report.md`, `HANDOFF.md` | mindkét oldal szakaszai megmaradnak, fordított időrendben |
+
 ## 🔀 INTEGRÁCIÓ 2026-09-19: az E18-vonal a mainbe — `integration/e18`
 
 A `claude/guitar-app-development-points-d0asfy` (E18-R01…R24, 162 commit,
@@ -29,6 +43,77 @@ mind SZEMANTIKUSAN feloldva — egyik oldal sem lett vakon átvéve.
 kategória-chip javításának régebbi párja volt (ugyanaz a hiba, két körben
 megjavítva); a viselkedést a `practice_area_hub_category_chips_test.dart` méri
 tovább.
+
+## 🩹 ÖNJAVÍTÓ KÖR (ADR 0112) 2026-09-19 — E17-R03 / H3: a brief premisszája megdőlt, a bekötés V2-natívvá íródott át
+
+Az `E17-R03` a **dispatch ELŐTT** halt meg (`H3`), motor indulása nélkül. A brief-lint
+`S15` által kötelezővé tett §2-újramérés megcáfolta a brief premisszáját: *„a
+`SetlistDetailScreen` a `SetlistSessionScreen` természetes belépési pontja"*.
+
+**Mért gyökérok.** Két diszjunkt setlist-világ van — legacy `Setlist{songIds}`
+(timestamp-id, kulcs-érték tár, reachable) és V2 `SongSetlist{items:[SongId…]}`
+(fájl-tár, **unreachable**) —, és a session a MÁSIKHOZ tartozik
+(`SetlistSessionScreen.setlist : SongSetlist`). A V2 setlist-tárnak **nulla
+produkciós írója** volt. A legacy-projekciós kifutás sem járható: a runner a
+`LearnScreen`-t futtatná, amely semmit nem ad vissza → minden `SetlistItemResult`
+kitalált lenne. Teljes mérés: `.pipeline/halt-E17-R03-preflight.md`.
+
+**Az új, addig nem mért tény.** A V2 lista bekötése önmagában pirosra viszi a
+`test/tooling/screen_reachability_test.dart` **A3** celláját (elérhető + nem
+design-migrált képernyő `E15-Rxx` gazda nélkül), és minden E15-ös kör `done` —
+ezért a **bekötés és a design-migráció ugyanaz a kör**. A kör SIKERE zárta volna
+ki a merge-ből ([L612](docs/LESSONS.md#l612) alakja).
+
+**A javítás.** A brief §0.1 revízióval V2-natívvá íródott át (belépés a
+`/song-trainer/setlists` route-on a `SongLibraryScreen`-ből → `SetlistListScreenV2`
+→ session), az `allowed_paths` TÁGULT (route-katalógus, router, V2 lista,
+library-képernyő, session-route varrat, l10n forrás + generált aggregátum,
+retirement-plan, S11 pin-őrök, e13_r23 goldenek), a mércéből semmi nem került ki —
+a `screen_reachability_test.dart` szándékosan csak `gate_tests`-ben van.
+
+**Gépi őr:** `tools/tests/test_e17_r03_setlist_session_scope.py` — 9 cella, a
+revízió előtti briefen 7 piros. Lecke: [L658](docs/LESSONS.md#l658).
+
+## ✅ E17-R02 KÉSZ — az Analysis V2 capture-ág GÉPI ŐRE + a „korábbi elemzés" navigációs hibája javítva — PR [#602](https://github.com/wolfcasaba/strumsight/pull/602), squash `c0e06a2e` (2026-09-19)
+
+**A kör fordulata.** A brief azt írta elő, hogy kösse be a három capture-képernyőt.
+A pre-flight újramérése (a brief-lint `S15` lelete nyomán, `main @ 4c12083c`) viszont
+azt mérte, hogy **a bekötés már a `main`-en van** — a pipeline-on kívüli `050e45028`
+(2026-09-05) committól, **brief, review, ADR és gépi őr nélkül**. A kör ezért a
+hiányzó MÉRCÉT építette meg, és javította azt, amit az őrizetlenség elrejtett.
+
+| | |
+|---|---|
+| **ADR** | [`0584`](docs/adr/0584-analysis-capture-flow-guard-and-open-contract.md) (az előre írt `0521` szám közben elkelt) |
+| **Review** | [`docs/reviews/e17-r02-review.md`](docs/reviews/e17-r02-review.md) — 1 MAJOR → javító kör → **APPROVED** |
+| **Motor** | implementer `sonnet-impl` (Claude Sonnet 5 high), orchestrátor/reviewer Claude Opus 5 |
+| **CI** | Full Gate `35408910142` + Router CI `35408908155`, mindkettő `success` a merge SHA-n (`0806f191`) |
+
+**Amit hozott:**
+
+- `test/features/audio_analysis/capture_wiring_test.dart` — 7 cella (A1–A6): a három
+  route léte és flag-kötöttsége MINDKÉT `audioAnalysisV2Enabled`-álláson, a
+  home → recording → processing átmenet a VALÓS providereken (override csak a
+  mikrofon- és repository-varraton), és a capture-widgetek injektált
+  szerződésének forrás-szintű pinnelése.
+- **Javított hiba:** a kezdőlap „korábbi elemzés megnyitása" ága `AnalysisSummary`-t
+  adott a timeline route-nak, amely `AnalysisDocument`-et kér (ADR 0241 §1) — a
+  koppintás MINDIG a fail-closed Live útra vitt. Most a kompozíció betölti a
+  dokumentumot (`_openStoredAnalysis`), hibánál marad a fail-closed ág.
+- **Három bizonyított rontás:** a route kapun kívülre kötve → A3 piros; a régi
+  `extra: summary` alak → A6 piros; `ref.watch` → `ref.read` a processing-builderben
+  → A2 piros (ez utóbbi a review saját lelete volt, l. [L657](docs/LESSONS.md#l657)).
+
+**Szándékosan NYITVA marad (a következő kör bemenete):** a capture kezdőlap
+„legutóbbi elemzések" listája a betöltési HIBÁT üres listaként mutatja
+(`app_router.dart`: `recent.value ?? const <AnalysisSummary>[]` → a képernyő a
+„még nincs elemzésed" üres-állapotot rajzolja). Ez hazug UI; az őszinte
+hibaállapot ÚJ l10n-kulcsot kíván (`lib/l10n/base/app_{en,hu}.arb` + a generált
+aggregátum), ami az E17-R02 `allowed_paths`-án kívül esett → lista-tágítás lett
+volna (H3). **Egy külön kör tárgya.**
+
+**Következő kör:** `E17-R03` — Setlist session bekötés (`docs/rounds/e17-r03-setlist-session-wiring.md`,
+a két maradék elérhetetlen song_trainer-képernyő).
 
 ## 🔀 INTEGRÁCIÓ 2026-09-18: a Song Trainer-vonal a mainbe — `integration/audio-import`
 

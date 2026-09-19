@@ -11,6 +11,7 @@
 // error instead of a run.
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -90,11 +91,16 @@ AppConfig _config({required bool audioAnalysisV2Enabled}) => AppConfig(
   appVersion: 'test',
 );
 
-Future<_Harness> _pumpRouter(WidgetTester tester) async {
+Future<_Harness> _pumpRouter(
+  WidgetTester tester, {
+  List<AnalysisSaveRequest> seed = const <AnalysisSaveRequest>[],
+  bool getByIdFails = false,
+}) async {
   final engine = FakeStrumEngine();
   final capture = FakeAudioCapture();
   final runner = _ScriptedRunner();
-  final repository = _InMemoryAnalysisRepository();
+  final repository = _InMemoryAnalysisRepository(getByIdFails: getByIdFails)
+    ..saved.addAll(seed);
   final container = ProviderContainer(
     overrides: [
       ...preferenceOverrides(),
@@ -355,6 +361,170 @@ void main() {
       expect(router.state.uri.path, AppRoutes.analysisHome);
     });
   });
+
+  // --- A merge-kor a mainrol atvett #602-es or cellai ---------------------
+  // A main a MASIK (torolt) `/analysis/capture` + `/analysis/record` agra
+  // irta ugyanezt a hatom cellat. A cellak VISELKEDEST mernek, amit a tulelo
+  // folyam is hordoz, ezert a torolt utvonalak feltamasztasa helyett a
+  // tulelo route-nevekre igazodnak (analysisHome / analysisRecording).
+
+  group('A1/A3 (#602) — the three capture routes live only behind '
+      'audioAnalysisV2Enabled', () {
+    GoRouter buildRouter({required bool audioAnalysisV2Enabled}) {
+      final container = ProviderContainer(
+        overrides: <Override>[
+          ...preferenceOverrides(),
+          appConfigProvider.overrideWithValue(
+            _config(audioAnalysisV2Enabled: audioAnalysisV2Enabled),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      // Route registration is data assembled once at construction time
+      // (`if (audioAnalysisV2Enabled) [...]` in app_router.dart); resolving
+      // it here never builds a screen.
+      return container.read(routerProvider);
+    }
+
+    test('A1 — flag on: all three capture routes resolve', () {
+      final router = buildRouter(audioAnalysisV2Enabled: true);
+      for (final path in <String>[
+        AppRoutes.analysisHome,
+        AppRoutes.analysisRecording,
+        AppRoutes.analysisProcessing,
+      ]) {
+        final match = router.configuration.findMatch(Uri.parse(path));
+        expect(match.isError, isFalse, reason: path);
+      }
+    });
+
+    test('A3 — flag off: all three capture routes are unregistered, and the '
+        'legacy /analyze route is unaffected', () {
+      final router = buildRouter(audioAnalysisV2Enabled: false);
+      for (final path in <String>[
+        AppRoutes.analysisHome,
+        AppRoutes.analysisRecording,
+        AppRoutes.analysisProcessing,
+      ]) {
+        final match = router.configuration.findMatch(Uri.parse(path));
+        expect(match.isError, isTrue, reason: path);
+      }
+      final analyzeMatch = router.configuration.findMatch(
+        Uri.parse(AppRoutes.analyze),
+      );
+      expect(analyzeMatch.isError, isFalse);
+    });
+  });
+
+  group('A4 (#602) — the capture widgets stay pure presentation', () {
+    test('AnalysisHomeScreen / AnalysisRecordingScreen / '
+        'AnalysisProcessingScreen read zero Riverpod providers directly '
+        '(the composition root injects every dependency)', () {
+      const directory =
+          'lib/features/audio_analysis/presentation/capture/';
+      final files = <String>[
+        '${directory}analysis_home_screen.dart',
+        '${directory}analysis_recording_screen.dart',
+        '${directory}analysis_processing_screen.dart',
+      ];
+      final riverpodUsage = RegExp(r'ref\.watch|ref\.read|ConsumerWidget');
+      for (final file in files) {
+        final contents = File(file).readAsStringSync();
+        expect(
+          riverpodUsage.hasMatch(contents),
+          isFalse,
+          reason: '$file must stay a pure presentation widget',
+        );
+      }
+    });
+
+    test('the three widgets keep their injected constructor contract', () {
+      // Compiles only while every required parameter below still exists —
+      // a narrowed/renamed constructor is the regression this cell catches
+      // (the widgets are never rendered here; A2 already covers that).
+      AnalysisHomeScreen(
+        recentAnalyses: const <AnalysisSummary>[],
+        onStartRecording: () {},
+        onImportFile: () {},
+        onOpenAnalysis: (_) {},
+      );
+      AnalysisRecordingScreen(
+        recorder: AnalysisRecorder(
+          mic: fakeMicCapture(owner: AudioOwner.analyzeRecorder),
+        ),
+        onFinished: (_, _) {},
+        onCancel: () {},
+      );
+      AnalysisProcessingScreen(
+        state: const AnalysisIdle(),
+        onCancel: () {},
+        onRestart: () {},
+        onViewResult: (_) {},
+      );
+    });
+  });
+
+  group('A6 (#602) — opening a stored analysis loads the AnalysisDocument, '
+      'not the AnalysisSummary', () {
+    AnalysisSaveRequest storedRequest() => AnalysisSaveRequest(
+      document: _document(id: 'stored-doc'),
+      title: 'Stored session',
+      customTitle: false,
+    );
+
+    testWidgets(
+      'tapping a recent analysis opens the overview with the LOADED '
+      'document (not the fail-closed redirect to Live)',
+      (tester) async {
+        final harness = await _pumpRouter(
+          tester,
+          seed: <AnalysisSaveRequest>[storedRequest()],
+        );
+        harness.router.go(AppRoutes.analysisHome);
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('analysis-home-recent-stored-doc')),
+          findsOneWidget,
+        );
+
+        await tester.tap(
+          find.byKey(const Key('analysis-home-recent-stored-doc')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(harness.router.state.uri.path, AppRoutes.analysisOverview);
+        expect(find.byType(AnalysisOverviewScreen), findsOneWidget);
+        expect(harness.repository.getByIdCalls, 1);
+      },
+    );
+
+    testWidgets(
+      'a load failure keeps the user on the home screen and SAYS SO — the '
+      'surviving flow carries an honest message where #602 only '
+      'fail-closed to Live',
+      (tester) async {
+        final harness = await _pumpRouter(
+          tester,
+          seed: <AnalysisSaveRequest>[storedRequest()],
+          getByIdFails: true,
+        );
+        harness.router.go(AppRoutes.analysisHome);
+        await tester.pumpAndSettle();
+
+        await tester.tap(
+          find.byKey(const Key('analysis-home-recent-stored-doc')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(harness.router.state.uri.path, AppRoutes.analysisHome);
+        expect(find.byType(AnalysisHomeScreen), findsOneWidget);
+        expect(find.byType(AnalysisOverviewScreen), findsNothing);
+        expect(find.text("Couldn't open that analysis."), findsOneWidget);
+        expect(harness.repository.getByIdCalls, 1);
+      },
+    );
+  });
 }
 
 // --- Hub harness (mirrors test/features/practice_hub/*_test.dart) ---------
@@ -443,7 +613,15 @@ final class _ScriptedHandle implements AnalysisRunHandle {
 }
 
 final class _InMemoryAnalysisRepository implements AnalysisRepository {
+  _InMemoryAnalysisRepository({this.getByIdFails = false});
+
+  /// Scripts the stored-document read side (A6): with it on, every
+  /// `getById` fails the way a corrupt or vanished file would, while
+  /// `list()` keeps returning the summary the home screen renders.
+  final bool getByIdFails;
+
   final List<AnalysisSaveRequest> saved = <AnalysisSaveRequest>[];
+  int getByIdCalls = 0;
 
   @override
   Future<AppResult<List<AnalysisSummary>>> list() async =>
@@ -462,6 +640,12 @@ final class _InMemoryAnalysisRepository implements AnalysisRepository {
 
   @override
   Future<AppResult<AnalysisDocument>> getById(String id) async {
+    getByIdCalls++;
+    if (getByIdFails) {
+      return const Failure<AnalysisDocument>(
+        StorageFailure(code: AnalysisRepositoryErrorCode.notFound),
+      );
+    }
     for (final request in saved) {
       if (request.document.id == id) {
         return Success<AnalysisDocument>(request.document);
