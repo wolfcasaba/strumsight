@@ -103,8 +103,13 @@ void main() {
         );
 
         expect(preview, isNot(equals(plain)));
+        // `aiTutorEnabled` is no longer the witness: E18-R24 turned it on
+        // outside production on its own, so it is true on BOTH sides. Vision
+        // is still preview-only, which is what makes the overlay a change.
+        expect(preview.visionEnabled, isTrue);
+        expect(plain.visionEnabled, isFalse);
         expect(preview.aiTutorEnabled, isTrue);
-        expect(plain.aiTutorEnabled, isFalse);
+        expect(plain.aiTutorEnabled, isTrue);
       },
     );
 
@@ -127,14 +132,20 @@ void main() {
       expect(flags.practiceGeneratorEnabled, isTrue);
       expect(flags.adaptiveShellEnabled, isTrue);
 
-      expect(flags.aiTutorEnabled, isFalse);
+      // E18-R24 (owner decision 2026-09-15): the LOCAL tutor and the seven
+      // non-experimental Analysis V2 flags follow the `nonProd` boundary, so
+      // they are on here without any define. Production is unchanged.
+      expect(flags.aiTutorEnabled, isTrue);
+      for (final entry in _nonProdAnalysisFlags(flags).entries) {
+        expect(entry.value, isTrue, reason: entry.key);
+      }
       expect(flags.aiTutorCloudEnabled, isFalse);
       expect(flags.plannerAssistEnabled, isFalse);
       for (final entry in _previewOnVisionFlags(flags).entries) {
         expect(entry.value, isFalse, reason: entry.key);
       }
       expect(flags.visionLabCaptureEnabled, isFalse);
-      for (final entry in _previewOnAnalysisFlags(flags).entries) {
+      for (final entry in _experimentalAnalysisFlags(flags).entries) {
         expect(entry.value, isFalse, reason: entry.key);
       }
       expect(flags.recognitionRecoveryEnabled, isFalse);
@@ -327,8 +338,11 @@ void main() {
       expect(shipped.toString(), equals(pinned.toString()));
 
       expect(shipped.accountEnabled, isFalse, reason: 'lab stays define-only');
-      expect(shipped.aiTutorEnabled, isFalse, reason: 'no preview overlay');
-      expect(shipped.audioAnalysisV2Enabled, isFalse);
+      // Not the overlay: E18-R24 put both on the `nonProd` boundary, and lab
+      // is non-production. `visionEnabled` is what still needs the overlay.
+      expect(shipped.aiTutorEnabled, isTrue, reason: 'nonProd, not preview');
+      expect(shipped.audioAnalysisV2Enabled, isTrue);
+      expect(shipped.visionEnabled, isFalse, reason: 'no preview overlay');
       _expectCommunityFlagsOff(shipped);
 
       // Lab keeps its own define-driven path in both directions.
@@ -364,8 +378,12 @@ void main() {
       );
 
       expect(flags.accountEnabled, isFalse);
-      expect(flags.aiTutorEnabled, isFalse, reason: 'no preview overlay');
-      expect(flags.audioAnalysisV2Enabled, isFalse);
+      // The refused defines cannot turn off what the rollout boundary itself
+      // turns on (E18-R24): the tutor and Analysis V2 stay on outside
+      // production. What the refused `previewAll` does take away is Vision.
+      expect(flags.aiTutorEnabled, isTrue, reason: 'nonProd, not preview');
+      expect(flags.audioAnalysisV2Enabled, isTrue);
+      expect(flags.visionEnabled, isFalse, reason: 'no preview overlay');
       _expectCommunityFlagsOff(flags);
 
       // With every WP-G default explicitly refused, the shipped resolution
@@ -626,17 +644,34 @@ Map<String, bool> _previewOnVisionFlags(FeatureFlags flags) => <String, bool>{
 
 /// The nine Audio Analysis V2 capabilities the preview overlay turns on.
 Map<String, bool> _previewOnAnalysisFlags(FeatureFlags flags) => <String, bool>{
+  ..._nonProdAnalysisFlags(flags),
+  ..._experimentalAnalysisFlags(flags),
+};
+
+/// The seven non-experimental Audio Analysis V2 flags. Since the owner
+/// decision of 2026-09-15 (E18-R24) they follow the `nonProd` boundary, so
+/// they are ON outside production WITHOUT the preview overlay — the overlay
+/// only keeps them on. Production is unchanged (all nine off,
+/// `analysis_rollout_flags_test.dart` measures that side).
+Map<String, bool> _nonProdAnalysisFlags(FeatureFlags flags) => <String, bool>{
   'audioAnalysisV2Enabled': flags.audioAnalysisV2Enabled,
   'analysisBeatGridEnabled': flags.analysisBeatGridEnabled,
   'analysisPitchEnabled': flags.analysisPitchEnabled,
-  'analysisPreprocessingExperimentalEnabled':
-      flags.analysisPreprocessingExperimentalEnabled,
-  'analysisExperimentalFusionEnabled': flags.analysisExperimentalFusionEnabled,
   'analysisTechniqueProxiesEnabled': flags.analysisTechniqueProxiesEnabled,
   'analysisComparisonEnabled': flags.analysisComparisonEnabled,
   'analysisPracticeIntegrationEnabled':
       flags.analysisPracticeIntegrationEnabled,
   'analysisTutorIntegrationEnabled': flags.analysisTutorIntegrationEnabled,
+};
+
+/// The two EXPERIMENTAL analysis flags — off in every environment unless the
+/// preview overlay turns them on.
+Map<String, bool> _experimentalAnalysisFlags(
+  FeatureFlags flags,
+) => <String, bool>{
+  'analysisPreprocessingExperimentalEnabled':
+      flags.analysisPreprocessingExperimentalEnabled,
+  'analysisExperimentalFusionEnabled': flags.analysisExperimentalFusionEnabled,
 };
 
 void _expectRecognitionRecoveryFlagsOff(FeatureFlags flags) {

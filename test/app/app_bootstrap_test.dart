@@ -242,8 +242,13 @@ void main() {
 
       expect(config.apiBaseUrl, AppConfig.devApiBaseUrl);
       expect(config.flags.accountEnabled, isFalse);
-      expect(config.flags.aiTutorEnabled, isFalse);
-      expect(config.flags.audioAnalysisV2Enabled, isFalse);
+      // E18-R24 (owner decision 2026-09-15): the local tutor and Analysis V2
+      // follow the `nonProd` boundary, so a lab build carries them without a
+      // define. Vision still needs the preview overlay, which lab does not
+      // take — that is what "unchanged by WP-G" means here.
+      expect(config.flags.aiTutorEnabled, isTrue);
+      expect(config.flags.audioAnalysisV2Enabled, isTrue);
+      expect(config.flags.visionEnabled, isFalse);
       expect(config.flags.communityEnabled, isFalse);
       expect(
         config.flags,

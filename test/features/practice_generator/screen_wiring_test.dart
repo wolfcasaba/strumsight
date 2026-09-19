@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
 import 'package:strumsight/core/storage/storage_providers.dart';
 import 'package:strumsight/features/practice_generator/public.dart';
@@ -200,20 +202,54 @@ Override _fixtureResolver() => exerciseCandidateResolverProvider
 Future<void> _activateFixturePlan(ProviderContainer container) =>
     container.read(localPracticePlanRepositoryProvider).activate(buildPlan());
 
-Future<void> _pumpToday(WidgetTester tester, ProviderContainer container) =>
-    tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          theme: SsLightTheme.data(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: TodayPlanScreen(
-            controller: TodayPlanController(clock: () => _today),
+/// A GoRouter harness, not a bare `MaterialApp`: the weekly plan and the
+/// privacy screen have registered addresses and open through
+/// `context.push` (so they stay deep-linkable), while the preview and the
+/// change review are built in place — they need an `extra` this screen
+/// cannot produce. The two routed builders are the router's own shape,
+/// reading the SAME composition root the test injects.
+Future<void> _pumpToday(
+  WidgetTester tester,
+  ProviderContainer container,
+) => tester.pumpWidget(
+  UncontrolledProviderScope(
+    container: container,
+    child: MaterialApp.router(
+      theme: SsLightTheme.data(),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      routerConfig: GoRouter(
+        initialLocation: AppRoutes.practiceGeneratorToday,
+        routes: <RouteBase>[
+          GoRoute(
+            path: AppRoutes.practiceGeneratorToday,
+            builder: (_, _) => TodayPlanScreen(
+              controller: TodayPlanController(clock: () => _today),
+            ),
           ),
-        ),
+          GoRoute(
+            path: AppRoutes.practiceGeneratorWeekly,
+            builder: (_, _) => Consumer(
+              builder: (context, ref, _) => WeeklyPlanScreen(
+                plan: ref.watch(activePracticePlanProvider).value,
+                today: ref.watch(practiceGeneratorTodayProvider)(),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: AppRoutes.practiceGeneratorPrivacy,
+            builder: (_, _) => Consumer(
+              builder: (context, ref, _) => PlanPrivacyScreen(
+                deleteUseCase: ref.watch(deletePracticePlanningDataProvider),
+                exportUseCase: ref.watch(exportPracticePlanningDataProvider),
+              ),
+            ),
+          ),
+        ],
       ),
-    );
+    ),
+  ),
+);
 
 Future<void> _openMenuItem(WidgetTester tester, String itemKey) async {
   await tester.tap(find.byKey(const Key('today-plan-menu')));

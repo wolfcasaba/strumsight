@@ -69,12 +69,6 @@ class TodayHubScreen extends ConsumerWidget {
         stats.totalSessions == 0 && streak.current == 0 && !planShowsHistory;
 
     final hero = _heroContent(l10n, snapshot: snapshot, isNewUser: isNewUser);
-    // The primary button continues THAT rung when the plan names one. A button
-    // labelled "continue" that goes somewhere else is the hub lying about what it
-    // just offered.
-    final primaryDestination = snapshot.recommendedMissionId == null
-        ? AppRoutes.practiceHub
-        : AppRoutes.curriculumLadder;
     final todayMinutes = todaySeconds ~/ 60;
     // The daily-goal ring (Ch18 spec §1): fills to today's minutes over the
     // goal; a zero goal is an explicit "not applicable", never a fake 0 %.
@@ -134,7 +128,17 @@ class TodayHubScreen extends ConsumerWidget {
               const SizedBox(height: 16),
               FilledButton(
                 key: const ValueKey('today-hub-primary-cta'),
-                onPressed: () => context.go(primaryDestination),
+                // A hub gyökerére `go` (az egy elsődleges cél), a létra
+                // rungjára `push` — az utóbbi nem navigációs cél, és `go`-val
+                // nem maradna alatta lap, amire vissza lehetne lépni
+                // (`hub_back_navigation_test` N1).
+                onPressed: () {
+                  if (snapshot.recommendedMissionId == null) {
+                    context.go(AppRoutes.practiceHub);
+                  } else {
+                    context.push(AppRoutes.curriculumLadder);
+                  }
+                },
                 child: Text(hero.ctaLabel),
               ),
             ],
@@ -362,7 +366,7 @@ class _StrumChallengeCard extends ConsumerWidget {
             const SizedBox(height: 12),
             OutlinedButton(
               key: const ValueKey('today-hub-strum-challenge-cta'),
-              onPressed: () => context.go(AppRoutes.strumChallenge),
+              onPressed: () => context.push(AppRoutes.strumChallenge),
               child: Text(l10n.strumChallengeStart),
             ),
           ],

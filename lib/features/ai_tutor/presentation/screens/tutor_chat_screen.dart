@@ -216,7 +216,10 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       Navigator.of(context).pop();
-      context.go(uri.toString());
+      // `push`, nem `go`: a gyakorlás-beállítás nem elsődleges navigációs cél,
+      // és `go`-val nem maradna alatta lap, amire a tanuló vissza tudna lépni
+      // (`hub_back_navigation_test` N1).
+      context.push(uri.toString());
     });
   }
 

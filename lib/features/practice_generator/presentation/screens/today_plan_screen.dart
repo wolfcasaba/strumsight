@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../app/routing/app_route.dart';
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controller/today_plan_controller.dart';
@@ -11,8 +13,6 @@ import '../controller/plan_preview_controller.dart';
 import '../providers/practice_generator_providers.dart';
 import 'plan_change_review_screen.dart';
 import 'plan_preview_screen.dart';
-import 'plan_privacy_screen.dart';
-import 'weekly_plan_screen.dart';
 
 /// The local, offline Today projection of the learner's active plan.
 class TodayPlanScreen extends StatelessWidget {
@@ -414,13 +414,28 @@ class _TodayPlanMenu extends StatelessWidget {
   }
 
   void _open(BuildContext context, _TodayPlanMenuAction action) {
-    final Widget page = switch (action) {
-      _TodayPlanMenuAction.weeklyPlan => const _WeeklyPlanRoute(),
-      _TodayPlanMenuAction.planPreview => const _PlanPreviewRoute(),
-      _TodayPlanMenuAction.changeReview => const _PlanChangeReviewRoute(),
-      _TodayPlanMenuAction.privacy => const _PlanPrivacyRoute(),
-    };
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+    // A heti terv és az adatvédelem a ROUTEREN át nyílik: mindkettőnek van
+    // regisztrált címe, amit a router a saját providereiből épít fel, és egy
+    // `Navigator`-os megkerülés mély-linkelhetetlenné tenné őket (WP-D).
+    // Az előnézet és a változás-áttekintés marad helyben épített lap: azok
+    // `extra`-t kérnek (tervet, illetve javaslatot), és `extra` nélkül a
+    // router őre visszadobná őket ide — vagyis halott vezérlő lenne.
+    switch (action) {
+      case _TodayPlanMenuAction.weeklyPlan:
+        context.push(AppRoutes.practiceGeneratorWeekly);
+      case _TodayPlanMenuAction.privacy:
+        context.push(AppRoutes.practiceGeneratorPrivacy);
+      case _TodayPlanMenuAction.planPreview:
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const _PlanPreviewRoute()),
+        );
+      case _TodayPlanMenuAction.changeReview:
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => const _PlanChangeReviewRoute(),
+          ),
+        );
+    }
   }
 }
 
@@ -494,21 +509,6 @@ class _ActivePlanRoute extends ConsumerWidget {
       ),
     };
   }
-}
-
-class _WeeklyPlanRoute extends StatelessWidget {
-  const _WeeklyPlanRoute();
-
-  @override
-  Widget build(BuildContext context) => _ActivePlanRoute(
-    title: (l10n) => l10n.weeklyPlanTitle,
-    builder: (context, ref, plan) => WeeklyPlanScreen(
-      plan: plan,
-      // Computed at READ time — the provider exposes a function, never a
-      // cached `LocalDate` (M3).
-      today: ref.watch(practiceGeneratorTodayProvider)(),
-    ),
-  );
 }
 
 class _PlanPreviewRoute extends StatelessWidget {
@@ -617,15 +617,4 @@ class _PlanChangeReviewRoute extends ConsumerWidget {
       ),
     };
   }
-}
-
-class _PlanPrivacyRoute extends ConsumerWidget {
-  const _PlanPrivacyRoute();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) => PlanPrivacyScreen(
-    deleteUseCase: ref.watch(deletePracticePlanningDataProvider),
-    exportUseCase: ref.watch(exportPracticePlanningDataProvider),
-    cacheDirectoryResolver: ref.watch(practiceGeneratorCacheDirectoryProvider),
-  );
 }

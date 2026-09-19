@@ -3869,24 +3869,6 @@ const _excludedCells = <_ExcludedCell>[
   // `lib/features/analyze/screens/analyze_screen.dart:331` — the mic-error
   // state's action Row (icon + retry label), hu locale only (longer string)
   // at landscape (least vertical room pushes it into a horizontal squeeze).
-  _ExcludedCell(
-    screen: 'analyze',
-    theme: 'light',
-    locale: 'hu',
-    viewport: _ViewportProfile.landscape,
-    textScale: 2.0,
-    measuredOverflowPx: 36,
-    measuredOn: '2026-09-03',
-  ),
-  _ExcludedCell(
-    screen: 'analyze',
-    theme: 'dark',
-    locale: 'hu',
-    viewport: _ViewportProfile.landscape,
-    textScale: 2.0,
-    measuredOverflowPx: 36,
-    measuredOn: '2026-09-03',
-  ),
 
   // `lib/features/learn/screens/latency_calibration_screen.dart` — compact
   // portrait, en only (the shorter locale — this one is a fixed-height

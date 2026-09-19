@@ -270,6 +270,14 @@ const Map<String, Set<String>> _goExceptions = <String, Set<String>>{
   // `PopScope` confirmation owns the exit; it is not a "menu item".
   'lib/features/practice/presentation/screens/practice_setup_screen.dart':
       <String>{'AppRoutes.practiceSession'},
+  // The challenge's exit, the Live Stage's `entryLocation` pattern exactly:
+  // `_leave` pops when it CAN (`context.canPop()` guards the line above it),
+  // and this branch only fires with an empty stack — where a push would
+  // strand the learner on a finished minute with no way out.
+  'lib/features/strum_challenge/presentation/screens/strum_challenge_screen.dart':
+      <String>{
+        'ref.read(appConfigProvider).flags.adaptiveShellEnabled ? AppRoutes.today : AppRoutes.live,',
+      },
 };
 
 /// The routes the hubs navigate to, read out of the hub sources — derived from

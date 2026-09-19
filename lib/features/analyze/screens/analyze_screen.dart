@@ -242,7 +242,11 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
         // to this widget, so it stays a token-styled local widget rather
         // than a forced SsEmptyState/SsFailureState (§0.0.A/R12 exception
         // class).
-        return Center(
+        // Görgethető, nem levágott: fekvő tájolásban 2.0-s szöveg-méretnél
+        // ez a törzs 52 pixellel túlcsordult, amióta az Analysis V2 belépője
+        // is a képernyőn van (E18-R24). Ugyanaz a forma, amit az `idle` és a
+        // `micDenied` ág már használ.
+        return SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [

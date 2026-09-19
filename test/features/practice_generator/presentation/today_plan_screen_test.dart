@@ -163,6 +163,10 @@ void main() {
           ),
         );
 
+        // A négy mellék-képernyő egy AppBar-menüből nyílik (E17-R06 / ADR
+        // 0525): előbb a menüt kell kinyitni, csak utána van mit koppintani.
+        await tester.tap(find.byKey(const Key('today-plan-menu')));
+        await tester.pumpAndSettle();
         await tester.tap(find.byKey(Key(entry.key)));
         await tester.pumpAndSettle();
 

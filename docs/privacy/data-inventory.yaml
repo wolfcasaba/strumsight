@@ -244,15 +244,6 @@ routes:
     rides: "account_api"
     fields: []
 
-  - id: account_api_community_social_graph_pages_repository
-    source: "HttpCommunitySocialGraphRepository"
-    file: "lib/features/community/data/repositories/social_graph_repository_impl.dart:80"
-    wired: true
-    gate: "rides account_api via communitySocialApiClientProvider (re-exported from relationship_repository_impl.dart:43-44); a paging decorator over HttpSocialGraphRepository"
-    consent_switch: "rides account_api — see that route's consent_switch"
-    rides: "account_api"
-    fields: []
-
   - id: account_api_community_challenge_repository
     source: "HttpCommunityChallengeRepository"
     file: "lib/features/community/data/repositories/challenge_repository_impl.dart:134"
