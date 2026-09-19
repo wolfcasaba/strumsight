@@ -182,6 +182,7 @@ import 'package:strumsight/features/share/share_service.dart';
 import 'package:strumsight/features/analyze/model/analyze_result.dart';
 import 'package:strumsight/features/song_trainer/application/import/import_preview.dart';
 import 'package:strumsight/features/song_trainer/application/import/song_import_controller.dart';
+import 'package:strumsight/features/song_trainer/application/setlists/setlist_controller.dart';
 import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_trainer_result.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_trainer_state.dart';
@@ -197,11 +198,15 @@ import 'package:strumsight/features/song_trainer/domain/models/song_instrument.d
 import 'package:strumsight/features/song_trainer/domain/models/song_measure.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_metadata.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_section.dart';
+import 'package:strumsight/features/song_trainer/domain/models/song_setlist.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_source.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_track.dart';
 import 'package:strumsight/features/song_trainer/domain/models/tempo_map.dart';
+import 'package:strumsight/features/song_trainer/domain/repositories/setlist_repository.dart';
 import 'package:strumsight/features/song_trainer/domain/repositories/song_asset_repository.dart';
 import 'package:strumsight/features/song_trainer/domain/repositories/song_repository.dart';
+import 'package:strumsight/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart';
+import 'package:strumsight/features/song_trainer/presentation/screens/setlist_session_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_editor_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_import_preview_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_import_screen.dart';
@@ -1615,6 +1620,70 @@ Widget _skillDetailScreen() => SkillDetailScreen(
   onStartRecommendedPractice: () {},
 );
 List<Override> _skillDetailOverrides() => [...preferenceOverrides()];
+
+// ── setlist_list_v2 / setlist_session (E17-R03, test/features/song_trainer/
+// setlist_session_wiring_test.dart) — both screens became reachable this
+// round (route + entry affordance); neither reads a provider directly (both
+// take `controller`/`songRepository`/`sessionLauncher`/`availability`/
+// runners as constructor args), so `overridesBuilder` only needs the
+// baseline preference override the pump harness expects everywhere.
+
+final class _SetlistMatrixRepository implements SetlistRepository {
+  _SetlistMatrixRepository(this._setlists);
+
+  final List<SongSetlist> _setlists;
+
+  @override
+  Future<AppResult<List<SongSetlist>>> list() async =>
+      AppResult<List<SongSetlist>>.success(_setlists);
+  @override
+  Future<AppResult<SongSetlist?>> get(String id) async =>
+      AppResult<SongSetlist?>.success(
+        _setlists.where((setlist) => setlist.id == id).firstOrNull,
+      );
+  @override
+  Future<AppResult<void>> save(SongSetlist setlist) =>
+      throw UnimplementedError('golden fixture');
+  @override
+  Future<AppResult<void>> delete(String id) =>
+      throw UnimplementedError('golden fixture');
+}
+
+SongSetlist _setlistMatrixFixtureSetlist() {
+  final now = DateTime.utc(2026, 9, 19);
+  return SongSetlist(
+    id: 'golden-setlist',
+    name: 'Golden Setlist',
+    createdAt: now,
+    updatedAt: now,
+    items: <SongSetlistItem>[
+      SongSetlistItem(id: 'item-1', songId: SongId('golden-overview')),
+    ],
+  );
+}
+
+Widget _setlistListV2Screen() => SetlistListScreenV2(
+  controller: SetlistController(
+    _SetlistMatrixRepository(<SongSetlist>[_setlistMatrixFixtureSetlist()]),
+  ),
+  clock: () => DateTime.utc(2026, 9, 19),
+  songRepository: InMemorySongRepository(),
+  sessionLauncher: (_) async =>
+      throw UnimplementedError('not exercised by the matrix pump'),
+);
+List<Override> _setlistListV2Overrides() => [...preferenceOverrides()];
+
+Widget _setlistSessionScreen() => SetlistSessionScreen(
+  setlist: _setlistMatrixFixtureSetlist(),
+  mode: SetlistSessionMode.practice,
+  availability: (_) => SetlistItemAvailability.ready,
+  performanceRunner: (item) async =>
+      throw UnimplementedError('not exercised by the matrix pump'),
+  createPracticeRunner: () =>
+      (item) async =>
+          throw UnimplementedError('not exercised by the matrix pump'),
+);
+List<Override> _setlistSessionOverrides() => [...preferenceOverrides()];
 
 // ── song_trainer (test/ui/goldens/e13_r23/24/25_screens_golden_test.dart) ──
 
@@ -3116,6 +3185,18 @@ final _screens = <String, _ScreenFixture>{
     screenPath: 'lib/features/settings/screens/settings_screen.dart',
     build: _settingsScreen,
     overridesBuilder: _settingsOverrides,
+  ),
+  'setlist_list_v2': _ScreenFixture(
+    screenPath:
+        'lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart',
+    build: _setlistListV2Screen,
+    overridesBuilder: _setlistListV2Overrides,
+  ),
+  'setlist_session': _ScreenFixture(
+    screenPath:
+        'lib/features/song_trainer/presentation/screens/setlist_session_screen.dart',
+    build: _setlistSessionScreen,
+    overridesBuilder: _setlistSessionOverrides,
   ),
   'share_preview': _ScreenFixture(
     screenPath: 'lib/features/share/screens/share_preview_screen.dart',

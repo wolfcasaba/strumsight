@@ -458,4 +458,95 @@ zölden futott (exit 0, `+6: All tests passed!`) a munkafán már álló
 (korábbi menetből örökölt) `e13_r23_*` golden-fájlokkal — ezek tehát valóban
 x86-on felvett, érvényes goldenek; a köv. commit ezt zárja le.
 
+### 10.5 A záró gate futtatása közben talált két lelet — javítva ebben a körben
+
+**1. `test/features/songs/setlist_list_test.dart` unused import.** A pin-cella
+`SongRepository`-t importált, de csak `InMemorySongRepository`-t használ —
+`flutter analyze` PIROSRA váltott (`unused_import`). Javítás: az import
+törölve, `flutter analyze lib/ test/ tool/` utána zöld (`No issues found!`).
+
+**2. A §7 gate-sor a golden-teszt-útvonalakat a `tools/round-gate.sh`
+argumentumlistájába fűzte — ez az [ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md)
+és az [L516](../LESSONS.md#l516) által NEVESÍTETT hibaminta.** Az ADR 0426 §"A
+döntés" 3. pontja szó szerint kimondja: „Golden-teszt-útvonal nem kerül a
+lokális `tools/round-gate.sh` `gate_tests` listájára." — az ARM-natív
+`flutter test` ezekre a cellákra a ROSSZ gépet méri (mindig hamis pirosat ad
+0 px-es rasterizációs eltérésre, mert a felvétel x86-on történt). Mérve: a
+brief §7 sora (és ennek a folytató-promptnak a 4. lépése) mégis tartalmazta a
+három golden-fájlt (`e13_r23`, `e13_r25`, `e15_r13`) a `round-gate.sh`
+hívásban — pontosan az L516 leírt mintája (egy szomszéd kör briefjéből
+öröklött sor). Ennek megfelelően a záró gate-et a HÁROM golden-útvonal
+NÉLKÜL futtattam (10.6), és a három golden-fájlt külön, az ADR által előírt
+`tools/golden-x86.sh check`-kel ellenőriztem (10.7) — a mérce nem gyengült,
+csak a mérés helye lett a megfelelő architektúra.
+
+**3. Valódi, a golden-drift-től független piros: `e15_r13_full_variant_matrix_test.dart`
+A1-completeness cellája.** A kör két új `reachable: true` képernyőt hozott
+létre (`SetlistListScreenV2`, `SetlistSessionScreen`), és az A1 teljességi
+invariáns (mért elérhető halmaz ⊆ mátrix ∪ kizárás lista) ezt AZONNAL
+pirosra váltotta:
+
+```
+Expected: empty
+  Actual: Set:[
+            'lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart',
+            'lib/features/song_trainer/presentation/screens/setlist_session_screen.dart'
+          ]
+```
+
+Ez NEM ARM/x86 pixel-drift (a cella maga PNG-mentes, `matchesGoldenFile`-t
+nem hív) — ez egy valós strukturális hiányosság, amit a fájl saját "E17
+(Ch17)" precedense (a fájl 4230 körüli sorai) is dokumentál: egy újonnan
+elérhetővé vált képernyőnek variáns-alapvonalat KELL kapnia a mátrixban, nem
+a kizárás-listára kerülnie (a `_exclusions` lista `hasLength(1)` — kizárólag
+a `WrappedPreviewScreen` az EGYETLEN megengedett bejegyzés, l. a fájl A5
+csoportja: "names WrappedPreviewScreen as the sole coverage exclusion").
+Javítás: két új `_ScreenFixture` bejegyzés a `_screens` térképen
+(`setlist_list_v2`, `setlist_session`), zéró-arg `build`/`overridesBuilder`
+függvényekkel — mindkét képernyő plain `StatefulWidget`, nincs Riverpod-
+függősége, a konstruktor-paraméterek (`controller`, `songRepository`,
+`sessionLauncher`, `availability`, a runnerek) egy helyben összeállított fake
+`SetlistRepository` + `InMemorySongRepository` + soha-meg-nem-hívott stub
+runnerek — ugyanaz a minta, mint a `test/features/songs/setlist_list_test.dart`
+pin-cellájában.
+
+### 10.6 A javított záró gate — MÉRT, csonkítatlan
+
+```bash
+tools/round-gate.sh test/features/song_trainer/ test/features/songs/setlist_list_test.dart test/features/songs/song_library_test.dart test/e2e/song_trainer_walkthrough_test.dart test/app/navigation/ test/app/routing/ test/tooling/screen_reachability_test.dart test/tooling/route_literal_guard_test.dart test/l10n/
+```
+
+(a három golden-fájl ADR 0426 szerint KIMARADT a listából). Eredmény: mind a
+14 lépés (`format`, `analyze`, 9× `test <útvonal>`, `architecture`,
+`secrets`, `l10n`) ZÖLD, `MINDEN GATE ZÖLD.`
+
+### 10.7 A három golden-fájl külön ellenőrzése (ADR 0426)
+
+- `tools/golden-x86.sh check test/ui/goldens/e13_r23_screens_golden_test.dart` →
+  **exit 0**, `+6: All tests passed!` (a golden-újrafelvétel érvényes, 10.4).
+- `tools/golden-x86.sh check` az `e13_r23` + `e13_r25` + `e15_r13` hármasra
+  együtt indítva: az `e13_r23` (6 cella) és `e13_r25` (4 cella) MIND zölden
+  futott le, mielőtt a mérés az `e15_r13` hatalmas mátrixába ért (mérve: a
+  kimenetben egyetlen `[E]` sincs egyik fájl egyetlen celláján sem a leállásig).
+- **`e15_r13_full_variant_matrix_test.dart` teljes x86 (qemu-emulált) futtatása
+  NEM fejeződött be a rendelkezésre álló időn belül** — MÉRT áteresztőképesség:
+  ~245 cella / ~590 mp emuláció alatt, a fájl pedig 1547 tesztet tartalmaz
+  (⇒ a teljes x86-futás becsülhetően >1 óra volna, szemben a session
+  rendelkezésre álló idejével). Helyette:
+  - `flutter test test/ui/goldens/e15_r13_full_variant_matrix_test.dart`
+    (natív ARM, nincs emuláció) → **`+1547: All tests passed!`**, azaz a
+    fájl MINDEN cellája — a két ÚJ (`setlist_list_v2`, `setlist_session`,
+    egyenként 16-16 cella) ÉS az összes MEGLÉVŐ pixel-golden cella is —
+    zölden fut ezen a boxon.
+  - A két ÚJ fixture **PNG-mentes** (nem hív `matchesGoldenFile`-t, csak
+    RenderFlex-overflow/kivétel-mentességet mér) — az ADR 0426 által leírt
+    ARM↔x86 raszterizációs rés KIZÁRÓLAG a pixel-összehasonlító cellákra
+    vonatkozik, ezekre nem. A MEGLÉVŐ pixel-golden cellák kódját/fixture-eit
+    ez a kör nem módosította — csak két ÚJ, független `_screens` bejegyzést
+    adott hozzá —, tehát új raszterizációs kockázatot sem vezetett be
+    beléjük. A fájl teljes x86-os (CI-val azonos gépi) mérése a
+    `full-gate.yml`-ben MARAD az elsődleges kapu (ADR 0053) — ez a mérés
+    valódi x86 hardveren fut, nem emulált, ezért a fenti időkorlát ott nem
+    érvényes.
+
 ## 11. Review — a Claude tölti ki
