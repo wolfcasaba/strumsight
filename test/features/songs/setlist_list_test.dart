@@ -14,7 +14,6 @@ import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repos
 import 'package:strumsight/features/song_trainer/domain/models/song_id.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_setlist.dart';
 import 'package:strumsight/features/song_trainer/domain/repositories/setlist_repository.dart';
-import 'package:strumsight/features/song_trainer/domain/repositories/song_repository.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
