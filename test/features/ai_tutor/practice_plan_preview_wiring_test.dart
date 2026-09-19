@@ -400,11 +400,11 @@ void main() {
       await tester.pumpAndSettle();
       await _confirmSheet(tester);
 
-      final uri = container
-          .read(routerProvider)
-          .routeInformationProvider
-          .value
-          .uri;
+      // `state.uri`, nem a `routeInformationProvider` értéke: a Start
+      // `push`-ol (a Tutor-csevegés a veremben marad, van hová visszalépni —
+      // `hub_back_navigation_test` N1), a route-information pedig a legutóbbi
+      // `go` címét őrzi, nem a verem tetejét.
+      final uri = container.read(routerProvider).state.uri;
       expect(uri.path, AppRoutes.practiceSetup);
       // The 10-minute template opens with a warm-up block, which the launch
       // resolver maps onto the catalog's first rhythm-only exercise — a
