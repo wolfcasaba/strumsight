@@ -1,5 +1,5 @@
 // E17-R03 (ADR 0522) — the Setlist session is wired from the setlist DETAIL
-// screen (§5.1) through ONE launcher whose mode is a parameter (§5.2 / A3);
+// screen (§1) through ONE launcher whose mode is a parameter (§2 / A3);
 // both modes run on the REAL `SetlistSessionController` over the real
 // composition — availability from the real song repositories, per-item
 // Stages from the shipped Song Trainer pipeline (A2) — and finishing pops

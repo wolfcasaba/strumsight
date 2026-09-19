@@ -829,7 +829,12 @@ E14-R42	docs/rounds/e14-r42-program-closure-and-production-gate.md	sonnet-impl	0
 #     Az ADR-oszlop ELŐZETES — a foglaló a kör indulásakor adja a véglegeset.
 E17-R01	docs/rounds/e17-r01-onboarding-first-win-stage-wiring.md	sonnet-impl	0534	done
 E17-R02	docs/rounds/e17-r02-analysis-v2-capture-wiring.md	sonnet-impl	0584	done
-E17-R03	docs/rounds/e17-r03-setlist-session-wiring.md	sonnet-impl	0522	pending
+# E17-R03: a kör tartalma a pipeline dispatch-én KÍVÜL landolt (`25b518457`,
+# 2026-09-15, „one launcher, mode as a parameter"), és a négy-vonalas
+# integrációval került a mainre; a #604 PR fája bitre azonos volt a mainnel,
+# ezért merge nélkül lezárva. Az ELŐZETES 0522 ADR-slot utólag megírva:
+# docs/adr/0522-setlist-session-single-launcher-and-mode-parameter.md.
+E17-R03	docs/rounds/e17-r03-setlist-session-wiring.md	sonnet-impl	0522	done
 E17-R04	docs/rounds/e17-r04-tutor-practice-plan-preview-wiring.md	sonnet-impl	0523	pending
 E17-R05	docs/rounds/e17-r05-practice-generator-seams.md	sonnet-impl	0524	pending
 E17-R06	docs/rounds/e17-r06-practice-generator-screen-wiring.md	sonnet-impl	0525	hold

@@ -1,6 +1,6 @@
 # E17-R03 — A Song Trainer setlist-session bekötése (V2-natív)
 
-- **Státusz:** REVISED (ADR 0112 önjavító kör, 2026-09-19; mért alap: `main @ 3ffde512`) — **`pending`**
+- **Státusz:** **`done`** — a kör TARTALMA a pipeline dispatch-én KÍVÜL landolt (`25b518457`, 2026-09-15), lásd §0.2. A §0.1 REVISED szövege (ADR 0112 önjavító kör, 2026-09-19; mért alap: `main @ 3ffde512`) történeti rekord.
 - **Típus:** Chapter 17 (Teljes bekötés), Kör 3
 - **Kör-azonosító:** `E17-R03`
 - **Branch:** `<motor>/e17-r03-setlist-session-wiring`
@@ -149,6 +149,28 @@ tools/codex-signal.sh done "<egy sor>"
 tools/codex-signal.sh stopped "<egy sor>"
 tools/codex-signal.sh blocked "<egy sor>"
 ```
+
+## 0.2 A kör tartalma a pipeline-on KÍVÜL landolt (2026-09-15) — `done`
+
+**Mérve 2026-09-19 (négy-vonalas main-integráció).** A setlist-session bekötése
+nem ezen a briefen keresztül dispatch-elve született meg, hanem a `25b518457`
+commitban („feat(song_trainer): the setlist session is reachable from the setlist
+detail — one launcher, mode as a parameter"), és az integrációval a `main`-re
+került. A körhöz nyitott #604 PR fája BITRE azonos volt a mainnel, ezért merge
+nélkül lezárva; a queue-sor `pending` → `done`.
+
+**A szállított megoldás ELTÉR e brief §5.1-étől.** A §0.1 revízió a belépést a
+**V2 setlist-felületre** tette volna (`/song-trainer/setlists`); ami valójában
+szállt, az a **legacy `SetlistDetailScreen`** belépés, ahol a legacy setlist
+belépésenként, MEMÓRIÁBAN vetül `SongSetlist`-re
+(`SetlistSessionComposer.compose`, semmi nem perzisztálódik). A §5.2–5.4 döntések
+(egy indító paraméteres móddal, valós dal-tárból jövő availability, mért
+`SetlistItemResult`) változatlanul érvényesek és szállítva vannak.
+
+**A kötött döntések mostantól az ADR-ben élnek, nem itt:**
+[`ADR 0522`](../adr/0522-setlist-session-single-launcher-and-mode-parameter.md)
+— a §5 alatti szakaszok ezért történeti rekordnak olvasandók, és a kódban lévő
+`ADR 0522 §…` hivatkozások az ADR saját döntés-számozására mutatnak.
 
 ## 1. Cél
 

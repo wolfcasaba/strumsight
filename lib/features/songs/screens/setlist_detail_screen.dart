@@ -28,7 +28,7 @@ class SetlistDetailScreen extends ConsumerWidget {
     );
   }
 
-  /// E17-R03 (ADR 0522 §5.2) — the mode chooser in front of the ONE session
+  /// E17-R03 (ADR 0522 §2) — the mode chooser in front of the ONE session
   /// launcher. Both tiles resolve to a [SetlistSessionMode] and fall through
   /// to [_startSession]; there is no second entry path per mode.
   Future<void> _chooseSessionMode(
@@ -81,7 +81,7 @@ class SetlistDetailScreen extends ConsumerWidget {
     await _startSession(context, ref, set, library, mode);
   }
 
-  /// E17-R03 (ADR 0522 §5.1) — the single Song Trainer session launcher;
+  /// E17-R03 (ADR 0522 §2) — the single Song Trainer session launcher;
   /// [mode] is a parameter, never a second code path.
   ///
   /// The legacy [Setlist] is projected into a V2 setlist IN MEMORY on every
