@@ -272,6 +272,30 @@ Future<void> _startSongTrainerSession(
   }
 }
 
+/// Opens a previously stored analysis from the capture home's "recent"
+/// list (ADR 0584 §5.4). The timeline route's own contract (ADR 0241 §1)
+/// takes an [AnalysisDocument], not the [AnalysisSummary] the home screen
+/// holds, so the composition loads the document here — the mirrored
+/// pattern is `library_item_detail_screen.dart`'s `_handleExport`. A load
+/// failure is NOT a new user-facing message: the route is entered with no
+/// valid `extra`, so the existing fail-closed redirect to Live applies
+/// unchanged.
+Future<void> _openStoredAnalysis(
+  BuildContext context,
+  WidgetRef ref,
+  AnalysisSummary summary,
+) async {
+  final repository = ref.read(analysisRepositoryProvider);
+  final result = await repository.getById(summary.documentId);
+  if (!context.mounted) return;
+  switch (result) {
+    case Success<AnalysisDocument>(:final value):
+      context.go(AppRoutes.analysisTimeline, extra: value);
+    case Failure<AnalysisDocument>():
+      context.go(AppRoutes.analysisTimeline);
+  }
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
   final refreshNotifier = _RouterRefreshNotifier();
   ref.listen(onboardingSeenProvider, (_, _) => refreshNotifier.refresh());
@@ -1078,7 +1102,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   );
                 },
                 onOpenAnalysis: (summary) =>
-                    context.go(AppRoutes.analysisTimeline, extra: summary),
+                    unawaited(_openStoredAnalysis(context, ref, summary)),
               );
             },
           ),
