@@ -9,7 +9,7 @@ is reachable from the setlist detail — one launcher, mode as a parameter (E17-
 Kapcsolódik: [ADR 0130](0130-setlist-v2-song-progress-and-epic-3-closure-boundary.md)
 (a V2 setlist-dokumentum és a legacy adapter határa),
 [ADR 0125](0125-song-trainer-setup-configuration-boundary.md) (a setup → compile →
-Stage lánc), [ADR 0087](0087-round-brief-scope-authority.md) §2 (a kör-brief
+Stage lánc), [ADR 0087](0087-autonomous-round-pipeline.md) §2 (a kör-brief
 scope-hatásköre), [ADR 0112](0112-self-healing-pipeline.md) §2 (a kör
 pre-flight-revíziója).
 
