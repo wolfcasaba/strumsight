@@ -420,8 +420,7 @@ void main() {
     test('AnalysisHomeScreen / AnalysisRecordingScreen / '
         'AnalysisProcessingScreen read zero Riverpod providers directly '
         '(the composition root injects every dependency)', () {
-      const directory =
-          'lib/features/audio_analysis/presentation/capture/';
+      const directory = 'lib/features/audio_analysis/presentation/capture/';
       final files = <String>[
         '${directory}analysis_home_screen.dart',
         '${directory}analysis_recording_screen.dart',
@@ -472,32 +471,29 @@ void main() {
       customTitle: false,
     );
 
-    testWidgets(
-      'tapping a recent analysis opens the overview with the LOADED '
-      'document (not the fail-closed redirect to Live)',
-      (tester) async {
-        final harness = await _pumpRouter(
-          tester,
-          seed: <AnalysisSaveRequest>[storedRequest()],
-        );
-        harness.router.go(AppRoutes.analysisHome);
-        await tester.pumpAndSettle();
+    testWidgets('tapping a recent analysis opens the overview with the LOADED '
+        'document (not the fail-closed redirect to Live)', (tester) async {
+      final harness = await _pumpRouter(
+        tester,
+        seed: <AnalysisSaveRequest>[storedRequest()],
+      );
+      harness.router.go(AppRoutes.analysisHome);
+      await tester.pumpAndSettle();
 
-        expect(
-          find.byKey(const Key('analysis-home-recent-stored-doc')),
-          findsOneWidget,
-        );
+      expect(
+        find.byKey(const Key('analysis-home-recent-stored-doc')),
+        findsOneWidget,
+      );
 
-        await tester.tap(
-          find.byKey(const Key('analysis-home-recent-stored-doc')),
-        );
-        await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('analysis-home-recent-stored-doc')),
+      );
+      await tester.pumpAndSettle();
 
-        expect(harness.router.state.uri.path, AppRoutes.analysisOverview);
-        expect(find.byType(AnalysisOverviewScreen), findsOneWidget);
-        expect(harness.repository.getByIdCalls, 1);
-      },
-    );
+      expect(harness.router.state.uri.path, AppRoutes.analysisOverview);
+      expect(find.byType(AnalysisOverviewScreen), findsOneWidget);
+      expect(harness.repository.getByIdCalls, 1);
+    });
 
     testWidgets(
       'a load failure keeps the user on the home screen and SAYS SO — the '
