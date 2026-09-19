@@ -376,4 +376,86 @@ tools/golden-x86.sh record test/ui/goldens/e13_r23_screens_golden_test.dart
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 10.1 Mit építettem, fájlonként
+
+| Fájl | Mit csinál |
+|---|---|
+| `lib/app/routing/app_route.dart` | ÚJ `AppRoutes.songTrainerSetlists` konstans (`/song-trainer/setlists`) |
+| `lib/app/routing/app_router.dart` | a route regisztrálása a meglévő `if (songTrainerEnabled)` blokkban, a `SetlistListScreenV2`-t a valós `setlistControllerProvider`/`songTrainerClockProvider`/`songRepositoryProvider`/`songTrainerSessionLauncherProvider` négyesével konstruktor-injektálva |
+| `lib/features/song_trainer/presentation/screens/song_library_screen.dart` | egy ÚJ AppBar-akció (`song-library-open-setlists` kulcs) a setlist-útvonalra |
+| `lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart` | design-rendszer migráció (`core/design_system/public.dart` tokenek/komponensek) + `songRepository`/`sessionLauncher` konstruktor-paraméter + az EGYETLEN `_startSession(setlist, mode)` belépési pont (5.2), ami friss `loadSetlistAvailabilitySnapshot` + `buildSetlistAvailabilityResolver` hívással pusholja a `SetlistSessionScreen`-t a `Navigator`-on (raw push, nem `context.go`, hogy a lista a veremben maradjon — A7) |
+| `lib/features/song_trainer/application/setlists/setlist_session_providers.dart` (ÚJ) | `loadSetlistAvailabilitySnapshot`, `buildSetlistAvailabilityResolver`, `buildSetlistPracticeRunner`/`buildSetlistPerformanceRunner`, `_runSetlistItem`, `_resultFor` — a runner a `songTrainerSessionLauncherProvider`-en és a valós `SongTrainerSessionRoute`-on át fut, és a `SetlistItemResult`-ot a session TÉNYLEGES `SongTrainerSessionOutcome`-jából képezi (5.3/5.4) |
+| `lib/features/song_trainer/presentation/screens/song_trainer_session_route.dart` | a befejezés-varrat: amikor `returnResultToCaller: true`, a route a saját mért `SongTrainerSessionOutcome`-ját adja vissza a hívónak `Navigator.pop`-on, ahelyett hogy a session csak elnyelné |
+| `lib/features/song_trainer/public.dart` | a kör által áthatárolt típusok (`SetlistSessionMode`, a runner-kompozíció publikus felülete) exportja |
+| `lib/l10n/base/app_{en,hu}.arb` + `lib/l10n/app_{en,hu}.arb` | `setlistSessionStartPractice`, `setlistSessionStartPerformance` és a hozzá tartozó szövegek forrás + generált aggregátum együtt |
+| `docs/ui/retirement-plan.md` | a `SetlistListScreenV2` és a `SetlistSessionScreen` sorainak átvezetése "keep (reachable + migrated)"-re |
+| `test/features/song_trainer/setlist_session_wiring_test.dart` (ÚJ) | A2/A3/A4/A5/A6/A7 mérő tesztjei (lásd 10.2) |
+| `test/features/songs/setlist_list_test.dart`, `test/features/song_trainer/application/setlists/setlist_session_controller_test.dart` | a pin-cellák átírása az ÚJ `songRepository`/`sessionLauncher` konstruktor-paraméterre (üres fake repo + nem-hívott stub launcher, mert ezek a tesztek session-indítást nem gyakorolnak) |
+| `test/ui/goldens/e13_r23_screens_golden_test.dart` + `test/ui/goldens/goldens/e13_r23_*.png` | golden-újrafelvétel a design-migráció pixel-eltolása miatt (10.3) |
+
+### 10.2 Acceptance-cellák → mérő teszt
+
+| # | Teszt (fájl → teszt-név) |
+|---|---|
+| A1 | `test/tooling/screen_reachability_test.dart` (gépi futtatás, nem külön teszt-eset) |
+| A2 | `test/features/song_trainer/setlist_session_wiring_test.dart` → `A2 — the song library entry affordance opens the V2 setlist route` |
+| A3 | `test/features/song_trainer/setlist_session_wiring_test.dart` → `A3/A4 — both modes start from the ONE entry point, wired through the real provider graph, onto the real SetlistSessionController` |
+| A4 | ugyanaz a teszt-eset (a `Setlist practice` ÉS `Setlist performance` cím-asszertáció mindkét módra) |
+| A5 | `test/features/song_trainer/setlist_session_wiring_test.dart` → `A5 — a song missing from the real repository index is skipped as missingSong; the controller never invokes the runner for it` |
+| A6 | `test/features/song_trainer/setlist_session_wiring_test.dart` → `A6/§6.1 — leaving a pushed session before it reports a result never produces a synthesized completed (...)` |
+| A7 | `test/features/song_trainer/setlist_session_wiring_test.dart` → `A7 — leaving the session returns to the V2 setlist list, never past it to the app root` |
+| A8 | `test/tooling/screen_reachability_test.dart` (teljes fájl, gate-lépés) |
+| A9 | `test/l10n/` (a gate-listán szereplő teljes mappa) |
+| A10 | `test/tooling/route_literal_guard_test.dart` |
+| A11 | `git diff lib/core/**/feature_flags.dart` üres (mérve: nincs ilyen diff a `b2cbd029..HEAD` tartományban) |
+
+### 10.3 A két KÖTELEZŐ falszifikációs próba — mért kimenet
+
+**A4 próba** — a `setlist_list_screen_v2.dart` performance-gombjának `onPressed`-jét
+ideiglenesen `_startSession(setlist, SetlistSessionMode.practice)`-re kötöttem
+(a `SetlistSessionMode.performance` helyett), majd lefuttattam:
+
+```
+flutter test test/features/song_trainer/setlist_session_wiring_test.dart
+```
+
+Eredmény: az `A3/A4` teszt-eset PIROSRA váltott —
+
+```
+Expected: exactly one matching candidate
+  Actual: _TextWidgetFinder:<Found 0 widgets with text "Setlist performance": []>
+```
+
+(a többi 4 teszt-eset zöld maradt). Ezután a diffet visszaállítottam
+(`SetlistSessionMode.performance`), és a teljes fájl újra zölden futott
+(`+5: All tests passed!`).
+
+**A6 próba** — a `setlist_session_providers.dart` `_runSetlistItem`
+záró sorát (`return _resultFor(item: item, outcome: outcome);`) ideiglenesen
+`return SetlistItemResult.completed(itemId: item.id, activeDuration:
+Duration.zero);`-re cseréltem, majd ugyanazt a parancsot futtattam.
+
+Eredmény: az `A6/§6.1` teszt-eset PIROSRA váltott —
+
+```
+Expected: exactly one matching candidate
+  Actual: _TextContainingWidgetFinder:<Found 0 widgets with text containing Completed 0 of 1: []>
+an early exit must be measured as NOT completed — a runner hard-coded to
+`completed` would report "Completed 1 of 1" here
+```
+
+(a többi 4 teszt-eset zöld maradt). Ezután a diffet visszaállítottam
+(`_resultFor(item: item, outcome: outcome)`), és a teljes fájl újra zölden
+futott (`+5: All tests passed!`).
+
+Mindkét próba után `git diff --stat` üres volt commit előtt — nincs
+visszamaradt perturbáció a fában.
+
+### 10.4 Golden-újrafelvétel
+
+`tools/golden-x86.sh check test/ui/goldens/e13_r23_screens_golden_test.dart`
+zölden futott (exit 0, `+6: All tests passed!`) a munkafán már álló
+(korábbi menetből örökölt) `e13_r23_*` golden-fájlokkal — ezek tehát valóban
+x86-on felvett, érvényes goldenek; a köv. commit ezt zárja le.
+
 ## 11. Review — a Claude tölti ki
