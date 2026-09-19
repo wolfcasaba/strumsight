@@ -767,6 +767,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, ref, _) => SetlistListScreenV2(
               controller: ref.watch(setlistControllerProvider),
               clock: ref.watch(songTrainerClockProvider),
+              songRepository: ref.watch(songRepositoryProvider),
+              sessionLauncher: ref.watch(songTrainerSessionLauncherProvider),
             ),
           ),
         ),

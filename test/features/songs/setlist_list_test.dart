@@ -7,11 +7,14 @@
 // `SetlistRepository`, per the brief's mandated test shape.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/design_system/public.dart' show SsLightTheme;
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/song_trainer/application/setlists/setlist_controller.dart';
+import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repository.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_id.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_setlist.dart';
 import 'package:strumsight/features/song_trainer/domain/repositories/setlist_repository.dart';
+import 'package:strumsight/features/song_trainer/domain/repositories/song_repository.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
@@ -104,11 +107,21 @@ void main() {
 }
 
 Widget _app(SetlistController controller) => MaterialApp(
+  // E17-R03 (ADR 0585 D5) — this screen is now design-system migrated, so
+  // its build reads `Theme.of(context).extension<SsColorScheme/SsTypography>()!`.
+  theme: SsLightTheme.data(),
   localizationsDelegates: AppLocalizations.localizationsDelegates,
   supportedLocales: AppLocalizations.supportedLocales,
   home: SetlistListScreenV2(
     controller: controller,
     clock: () => DateTime.utc(2026, 8, 1),
+    // Neither A5 nor A6 taps a session-start affordance — these two are
+    // constructor-injected (E17-R03, ADR 0585 D3/D4) but never exercised
+    // here, so a plain empty fake and an unreachable stub are enough.
+    songRepository: InMemorySongRepository(),
+    sessionLauncher: (_) async => throw UnimplementedError(
+      'not exercised by the A5/A6 rendering assertions in this file',
+    ),
   ),
 );
 

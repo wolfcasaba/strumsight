@@ -1,37 +1,46 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/setlists/setlist_controller.dart';
 import '../../application/setlists/setlist_session_providers.dart';
-import '../../application/song_trainer_providers.dart';
 import '../../application/trainer/song_trainer_session_launcher.dart';
 import '../../domain/models/song_id.dart';
 import '../../domain/models/song_setlist.dart';
+import '../../domain/repositories/song_repository.dart';
 import '../widgets/setlist_item_availability_badge.dart';
 import 'setlist_session_screen.dart';
 
-final class SetlistListScreenV2 extends ConsumerStatefulWidget {
+final class SetlistListScreenV2 extends StatefulWidget {
   const SetlistListScreenV2({
     super.key,
     required this.controller,
     required this.clock,
+    required this.songRepository,
+    required this.sessionLauncher,
   });
 
   final SetlistController controller;
   final DateTime Function() clock;
 
+  /// Backs the session-start availability snapshot (ADR 0585 D3) —
+  /// constructor-injected exactly like [controller]/[clock] rather than
+  /// read from a provider inside this widget, so this screen stays a plain
+  /// `StatefulWidget` with no `ProviderScope` requirement of its own.
+  final SongRepository songRepository;
+
+  /// Backs the session-start item runners (ADR 0585 D3/D4) — same reasoning
+  /// as [songRepository].
+  final SongTrainerSessionLauncher sessionLauncher;
+
   @override
-  ConsumerState<SetlistListScreenV2> createState() =>
-      _SetlistListScreenV2State();
+  State<SetlistListScreenV2> createState() => _SetlistListScreenV2State();
 }
 
-final class _SetlistListScreenV2State
-    extends ConsumerState<SetlistListScreenV2> {
+final class _SetlistListScreenV2State extends State<SetlistListScreenV2> {
   List<SongSetlist>? _setlists;
   bool _isSaving = false;
 
@@ -96,8 +105,8 @@ final class _SetlistListScreenV2State
     SongSetlist setlist,
     SetlistSessionMode mode,
   ) async {
-    final repository = ref.read(songRepositoryProvider);
-    final launcher = ref.read(songTrainerSessionLauncherProvider);
+    final repository = widget.songRepository;
+    final launcher = widget.sessionLauncher;
     final snapshot = await loadSetlistAvailabilitySnapshot(repository);
     if (!mounted) return;
     final availability = buildSetlistAvailabilityResolver(snapshot);

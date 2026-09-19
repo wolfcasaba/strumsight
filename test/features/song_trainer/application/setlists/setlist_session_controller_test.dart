@@ -6,6 +6,7 @@ import 'package:strumsight/features/song_trainer/application/progress/song_progr
 import 'package:strumsight/features/song_trainer/application/setlists/setlist_controller.dart';
 import 'package:strumsight/features/song_trainer/application/setlists/setlist_session_controller.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_trainer_result.dart';
+import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repository.dart';
 import 'package:strumsight/features/song_trainer/domain/models/setlist_result.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_id.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_setlist.dart';
@@ -147,6 +148,12 @@ void main() {
         SetlistListScreenV2(
           controller: controller,
           clock: () => DateTime.utc(2026, 8, 4),
+          // This test never taps a session-start affordance (E17-R03,
+          // ADR 0585 D3/D4) — an empty fake repository and an unreachable
+          // stub launcher are enough.
+          songRepository: InMemorySongRepository(),
+          sessionLauncher: (_) async =>
+              throw UnimplementedError('not exercised by this widget test'),
         ),
       ),
     );
