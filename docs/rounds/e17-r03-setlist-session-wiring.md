@@ -550,3 +550,17 @@ tools/round-gate.sh test/features/song_trainer/ test/features/songs/setlist_list
     érvényes.
 
 ## 11. Review — a Claude tölti ki
+
+**VERDIKT: APPROVED** — 0 nyitott BLOCKER/MAJOR. A teljes jelentés:
+[`docs/reviews/e17-r03-review.md`](../reviews/e17-r03-review.md).
+
+- Gate SAJÁT kézzel, izolált `/tmp/review-e17-r03` klónon, `c6980fa0`-n: 14/14 ZÖLD.
+- Scope-audit a TELJES körre (`b2cbd029..c6980fa0`): `OK`, 22 útvonal.
+- Két FÜGGETLEN falszifikációs próba (reviewer-oldali): az A6 és az A5 cella
+  pontosan a saját sértésére vált pirosra, egyenként egy cella.
+- A1–A11 mind teljesül; a mért elérhetetlen képernyők: 3 → 1.
+- Leletek: **MINOR M1** (a §5.4 betű szerinti eltérése — nyers
+  `MaterialPageRoute` a regisztrált útvonal helyett; mért viselkedésbeli
+  költsége nulla, feloldás = dokumentálás), **MINOR M2** (a brief §7 /
+  `gate_tests` sora ütközött az ADR 0426 3. pontjával — az implementer ezt
+  mérte és helyesen oldotta fel), + N1–N4.
