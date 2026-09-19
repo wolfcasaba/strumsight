@@ -2,8 +2,15 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/features/live/domain/recognition/recognition_mode.dart';
 import 'package:strumsight/features/live/engine/dsp/chord_matcher.dart';
 import 'package:strumsight/features/live/engine/dsp/viterbi_chord_decoder.dart';
+
+/// E14-R30 (ADR 0544 D2): a hint can only be BUILT for a guided-mode engine,
+/// so every cell below has to go through [ExpectedChordHint.forMode] — there
+/// is no `setExpected('C')` string overload to call any more.
+ExpectedChordHint? guidedHint(String? label) =>
+    ExpectedChordHint.forMode(RecognitionMode.guided, label);
 
 Float64List chroma(Map<int, double> weights) {
   final v = Float64List(12);
@@ -200,26 +207,98 @@ void main() {
     });
   });
 
-  // Round 137 (chunk 016 rec #1): the expected-target prior. During a lesson
-  // the target chord is KNOWN — a small per-frame bonus resolves AMBIGUOUS
-  // evidence toward the target, but must never mask a genuinely different
-  // played chord (the "off-chart" guarantee).
+  // Round 137 (chunk 016 rec #1) introduced the expected-target prior as an
+  // ADDITIVE per-frame trellis bonus. E14-R30 (ADR 0544 D3) replaced that
+  // mechanism with a pure READ-OUT TIE-BREAK: the hint never enters the
+  // trellis, so it cannot accumulate, and it may only decide a frame that is
+  // tied on BOTH the accumulated path score and the raw similarity.
   group('expected-chord prior', () {
-    test('ambiguous maj-vs-maj7 evidence resolves to the expected chord', () {
-      final d = ViterbiChordDecoder()..setExpected('C');
+    // UPDATED IN E14-R30 (was: "…resolves to the expected chord", asserting
+    // 'C'). That cell pinned the OLD additive-bias behaviour, which is exactly
+    // what this round removes: sustained maj7 evidence must be allowed to win.
+    // Analytically pinned, not tuned: once the trellis has SETTLED, every
+    // follower state sits at least `selfBonus` (0.22) behind the leader
+    // (`gap = simLeader − simFollower + selfBonus`), and 0.22 is far outside
+    // the 0.05 tie-break band — so a settled trellis can never be tie-broken.
+    test('sustained ambiguous maj7 evidence still wins over the expected '
+        'chord: the hint is a tie-break, not an additive bias', () {
+      final d = ViterbiChordDecoder()..setExpected(guidedHint('C'));
       feed(d, cMaj, 8);
-      // Without the prior this sustained marginal Cmaj7 flips within 25
-      // frames (see the flicker test above); expecting C it must hold C.
       final held = feed(d, cMaj7, 25);
       expect(
         held!.chord.label,
-        'C',
-        reason: 'the prior tips the ambiguous call toward the target',
+        'Cmaj7',
+        reason:
+            'ADR 0544 D3: the audio evidence, once it has actually separated '
+            'the two states, is never overwritten by the expectation',
+      );
+      expect(
+        d.lastExpectedTieBreakApplied,
+        isFalse,
+        reason: 'a settled trellis is not a tie',
       );
     });
 
+    // The POSITIVE side of the same contract, on a deliberately EXACT tie.
+    // An augmented triad is pitch-class symmetric: with a uniform {0,4,8}
+    // bass AND treble observation, Caug / Eaug / G#aug score identically
+    // (0.8228 each, computed from the dictionary; the next competitor is
+    // 0.6692, i.e. 0.15 away — far outside the 0.05 band). Which of the three
+    // the argmax happens to pick is an implementation detail, so each hint is
+    // driven separately.
+    group('a GENUINE tie is what the hint may decide', () {
+      final augTie = [
+        chroma({0: 1, 4: 1, 8: 1}),
+        chroma({0: 1, 4: 1, 8: 1}),
+      ];
+
+      test('with no hint the tie resolves to one of the tied roots and the '
+          'tie-break never fires', () {
+        final d = ViterbiChordDecoder();
+        final m = feed(d, augTie, 6);
+        expect(m!.chord.label, isIn(['Caug', 'Eaug', 'G#aug']));
+        expect(d.lastExpectedTieBreakApplied, isFalse);
+      });
+
+      for (final target in ['Caug', 'Eaug', 'G#aug']) {
+        test('expecting $target reports $target', () {
+          final d = ViterbiChordDecoder()..setExpected(guidedHint(target));
+          final m = feed(d, augTie, 6);
+          expect(m!.chord.label, target);
+        });
+      }
+
+      test('a chord OUTSIDE the tie is not reachable by the hint', () {
+        // C major scores 0.6692 against this observation — 0.15 below the
+        // tied augmented triads, i.e. genuinely different audio evidence.
+        final d = ViterbiChordDecoder()..setExpected(guidedHint('C'));
+        final m = feed(d, augTie, 6);
+        expect(m!.chord.label, isNot('C'));
+        expect(d.lastExpectedTieBreakApplied, isFalse);
+      });
+    });
+
+    test('the hint never enters the trellis: clearing it makes the decoder '
+        'bit-identical to one that never had it (ADR 0544 D3)', () {
+      final hinted = ViterbiChordDecoder()..setExpected(guidedHint('C'));
+      final plain = ViterbiChordDecoder();
+      feed(hinted, cMaj, 6);
+      feed(plain, cMaj, 6);
+      hinted.setExpected(null);
+
+      // From here the two decoders must agree frame by frame on BOTH the
+      // label and the exact confidence — an additive prior would have left a
+      // permanent trace in the accumulated path.
+      for (var i = 0; i < 30; i++) {
+        final a = hinted.process(cMaj7[0], cMaj7[1]);
+        final b = plain.process(cMaj7[0], cMaj7[1]);
+        expect(a?.chord.label, b?.chord.label, reason: 'frame $i label');
+        expect(a?.confidence, b?.confidence, reason: 'frame $i confidence');
+      }
+    });
+
     test('a clearly different played chord still wins (off-chart safety)', () {
-      final d = ViterbiChordDecoder()..setExpected('C');
+      final d = ViterbiChordDecoder()..setExpected(guidedHint('C'));
       final m = feed(d, gMaj, 8);
       expect(
         m!.chord.label,
@@ -236,7 +315,7 @@ void main() {
         chroma({7: 1, 0: 0.25, 5: 0.15}),
         chroma({7: 1, 11: 0.35, 2: 0.7, 0: 0.3, 4: 0.2, 9: 0.15}),
       ];
-      final d = ViterbiChordDecoder()..setExpected('C');
+      final d = ViterbiChordDecoder()..setExpected(guidedHint('C'));
       final m = feed(d, noisyG, 8);
       expect(
         m!.chord.label,
@@ -248,7 +327,7 @@ void main() {
     });
 
     test('clearing the expectation restores baseline behaviour', () {
-      final d = ViterbiChordDecoder()..setExpected('C');
+      final d = ViterbiChordDecoder()..setExpected(guidedHint('C'));
       d.setExpected(null);
       feed(d, cMaj, 8);
       final held = feed(d, cMaj7, 25);
@@ -260,13 +339,13 @@ void main() {
     });
 
     test('an unknown label is ignored gracefully', () {
-      final d = ViterbiChordDecoder()..setExpected('G/B');
+      final d = ViterbiChordDecoder()..setExpected(guidedHint('G/B'));
       final m = feed(d, cMaj, 8);
       expect(m!.chord.label, 'C');
     });
 
     test('expecting a chord never conjures it from silence', () {
-      final d = ViterbiChordDecoder()..setExpected('C');
+      final d = ViterbiChordDecoder()..setExpected(guidedHint('C'));
       expect(
         feed(d, silence, 8),
         isNull,
@@ -275,7 +354,7 @@ void main() {
     });
 
     test('reset clears the prior and the onset boost (r142 audit)', () {
-      final d = ViterbiChordDecoder()..setExpected('C');
+      final d = ViterbiChordDecoder()..setExpected(guidedHint('C'));
       d.noteOnset();
       d.reset();
       feed(d, cMaj, 8);

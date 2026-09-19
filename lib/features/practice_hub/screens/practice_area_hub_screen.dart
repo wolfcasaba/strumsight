@@ -147,6 +147,9 @@ class PracticeAreaHubScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
+            // The quick tools PUSH: `go` replaces the whole stack, so a
+            // single BACK from the Metronome left the app instead of
+            // returning to this hub (emulator audit H5).
             Wrap(
               spacing: 12,
               runSpacing: 12,

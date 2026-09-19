@@ -4,11 +4,24 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/app/routing/app_route.dart';
+import 'package:strumsight/core/music/strum.dart';
+import 'package:strumsight/features/practice/application/practice_session_command.dart';
+import 'package:strumsight/features/practice/application/practice_session_providers.dart';
+import 'package:strumsight/features/practice/application/practice_setup_controller.dart';
+import 'package:strumsight/features/practice/domain/model/beat_position.dart';
+import 'package:strumsight/features/practice/domain/model/meter.dart';
+import 'package:strumsight/features/practice/domain/model/practice_definition.dart';
+import 'package:strumsight/features/practice/domain/model/practice_event.dart';
 import 'package:strumsight/features/practice/domain/model/practice_history_entry.dart';
 import 'package:strumsight/features/practice/domain/model/practice_metric_snapshot.dart';
 import 'package:strumsight/features/practice/domain/model/practice_mode.dart';
+import 'package:strumsight/features/practice/domain/model/practice_session_config.dart';
 import 'package:strumsight/features/practice/domain/model/practice_source.dart';
+import 'package:strumsight/features/practice/domain/model/scoring_profile.dart';
+import 'package:strumsight/features/practice/domain/model/tempo.dart';
+import 'package:strumsight/features/practice/presentation/practice_effect_listener.dart';
 import 'package:strumsight/features/practice/presentation/screens/practice_result_screen.dart';
+import 'package:strumsight/features/practice/presentation/screens/practice_setup_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/l10n/app_localizations_en.dart';
 import 'package:strumsight/core/design_system/themes/ss_light_theme.dart';
@@ -296,6 +309,256 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  // H22 — the screen title is not repeated in the body
+  // -------------------------------------------------------------------
+  group('H22 — no duplicated screen title', () {
+    testWidgets('an entry without its own title renders "Practice result" '
+        'exactly once (the app bar)', (tester) async {
+      final entry = _entry(PracticeMode.strumPattern, displayTitle: '');
+      await pumpResult(tester, PracticeResultScreen(entry: entry));
+      expect(
+        find.text(l10n().practiceResultTitle),
+        findsOneWidget,
+        reason:
+            'H22: the header used to echo the app-bar title as the first '
+            'body line whenever the entry had no title of its own.',
+      );
+    });
+
+    testWidgets('an entry WITH a title still shows it under the app bar', (
+      tester,
+    ) async {
+      final entry = _entry(PracticeMode.strumPattern);
+      await pumpResult(tester, PracticeResultScreen(entry: entry));
+      expect(find.text(entry.displayTitle), findsOneWidget);
+      expect(find.text(l10n().practiceResultTitle), findsOneWidget);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // L3 — "Practice again" restarts the same drill, same settings
+  // -------------------------------------------------------------------
+  group('L3 — Practice again restarts the drill', () {
+    testWidgets('with the finished session still active it re-dispatches the '
+        'IDENTICAL definition + config and opens the session', (tester) async {
+      final entry = _entry(PracticeMode.strumPattern);
+      final definition = _definitionFor(entry.definitionId);
+      final config = _configFor(entry.definitionId);
+      final commands = <PreparePractice>[];
+      var sessionNavigations = 0;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...preferenceOverrides(),
+            // The activation chain is exercised end-to-end by
+            // `practice_setup_navigation_test.dart`; here the host is
+            // stubbed out so the cell measures the restart hand-off only.
+            practiceSessionHostProvider.overrideWithValue(null),
+            practiceActiveSessionInputsProvider.overrideWith(
+              () => _FixedInputs((definition: definition, config: config)),
+            ),
+            practicePrepareSinkProvider.overrideWithValue(commands.add),
+            practiceSessionNavigationSinkProvider.overrideWithValue(
+              () => sessionNavigations++,
+            ),
+          ],
+          child: MaterialApp(
+            theme: SsLightTheme.data(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: PracticeResultScreen(entry: entry),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final cta = find.text(l10n().practiceResultNextStepCta);
+      await tester.ensureVisible(cta);
+      await tester.pumpAndSettle();
+      await tester.tap(cta);
+      await tester.pumpAndSettle();
+
+      expect(commands, hasLength(1));
+      expect(commands.single.definition, definition);
+      expect(
+        commands.single.config,
+        config,
+        reason: 'L3: "again" means the SAME settings, not a fresh setup',
+      );
+      expect(sessionNavigations, 1);
+      expect(
+        find.byType(PracticeSetupScreen),
+        findsNothing,
+        reason: 'L3: the user must not be dropped back on Practice setup',
+      );
+    });
+
+    testWidgets('inputs belonging to ANOTHER definition are not reused', (
+      tester,
+    ) async {
+      final entry = _entry(PracticeMode.strumPattern);
+      const otherId = 'some-other-definition';
+      final commands = <PreparePractice>[];
+      var sessionNavigations = 0;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...preferenceOverrides(),
+            practiceSessionHostProvider.overrideWithValue(null),
+            practiceActiveSessionInputsProvider.overrideWith(
+              () => _FixedInputs((
+                definition: _definitionFor(otherId),
+                config: _configFor(otherId),
+              )),
+            ),
+            practicePrepareSinkProvider.overrideWithValue(commands.add),
+            practiceSessionNavigationSinkProvider.overrideWithValue(
+              () => sessionNavigations++,
+            ),
+          ],
+          child: MaterialApp(
+            theme: SsLightTheme.data(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: PracticeResultScreen(entry: entry),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final cta = find.text(l10n().practiceResultNextStepCta);
+      await tester.ensureVisible(cta);
+      await tester.pumpAndSettle();
+      await tester.tap(cta);
+      await tester.pumpAndSettle();
+
+      // Nothing to restart from — the user goes to Setup for THIS entry's
+      // definition rather than silently replaying a different drill.
+      expect(commands, isEmpty);
+      expect(sessionNavigations, 0);
+      expect(find.byType(PracticeSetupScreen), findsOneWidget);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // Audit U2 / U10 / U11 — action hierarchy, empty share, reward copy
+  // -------------------------------------------------------------------
+  group('audit — result actions', () {
+    /// A viewport tall enough that every action below the fold is built —
+    /// the assertions are about hierarchy and enablement, not scrolling.
+    Future<void> pumpTall(WidgetTester tester, Widget child) async {
+      tester.view.physicalSize = const Size(500, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await pumpResult(tester, child);
+    }
+
+    testWidgets('U2 — exactly ONE primary (filled) button in the actions', (
+      tester,
+    ) async {
+      await pumpTall(
+        tester,
+        PracticeResultScreen(entry: _entry(PracticeMode.strumPattern)),
+      );
+      // `_NextStepAction` loads the persisted history AFTER the first
+      // frame, so the action row only exists once that settles.
+      await tester.pumpAndSettle();
+      // The NEXT STEP is the single filled action; every other action on
+      // the screen (Share, History, Speed Builder, and — when the A7
+      // recommender names a different drill — "Practice again") is
+      // outlined. The label of that one primary is the recommended drill's
+      // CTA when a recommendation exists, and "Practice again" otherwise;
+      // what this cell pins is that there is exactly ONE of them and that
+      // it belongs to the next-step block.
+      final primaries = find.byWidgetPredicate(
+        (w) => w is FilledButton || w is ElevatedButton,
+        description: 'filled/elevated (primary) buttons',
+      );
+      expect(primaries, findsOneWidget);
+      final primaryKey = tester.widget<ButtonStyleButton>(primaries).key;
+      expect(
+        primaryKey,
+        anyOf(
+          const ValueKey<String>('practice-result-next-recommended'),
+          const ValueKey<String>('practice-result-practice-again'),
+        ),
+        reason: 'the one primary must be the next-step action',
+      );
+      expect(
+        find.byWidgetPredicate((w) => w is OutlinedButton),
+        findsWidgets,
+        reason: 'Share / History / Speed Builder stay secondary',
+      );
+    });
+
+    testWidgets('U10 — a result with nothing detected disables Share', (
+      tester,
+    ) async {
+      // 0 of 16 targets resolved: the share card would print "0/16" with
+      // no evidence behind it.
+      final entry = _entry(
+        PracticeMode.strumPattern,
+      ).copyWith(resolvedTargets: 0);
+      await pumpTall(tester, PracticeResultScreen(entry: entry));
+
+      final share = find.ancestor(
+        of: find.text(l10n().practiceResultShareCta),
+        matching: find.byWidgetPredicate((w) => w is OutlinedButton),
+      );
+      expect(share, findsOneWidget);
+      expect(tester.widget<OutlinedButton>(share).onPressed, isNull);
+      // A disabled control still says why.
+      expect(find.text(l10n().practiceResultShareUnavailable), findsOneWidget);
+      // Tapping it cannot open the share projection either.
+      await tester.tap(share, warnIfMissed: false);
+      await tester.pump();
+      expect(find.text(l10n().practiceResultShareSummaryTitle), findsNothing);
+    });
+
+    testWidgets('U10 — a normal result keeps Share enabled', (tester) async {
+      await pumpTall(
+        tester,
+        PracticeResultScreen(entry: _entry(PracticeMode.strumPattern)),
+      );
+      final share = find.ancestor(
+        of: find.text(l10n().practiceResultShareCta),
+        matching: find.byWidgetPredicate((w) => w is OutlinedButton),
+      );
+      expect(tester.widget<OutlinedButton>(share).onPressed, isNotNull);
+      expect(find.text(l10n().practiceResultShareUnavailable), findsNothing);
+      await tester.tap(share);
+      await tester.pump();
+      expect(find.text(l10n().practiceResultShareSummaryTitle), findsOneWidget);
+    });
+
+    test('U10 — the predicate follows the model, not the mode', () {
+      final scored = _entry(PracticeMode.strumPattern);
+      expect(practiceResultHasShareableEvidence(scored), isTrue);
+      expect(
+        practiceResultHasShareableEvidence(scored.copyWith(resolvedTargets: 0)),
+        isFalse,
+      );
+      // Free Practice sets no targets — its evidence is the attempt count.
+      final free = _entry(PracticeMode.freePractice).copyWith(totalTargets: 0);
+      expect(
+        practiceResultHasShareableEvidence(free.copyWith(attemptsCount: 3)),
+        isTrue,
+      );
+      expect(
+        practiceResultHasShareableEvidence(free.copyWith(attemptsCount: 0)),
+        isFalse,
+      );
+    });
+
+    // U11 (E14) is deliberately NOT ported: the main line answered the same
+    // finding by NOT rendering the reward card at all when the ledger holds
+    // no entry for the session (see `_RewardSection`'s call site and
+    // `reward_idempotency_test.dart`) — a card that is absent cannot make a
+    // promise, so there is no copy left to assert.
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -341,14 +604,66 @@ Future<GoRouter> _pumpRouted(
   return router;
 }
 
-PracticeHistoryEntry _entry(PracticeMode mode) {
+/// A [PracticeActiveSessionInputsController] pinned to one value, so a
+/// widget test can describe "the session that just finished" without
+/// building the whole session runtime.
+class _FixedInputs extends PracticeActiveSessionInputsController {
+  _FixedInputs(this.inputs);
+
+  final PracticeSessionInputs inputs;
+
+  @override
+  PracticeSessionInputs? build() => inputs;
+}
+
+PracticeDefinition _definitionFor(String id) => PracticeDefinition(
+  id: id,
+  schemaVersion: 1,
+  titleKey: 'practiceCatalogTestSetupTitle',
+  descriptionKey: 'practiceCatalogTestSetupDescription',
+  mode: PracticeMode.strumPattern,
+  source: PracticeSource.builtin,
+  meter: const Meter(beatsPerBar: 4),
+  defaultTempo: const Tempo(100),
+  totalBeats: BeatPosition.quarters(16),
+  events: List<PracticeEvent>.unmodifiable([
+    for (var i = 0; i < 4; i++)
+      PracticeEvent(
+        id: '$id.e$i',
+        position: BeatPosition.quarters(i),
+        direction: StrumDirection.down,
+      ),
+  ]),
+  scoringProfile: ScoringProfile.legacyLearnParity,
+  skillTags: const ['test'],
+  displayTitle: 'Restart fixture',
+);
+
+PracticeSessionConfig _configFor(String id) => PracticeSessionConfig(
+  definitionId: id,
+  definitionSnapshotVersion: 1,
+  effectiveTempo: const Tempo(100),
+  countInBars: 1,
+  loopCount: 2,
+  metronomeEnabled: true,
+  accentEnabled: false,
+  backingEnabled: false,
+  scoringProfileId: ScoringProfile.legacyLearnParity.id,
+  inputLatency: Duration.zero,
+  visualLatency: Duration.zero,
+  expectedChordHintEnabled: true,
+  sessionTimeout: const Duration(minutes: 5),
+  reducedMotion: false,
+);
+
+PracticeHistoryEntry _entry(PracticeMode mode, {String? displayTitle}) {
   return PracticeHistoryEntry(
     id: 'result-${mode.code}',
     modeCode: mode.code,
     sourceCode: PracticeSource.builtin.code,
     createdAt: DateTime(2026, 8, 1, 12, 0),
     definitionId: 'd-${mode.code}',
-    displayTitle: 'fixture-${mode.code}',
+    displayTitle: displayTitle ?? 'fixture-${mode.code}',
     finishReasonCode: 'userFinished',
     activeDuration: const Duration(seconds: 30),
     pausedDuration: Duration.zero,
@@ -378,6 +693,8 @@ extension on PracticeHistoryEntry {
     PracticeMetricSnapshot? finalMetricSnapshot,
     int? attemptsCount,
     Duration? activeDuration,
+    int? totalTargets,
+    int? resolvedTargets,
   }) {
     return PracticeHistoryEntry(
       id: id ?? this.id,
@@ -391,8 +708,8 @@ extension on PracticeHistoryEntry {
       pausedDuration: pausedDuration,
       attemptsCount: attemptsCount ?? this.attemptsCount,
       finalMetricSnapshot: finalMetricSnapshot ?? this.finalMetricSnapshot,
-      totalTargets: totalTargets,
-      resolvedTargets: resolvedTargets,
+      totalTargets: totalTargets ?? this.totalTargets,
+      resolvedTargets: resolvedTargets ?? this.resolvedTargets,
       scorePoints: scorePoints,
       maxCombo: maxCombo,
       meanAbsoluteOffset: meanAbsoluteOffset,

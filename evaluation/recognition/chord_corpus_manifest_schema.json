@@ -1,0 +1,105 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://strumsight.internal/schemas/chord-corpus-manifest-1.json",
+  "title": "Balanced chord corpus manifest",
+  "description": "Machine-checkable shape of the SDD Ch14 §7.1 chord corpus (E14-R25, ADR 0538). Enforced by hand-written validation in lib/features/live/domain/evaluation/chord_corpus_manifest.dart (ADR 0354 D8 precedent: no schema-library dependency). Carries NO audio — only per-item metadata plus a corpus content hash (ADR 0354 D1). Every recording-condition field is REQUIRED: a field that may be missing is a field that will be missing exactly where the analysis needs it. A synthetic corpus is a first-class, explicitly labelled kind and is refused as release-gate evidence (SDD Ch14 §12/2).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "corpusId", "corpusKind", "corpusSha256", "items"],
+  "properties": {
+    "schemaVersion": {
+      "const": "1",
+      "description": "Manifest contract version. Any other value is a typed ChordCorpusConfigException."
+    },
+    "corpusId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable corpus identifier, e.g. strumsight-phone-majmin-v1 or guitarset-majmin."
+    },
+    "corpusKind": {
+      "enum": ["realAudio", "synthetic"],
+      "description": "realAudio: recorded from a real guitar and microphone. synthetic: generated — usable to exercise the validator and decoder plumbing, NEVER as release evidence (ChordCorpusManifest.gateEvidenceRefusal)."
+    },
+    "corpusSha256": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Content hash of the audio this manifest describes. The audio itself never enters the repository."
+    },
+    "items": {
+      "type": "array",
+      "description": "One entry per recording. itemId must be unique across the corpus.",
+      "items": { "$ref": "#/definitions/item" }
+    }
+  },
+  "definitions": {
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "itemId",
+        "label",
+        "voicing",
+        "capo",
+        "pickStyle",
+        "loudness",
+        "room",
+        "distanceCm",
+        "guitar",
+        "player",
+        "device",
+        "durationMs",
+        "tempoBpm"
+      ],
+      "properties": {
+        "itemId": { "type": "string", "minLength": 1 },
+        "label": {
+          "type": "string",
+          "description": "One of the 24 supported maj/min classes (assets/ml/model_manifest.json output_classes minus N.C.), or the reserved \"noChord\" label. An out-of-vocabulary chord (sus4, add9, 7th) belongs in the open-set corpus, not here — the validator rejects it, so a balanced maj/min corpus can never quietly absorb one."
+        },
+        "voicing": {
+          "enum": ["open", "barre", "alt"],
+          "description": "SDD Ch14 §7.1 voicing coverage."
+        },
+        "capo": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Fret the capo sits on; 0 for no capo."
+        },
+        "pickStyle": { "enum": ["pick", "finger"] },
+        "loudness": { "enum": ["quiet", "medium", "loud"] },
+        "room": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Room identifier — a grouped-split key (recognition_split.dart GroupKey.room)."
+        },
+        "distanceCm": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Phone-to-guitar distance in centimetres."
+        },
+        "guitar": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Guitar identifier — a grouped-split key."
+        },
+        "player": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Player identifier — a grouped-split key."
+        },
+        "device": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Phone model identifier — a grouped-split key."
+        },
+        "durationMs": { "type": "integer", "minimum": 1 },
+        "tempoBpm": { "type": "integer", "minimum": 1 },
+        "hardNegativeCategory": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "A category id from evaluation/recognition/negative_taxonomy.json when this item is a hard negative, otherwise null. A hard negative must carry label \"noChord\" — the validator enforces it."
+        }
+      }
+    }
+  }
+}

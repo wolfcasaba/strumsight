@@ -60,15 +60,13 @@ the round's complete, documented output.
    next to an `Expanded` label in a `Row`; at `textScale 2.0` it overflows by
    43px on the right, identically in `en` and `hu` (the id itself never
    localises — the label growing is what starves it of space).
-   **FIXED in E18-R01 (2026-09-10)** — the id `Text` is capped at 60 % of
-   the row (`LayoutBuilder` + `ConstrainedBox`), so it
-   keeps its natural width when it fits (pixel goldens unchanged) and wraps
-   instead of overflowing when it does not; the registry entry
-   and its `knownOverflows` mirror were removed (shrink-only registry, A6
-   guard re-verified in CI). Trigger: the E18-R01 fix to `_backToHub` moved
-   the `Row` to line 424, which made the line-pinned tolerance stale — a
-   stale tolerance is a red cell by design, so the defect was fixed rather
-   than the pin moved.
+   **RESOLVED (E14 audit H14/U3):** the raw id is gone — the row now renders
+   a localized phrase (`practiceScoringProfile*`) inside a `Flexible`, so it
+   cannot overflow at any text scale. Its `known-exceptions.yaml` entry and
+   both `KnownOverflow` mirrors were removed in the same change (a stale
+   tolerance is a red gate cell by design). Trigger for re-opening the
+   finding: the E18-R01 fix to `_backToHub` moved the `Row` to line 424,
+   which made the earlier line-pinned tolerance stale.
 2. **`feedback-combo-row-overflow-hu`** — the combo-count `Row`
    (`practice_feedback.dart:89`) has neither `Text` child wrapped in
    `Expanded`/`Flexible`; the Hungarian `practiceFeedbackComboLabel`

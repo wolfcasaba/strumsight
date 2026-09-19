@@ -10,6 +10,14 @@ import '../theme/app_palette.dart';
 ///
 /// Shared by every mic-driven screen (Live, Tuner) so a missing permission is
 /// never a silent idle.
+///
+/// Layout (audit F1 / A7): the action sits on its OWN line under the
+/// icon+message row, the way a [MaterialBanner] lays actions out. The former
+/// single-row version put the explanation and a fixed-width text button side
+/// by side, so at textScale 2.0 in a narrow column the message was squeezed
+/// into a sliver and the row still overflowed horizontally (measured: 167 px
+/// at a 258 px width). With the action on its own line the message keeps the
+/// full width at every text scale and nothing overflows sideways.
 class MicPermissionBanner extends StatelessWidget {
   const MicPermissionBanner({super.key});
 
@@ -25,25 +33,39 @@ class MicPermissionBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.5)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.mic_off_outlined, color: AppColors.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              l10n.micPermissionBody,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 12.5,
-                height: 1.35,
-                color: palette.ink,
+          Row(
+            // Top-aligned: at a large text scale the message is several
+            // lines tall and a centred icon would float mid-paragraph.
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.mic_off_outlined, color: AppColors.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  l10n.micPermissionBody,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12.5,
+                    height: 1.35,
+                    color: palette.ink,
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-          const SizedBox(width: 8),
-          TextButton(
-            onPressed: openAppSettings,
-            child: Text(l10n.micPermissionAction),
+          // `Align` hands the button LOOSE constraints capped at the banner
+          // width, so an over-long (or heavily scaled) label wraps inside
+          // the button instead of overflowing the banner.
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: TextButton(
+              onPressed: openAppSettings,
+              child: Text(l10n.micPermissionAction),
+            ),
           ),
         ],
       ),

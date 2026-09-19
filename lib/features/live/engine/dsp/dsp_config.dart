@@ -41,6 +41,28 @@ class DspConfig {
   static const double chordTrebleWeight = 0.65;
   static const double chordNoChordScore = 0.55;
 
+  /// Onset-aligned chord updates (chunk 016 rec #2, round 138) — moved here
+  /// from `ViterbiChordDecoder`'s private constants in E14-R28 so the
+  /// stabilizer can DERIVE its onset-alignment window from the same numbers
+  /// instead of inventing a second one. The VALUES are unchanged (no retune):
+  /// for [chordOnsetBoostFrames] chord frames after a strum onset the
+  /// decoder's self-transition bonus is scaled by [chordOnsetBonusScale], so
+  /// the chord changes ON the strum and stays stable between strums.
+  static const int chordOnsetBoostFrames = 2;
+  static const double chordOnsetBonusScale = 0.25;
+
+  /// [chordOnsetBoostFrames] expressed in SECONDS at [defaultSampleRate]:
+  /// `2 × 4096 / 44100 ≈ 0.186 s`. Derived, never tuned — it is the window in
+  /// which the DSP itself is willing to change chord.
+  static const double chordOnsetBoostSeconds =
+      chordOnsetBoostFrames * nnlsHop / defaultSampleRate;
+
+  /// The `LiveFrame` emission cadence in seconds (~15 Hz) — the sample-clock
+  /// period `LivePipeline` counts frames on. Named here (it used to be a bare
+  /// `0.066` literal in the pipeline) so the onset-alignment window can be
+  /// expressed in frames × cadence.
+  static const double frameEmitSeconds = 0.066;
+
   /// Minimum chroma tonalness (chunk 003) for a frame to update the chord.
   /// Below this the frame is diffuse (speech/noise) and is treated as silence
   /// so it can't fake a chord. MEASURED (synth): a clean triad ≈ 0.99, white

@@ -5,6 +5,7 @@ import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/main.dart';
 
+import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
 import '../../support/preference_store.dart';
 
@@ -25,6 +26,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         ...preferenceOverrides(),
+        ...fakeAudioOverrides(),
         strumEngineProvider.overrideWithValue(engine),
       ],
     );

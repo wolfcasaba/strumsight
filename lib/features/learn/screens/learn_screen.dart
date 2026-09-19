@@ -27,6 +27,7 @@ import '../lesson_scorer.dart';
 import '../lesson_timing.dart';
 import '../model/lesson.dart';
 import '../../../core/widgets/hit_burst.dart';
+import '../widgets/audio_error_notice.dart';
 import '../widgets/lesson_highway.dart';
 import '../widgets/wrapped_prompt.dart';
 import 'lesson_score_preview_screen.dart';
@@ -115,6 +116,17 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   /// Push the current lesson target chord to the detector when it changes
   /// (the chunk-016 expected-target prior). Jam mode and a finished/idle
   /// screen hint nothing.
+  ///
+  /// **What this actually does today (E14-R37, ADR 0550 D4 — stated so the
+  /// code does not imply more than it delivers):** the shared engine is
+  /// constructed in `RecognitionMode.free`
+  /// (`liveRecognitionModeProvider`), and `ExpectedChordHint.forMode`
+  /// returns `null` for that regime, so the label is dropped inside
+  /// `RealStrumEngine.setExpectedChord` and never reaches the decoder. The
+  /// lesson's verdict is therefore audio-only. The call is kept — not
+  /// deleted — because it is the wiring the guided regime needs the moment
+  /// the microphone-lease question is decided, and because clearing on
+  /// dispose stays correct in both regimes.
   String? _sentExpected;
   StrumEngine? _hintedEngine; // captured so dispose can clear without ref
   void _updateExpectedChord() {
@@ -696,6 +708,13 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
                             color: colors.textPrimary,
                           ),
                         ),
+                      // A mute click or a mute jam pad used to fail into an
+                      // empty `catch` — the player heard nothing and was
+                      // told nothing (audit H20 / L12). Renders nothing
+                      // while both outputs are healthy.
+                      AudioOutputErrorNotice(
+                        sources: [_metronome.lastError, _backing.lastError],
+                      ),
                       // Dynamic difficulty (016b P4, r154): OFFER a switch —
                       // down after a fail streak, up when Easy is aced. Quiet
                       // inline row; the player stays in charge, and switching

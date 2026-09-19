@@ -1330,6 +1330,14 @@
   "analyzeSaved": "Elmentve a Könyvtárba",
   "analyzeStop": "Leállítás",
   "analyzeStrumsSummary": "{down} le · {up} fel",
+  "audioOutputChordFailed": "Az akkordot nem sikerült lejátszani. Ellenőrizd a hangerőt, és próbáld újra.",
+  "@audioOutputChordFailed": {
+    "description": "Inline notice shown on the chord/jam screens when the device refused to play a chord pad or reference tone, so a tap stayed silent (audit H20/L12)."
+  },
+  "audioOutputMetronomeFailed": "A metronóm kattanását nem sikerült lejátszani. Ellenőrizd a hangerőt, és próbáld újra.",
+  "@audioOutputMetronomeFailed": {
+    "description": "Inline notice shown on the metronome and lesson screens when the device refused to play the metronome click, so the metronome is running silently (audit H20/L12)."
+  },
   "authContinueWithoutAccount": "Folytatás fiók nélkül",
   "authEmail": "Email",
   "authEmailInvalid": "Adj meg egy érvényes email címet",
@@ -1495,8 +1503,22 @@
   "@communityBookmarkLoadMore": {},
   "communityBookmarkRemoveAction": "Eltávolítás",
   "@communityBookmarkRemoveAction": {},
+  "communityBookmarkSavedOn": "Mentve: {date}",
+  "@communityBookmarkSavedOn": {
+    "description": "Subtitle of a bookmark row: the day the post was saved.",
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "2026. aug. 20."
+      }
+    }
+  },
   "communityBookmarkTombstoneBody": "Ez a poszt már nem érhető el. A könyvjelző a listádban marad, amíg el nem távolítod.",
   "@communityBookmarkTombstoneBody": {},
+  "communityBookmarkUntitledPost": "Mentett bejegyzés",
+  "@communityBookmarkUntitledPost": {
+    "description": "Fallback label for a bookmark row whose post title/excerpt could not be loaded."
+  },
   "communityBookmarksEmpty": "Még nincs mentett poszt.",
   "@communityBookmarksEmpty": {},
   "communityBookmarksErrorTitle": "A könyvjelzők nem töltődtek be.",
@@ -2915,12 +2937,156 @@
       }
     }
   },
+  "liveDecisionCandidate": "Akkord keresése…",
+  "@liveDecisionCandidate": {
+    "description": "Live stage decision chip for RecognitionDecision.candidate (E14-R37, ADR 0550): a verdict is forming but has cleared no threshold, so no chord is claimed."
+  },
+  "liveDecisionConfirmed": "Akkord megerősítve",
+  "@liveDecisionConfirmed": {
+    "description": "Live stage decision chip for RecognitionDecision.confirmed — the only state in which the hero may present a chord."
+  },
+  "liveDecisionExpired": "A legutóbbi akkord elhalványult",
+  "@liveDecisionExpired": {
+    "description": "Live stage decision chip for RecognitionDecision.expired: a chord was confirmed earlier and has since aged out."
+  },
+  "liveDecisionProvisional": "Akkord kirajzolódik…",
+  "@liveDecisionProvisional": {
+    "description": "Live stage decision chip for RecognitionDecision.provisional when no chord label is known yet. Hedged on purpose: the reading is leaning somewhere but is not confirmed."
+  },
+  "liveDecisionProvisionalNamed": "Valószínűleg {chord}…",
+  "@liveDecisionProvisionalNamed": {
+    "description": "Live stage decision chip for RecognitionDecision.provisional when a chord label is known. The chord is named ONLY inside this hedged sentence — never as a confirmed verdict (ADR 0550 D1).",
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "C"
+      }
+    }
+  },
+  "liveDecisionRejected": "Nincs akkordolvasat",
+  "@liveDecisionRejected": {
+    "description": "Live stage decision chip for RecognitionDecision.rejected. The paired uncertainty banner states WHY; this chip only states that there is no reading."
+  },
+  "liveDecisionUncertain": "Még bizonytalan",
+  "@liveDecisionUncertain": {
+    "description": "Live stage decision chip for RecognitionDecision.uncertain: below the confirmation threshold, so nothing is shown as a recognised chord."
+  },
   "liveFinish": "Befejezés",
   "@liveFinish": {
     "description": "Ends the current Live session and leaves the screen (ADR 0276 decision 4)."
   },
+  "liveGuidedTarget": "Cél",
+  "@liveGuidedTarget": {
+    "description": "Label of the Guided-mode target card on the Live stage. Names the ROLE of the chord next to it — what the app is asking for, not what it heard."
+  },
+  "liveGuidedTargetSemantics": "Cél akkord: {chord}",
+  "@liveGuidedTargetSemantics": {
+    "description": "Screen-reader label of the Guided-mode target card: the role is spoken before the value, so a target is never mistaken for a detection.",
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "Am"
+      }
+    }
+  },
   "liveInputLevel": "Bemeneti szint",
+  "liveLabShadowChordAgreement": "Akkordmodell: {compared} keretből {agreed} egyezik a szállított akkordúttal",
+  "@liveLabShadowChordAgreement": {
+    "description": "Live Lab shadow card — chord-band agreement line between the shadow chord model and the shipped chord path.",
+    "placeholders": {
+      "agreed": {
+        "type": "int"
+      },
+      "compared": {
+        "type": "int"
+      }
+    }
+  },
+  "liveLabShadowChordFallbackAssetMissing": "Akkordmodell: a modellfájl nincs benne ebben a buildben.",
+  "@liveLabShadowChordFallbackAssetMissing": {
+    "description": "Live Lab shadow card — the chord shadow model could not start because its weights asset is absent. Named explicitly instead of silently showing no chord row."
+  },
+  "liveLabShadowChordFallbackDisabled": "Akkordmodell: kikapcsolva.",
+  "@liveLabShadowChordFallbackDisabled": {
+    "description": "Live Lab shadow card — the chord shadow band was explicitly disabled rather than failing."
+  },
+  "liveLabShadowChordFallbackParse": "Akkordmodell: a modellfájl megbukott az integritás-ellenőrzésen.",
+  "@liveLabShadowChordFallbackParse": {
+    "description": "Live Lab shadow card — the chord weights did not match the expected checksum or could not be parsed. Fail-closed: the model is not used."
+  },
+  "liveLabShadowChordFallbackShape": "Akkordmodell: a modell nem illeszkedik a build bemeneti formátumához.",
+  "@liveLabShadowChordFallbackShape": {
+    "description": "Live Lab shadow card — the chord model parsed but its input/output shape does not match the build's feature front-end."
+  },
+  "liveLabShadowChordFallbackUnreadable": "Akkordmodell: a modellfájlt nem sikerült beolvasni.",
+  "@liveLabShadowChordFallbackUnreadable": {
+    "description": "Live Lab shadow card — the chord shadow model's weights file exists but could not be read."
+  },
+  "liveLabShadowChordNoData": "Akkordmodell: ebben a felvételben nincs összehasonlítható keret.",
+  "@liveLabShadowChordNoData": {
+    "description": "Live Lab shadow card — shown when the chord band produced no comparable frame."
+  },
+  "liveLabShadowNeverShown": "Az árnyék-eredmények soha nem változtatják meg, amit a Live mutat.",
+  "@liveLabShadowNeverShown": {
+    "description": "Live Lab shadow card — the invariant footnote: a shadow band's output can never reach the Live screen, a score, or any user-visible verdict."
+  },
+  "liveLabShadowOff": "Mindkét árnyék-sáv ki van kapcsolva ebben a buildben — semmi nem futott.",
+  "@liveLabShadowOff": {
+    "description": "Live Lab shadow card — shown when both shadow gates are closed. Says nothing ran, rather than showing an empty report that could be mistaken for a zero result."
+  },
+  "liveLabShadowStrumAbstained": "Pengetés: {verdicts} döntésből {abstained} nem adott választ",
+  "@liveLabShadowStrumAbstained": {
+    "description": "Live Lab shadow card — how often the candidate strum model abstained (no-strum class, or a margin inside the uncertainty band).",
+    "placeholders": {
+      "abstained": {
+        "type": "int"
+      },
+      "verdicts": {
+        "type": "int"
+      }
+    }
+  },
+  "liveLabShadowStrumAgreement": "Pengetés: {compared} döntésből {agreed} egyezik a szállított úttal",
+  "@liveLabShadowStrumAgreement": {
+    "description": "Live Lab shadow card — strum-band agreement line. Deliberately a fraction and not a percentage, so a tiny sample cannot read as a confident rate.",
+    "placeholders": {
+      "agreed": {
+        "type": "int"
+      },
+      "compared": {
+        "type": "int"
+      }
+    }
+  },
+  "liveLabShadowStrumNoData": "Pengetés: ebben a felvételben nincs összehasonlítható döntés.",
+  "@liveLabShadowStrumNoData": {
+    "description": "Live Lab shadow card — shown when the strum band produced no comparable verdict. An empty sample has no agreement rate, so none is displayed."
+  },
+  "liveLabShadowTitle": "Árnyék-összehasonlítás",
+  "@liveLabShadowTitle": {
+    "description": "Live Lab panel — heading of the E14-R23/R26 shadow-mode card. Lab-only; a candidate recognition model is compared against the shipped one."
+  },
+  "liveLabShadowWindow": "Ablak: a legutóbbi {kept} összehasonlítás ({dropped} korábbi elhagyva)",
+  "@liveLabShadowWindow": {
+    "description": "Live Lab shadow card — states that the sample list is a bounded ring, so the reader knows the report is a window and not a session total.",
+    "placeholders": {
+      "kept": {
+        "type": "int"
+      },
+      "dropped": {
+        "type": "int"
+      }
+    }
+  },
   "liveListening": "Figyelek…",
+  "liveModeFreePlay": "Szabad játék",
+  "@liveModeFreePlay": {
+    "description": "Live stage mode chip: nothing is being asked of the player, the stage mirrors what it hears (E14-R37, ADR 0550 D2)."
+  },
+  "liveModeGuided": "Vezetett",
+  "@liveModeGuided": {
+    "description": "Live stage mode chip: a lesson/song target is on screen (E14-R37, ADR 0550 D2)."
+  },
   "liveNext": "Következő",
   "livePause": "Szünet",
   "liveRejectLowConfidence": "Nem eléggé tiszta — pengesd meg újra",
@@ -2935,9 +3101,33 @@
   "@liveRejectNoChord": {
     "description": "Uncertainty-reason banner text for RecognitionRejectReason.noChord (ADR 0520)."
   },
+  "liveRejectSignalClipping": "Torzít a jel (túlvezérlés) — távolodj el a mikrofontól és pengess lágyabban",
+  "@liveRejectSignalClipping": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalClipping (ADR 0535)."
+  },
   "liveRejectSignalQuality": "Túl gyenge a jel — menj közelebb a mikrofonhoz",
   "@liveRejectSignalQuality": {
     "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalQuality (ADR 0520)."
+  },
+  "liveRejectSignalSpeechLike": "Beszédet vagy más hangot hallunk — csak a gitár szóljon",
+  "@liveRejectSignalSpeechLike": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalSpeechLike (ADR 0535)."
+  },
+  "liveRejectSignalTooLoud": "Túl hangos a jel — távolodj el a mikrofontól, vagy pengess halkabban",
+  "@liveRejectSignalTooLoud": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooLoud (ADR 0535)."
+  },
+  "liveRejectSignalTooNoisy": "Túl nagy a háttérzaj — keress csendesebb helyet",
+  "@liveRejectSignalTooNoisy": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooNoisy (ADR 0535)."
+  },
+  "liveRejectSignalTooQuiet": "Túl halk a jel — menj közelebb a mikrofonhoz, vagy pengess hangosabban",
+  "@liveRejectSignalTooQuiet": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooQuiet (ADR 0535)."
+  },
+  "liveRejectSignalUnstable": "Ugrál a hangerő — tartsd stabilan a telefont és pengess egyenletesen",
+  "@liveRejectSignalUnstable": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalUnstable (ADR 0535)."
   },
   "liveRejectTimeout": "Túl sokáig tartott a döntés — próbáld újra",
   "@liveRejectTimeout": {
@@ -2988,6 +3178,10 @@
   "liveSummaryTipCourse": "Jöhet egy cél? A vezetett tanfolyam megadja a következő megtanulandó akkordot.",
   "liveSummaryTipShort": "Rövid volt. Legközelebb játssz kicsit tovább — a felismerés pár pengetés után áll be.",
   "liveSummaryTitle": "Szép munka!",
+  "liveTempoNotMeasured": "A tempó nincs mérve",
+  "@liveTempoNotMeasured": {
+    "description": "Live status header: shown in place of a BPM number when no tempo has been measured yet, or when the signal-quality gate rejected the frame so any tempo reading would be an unsupported claim. Replaces the old, misleading \"0 BPM\"."
+  },
   "liveTuner": "Hangoló",
   "liveWaitingForChord": "Pengess egy akkordot…",
   "@liveWaitingForChord": {
@@ -3008,6 +3202,14 @@
   "metronomeStart": "Indítás",
   "metronomeStop": "Leállítás",
   "metronomeTap": "Tap tempó",
+  "metronomeTempoDecrease": "1 BPM-mel lassabb",
+  "@metronomeTempoDecrease": {
+    "description": "Tooltip of the metronome's minus button (audit U7)."
+  },
+  "metronomeTempoIncrease": "1 BPM-mel gyorsabb",
+  "@metronomeTempoIncrease": {
+    "description": "Tooltip of the metronome's plus button (audit U7)."
+  },
   "metronomeTimeSignature": "Ütemmutató",
   "metronomeTitle": "Metronóm",
   "micErrorAction": "Újra",
@@ -3328,6 +3530,28 @@
   "practiceChordLaneOutcomeNotApplicable": "Nincs pontozva",
   "practiceChordLaneOutcomeWrong": "Helytelen",
   "practiceChordLaneUpcomingBar": "Következő ütem",
+  "practiceCorrectionHitTarget": "Ez a cél kimaradt — a következőre figyelj.",
+  "@practiceCorrectionHitTarget": {
+    "description": "Correction shown when a missed target carries no chord (a rhythm / strum-pattern exercise), so no chord can honestly be named."
+  },
+  "practiceCorrectionPlayChord": "A következő célnál {chord} akkordot játssz.",
+  "@practiceCorrectionPlayChord": {
+    "description": "Correction shown after a missed target, or a chord the recognizer confidently heard as a different one.",
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "C"
+      }
+    }
+  },
+  "practiceCorrectionTitle": "Következő javítás",
+  "@practiceCorrectionTitle": {
+    "description": "Heading of the practice session's correction banner (E14-R38, ADR 0551 D6) — the one concrete thing to change on the next target."
+  },
+  "practiceCorrectionUnclear": "Az app nem tudta kivenni, mit hallott — játszd el újra ezt a részt.",
+  "@practiceCorrectionUnclear": {
+    "description": "Correction shown when the recognizer abstained and gave no typed reason. Blames the app, never the player (ADR 0551 D6); when a reason IS available the localized liveReject* sentence is shown instead."
+  },
   "practiceErrorConfigCountInBarsOutOfRange": "A beszámolásnak 0 és 4 közé kell esnie.",
   "practiceErrorConfigLoopCountOutOfRange": "Az ismétlésszámnak 1 és 32 közé kell esnie.",
   "practiceErrorDefinitionNotFound": "Ez a gyakorlat nem elérhető.",
@@ -3664,6 +3888,10 @@
     }
   },
   "practiceResultShareSummaryTitle": "Megosztási összegzés",
+  "practiceResultShareUnavailable": "Ebből a gyakorlásból nincs mit megosztani — nem érzékeltünk leütést",
+  "@practiceResultShareUnavailable": {
+    "description": "Reason shown next to the disabled Share button on the practice result screen when the session resolved no targets and recorded no attempt, so the share card would carry no evidence (audit U10)."
+  },
   "practiceResultShareWhen": "Dátum: {date}",
   "@practiceResultShareWhen": {
     "placeholders": {
@@ -3690,6 +3918,10 @@
   "practiceResultUnavailableAction": "Vissza a gyakorló hubra",
   "practiceResultUnavailableBody": "Futtass le egy gyakorlatot az eredmény megtekintéséhez.",
   "practiceResultUnavailableTitle": "Nincs megjeleníthető eredmény",
+  "practiceRewardNone": "Ehhez a gyakorláshoz nincs jutalom",
+  "@practiceRewardNone": {
+    "description": "Shown in the Reward card of the practice result screen when the ledger holds no reward for the finished session. Replaces practiceResultRewardNone, whose \"yet\" promised a reward that is never coming (audit U11)."
+  },
   "practiceRhythmOnlyBodyNoDirection": "Tempózz a 4/4-re. Az akkord- és irány-dimenzió itt nem pontozódik.",
   "practiceRhythmOnlyBodyWithDirection": "Tempózz a 4/4-re. Az akkord-dimenzió nem pontozódik; az irány csak tájékoztató jellegű.",
   "practiceRhythmOnlyDimensionAvailable": "Mérés alatt",
@@ -3702,7 +3934,39 @@
   "practiceRouteErrorBack": "Vissza a hubra",
   "practiceRouteErrorBody": "Ezt a gyakorlatot nem sikerült betölteni. Menj vissza a hubra, és válassz másikat.",
   "practiceRouteErrorTitle": "Gyakorlat nem elérhető",
+  "practiceScoringProfileChordChangeDefault": "Akkordok és ritmus",
+  "@practiceScoringProfileChordChangeDefault": {
+    "description": "Human label of the chordChangeDefault scoring profile (audit H14)."
+  },
+  "practiceScoringProfileChordProgressionDefault": "Ritmus, irány és akkordok",
+  "@practiceScoringProfileChordProgressionDefault": {
+    "description": "Human label of the chordProgressionDefault scoring profile (audit H14)."
+  },
+  "practiceScoringProfileCustom": "Egyedi",
+  "@practiceScoringProfileCustom": {
+    "description": "Fallback label for a scoring profile outside the built-in set (audit H14)."
+  },
+  "practiceScoringProfileFreePracticeOpen": "Nincs pontozás",
+  "@practiceScoringProfileFreePracticeOpen": {
+    "description": "Human label of the freePracticeOpen scoring profile (audit H14)."
+  },
+  "practiceScoringProfileLegacyLearnParity": "Ritmus és pengetésirány",
+  "@practiceScoringProfileLegacyLearnParity": {
+    "description": "Human label of the legacyLearnParity scoring profile (audit H14)."
+  },
+  "practiceScoringProfileRhythmOnlyDefault": "Csak ritmus",
+  "@practiceScoringProfileRhythmOnlyDefault": {
+    "description": "Human label of the rhythmOnlyDefault scoring profile (audit H14)."
+  },
   "practiceSessionAttempt": "Próbálkozás",
+  "practiceSessionCancelledBody": "A gyakorlást leállítottad. Bármikor újraindíthatod.",
+  "@practiceSessionCancelledBody": {
+    "description": "Body copy of the designed cancelled state on the practice session screen (audit H16)."
+  },
+  "practiceSessionCompletedBody": "Szép munka — kész az eredményed.",
+  "@practiceSessionCompletedBody": {
+    "description": "Body copy of the designed completed state on the practice session screen (audit H16)."
+  },
   "practiceSessionConfirmExit": "A kilépés eldobja a session eddigi eredményét. Nem lesz elmentve, és ez nem vonható vissza.",
   "practiceSessionCountIn": "Hátralévő beszámolási ütések",
   "practiceSessionElapsed": "Eltelt idő",
@@ -3712,7 +3976,19 @@
   "practiceSessionErrorPermission": "Mikrofonhozzáférés szükséges. Nyisd meg a Beállításokat az engedélyezéshez.",
   "practiceSessionErrorTitle": "Gyakorlási hiba",
   "practiceSessionExit": "Kilépés",
+  "practiceSessionExitHint": "Mentés nélkül lép ki — ez a gyakorlás elveszik",
+  "@practiceSessionExitHint": {
+    "description": "Semantics hint and tooltip on the Exit transport button of the practice session screen, shown only while an exit would really cancel a live session. States the consequence: Exit discards the session (audit L9)."
+  },
   "practiceSessionFinish": "Befejezés",
+  "practiceSessionFinishHint": "Lezárja a gyakorlást, és elmenti az eredményt",
+  "@practiceSessionFinishHint": {
+    "description": "Semantics hint and tooltip on the Finish transport button of the practice session screen. States the consequence: Finish keeps the result (audit L9)."
+  },
+  "practiceSessionIdleBody": "Még nem fut gyakorlás. Indíts egyet a Gyakorlás beállításainál.",
+  "@practiceSessionIdleBody": {
+    "description": "Body copy of the designed idle state on the practice session screen (audit H16)."
+  },
   "practiceSessionPause": "Szünet",
   "practiceSessionPausedByInterruption": "A session automatikusan szünetel",
   "practiceSessionPausedByUser": "Te állítottad meg a sessiont",
@@ -3755,8 +4031,16 @@
   "practiceSetupChordHintLabel": "Akkord segítség mutatása",
   "practiceSetupCountInHelp": "0–4",
   "practiceSetupCountInLabel": "Beszámolás ütemek",
+  "practiceSetupCountInUnit": "ütem",
+  "@practiceSetupCountInUnit": {
+    "description": "Unit label of the count-in numeric field on the practice setup screen. The setting is named once by the row label; the field carries only the unit (audit U3)."
+  },
   "practiceSetupLoopHelp": "1–32",
   "practiceSetupLoopLabel": "Ismétlések száma",
+  "practiceSetupLoopUnit": "ismétlés",
+  "@practiceSetupLoopUnit": {
+    "description": "Unit label of the loop-count numeric field on the practice setup screen. The setting is named once by the row label; the field carries only the unit (audit U3)."
+  },
   "practiceSetupMeterLabel": "Ütemmutató",
   "practiceSetupMetronomeLabel": "Metronóm",
   "practiceSetupScoringProfileLabel": "Pontozási profil",
@@ -3799,6 +4083,30 @@
   "privacyCenterPolicyLabMode": "Labor mód (diagnosztika)",
   "privacyCenterPolicyLabModeOff": "Kikapcsolva — nem gyűjtünk diagnosztikai hangot",
   "privacyCenterPolicyLabModeOn": "Bekapcsolva — rövid hangfelvételek megoszthatók pontossági ellenőrzéshez",
+  "privacyCenterTelemetryNeverNote": "Ami soha nincs benne: hang, beírt szöveg, a dalaid, sem rólad vagy a telefonodról szóló azonosító. A jelentés csak egy véletlen kódot visz, amit hetente lecserélünk.",
+  "@privacyCenterTelemetryNeverNote": {},
+  "privacyCenterTelemetryPendingTransportNote": "Most még semmi nem megy el. Ebben a változatban nincs küldési csatorna — a döntésedet megjegyezzük, amíg a béta jelentés el nem indul.",
+  "@privacyCenterTelemetryPendingTransportNote": {},
+  "privacyCenterTelemetryRevokeNote": "A kikapcsolás a véletlen kódot is törli erről az eszközről.",
+  "@privacyCenterTelemetryRevokeNote": {},
+  "privacyCenterTelemetryScopeNote": "Ami benne lenne: hány felismerést fogadott el vagy utasított el az alkalmazás, milyen volt a bemenet minősége, mennyi ideig tartott egy döntés, és hogy javítottad-e.",
+  "@privacyCenterTelemetryScopeNote": {},
+  "privacyCenterTelemetryStatusNotAsked": "Még nincs döntés — semmit nem gyűjtünk",
+  "@privacyCenterTelemetryStatusNotAsked": {},
+  "privacyCenterTelemetryStatusOff": "Kikapcsolva — semmit nem gyűjtünk",
+  "@privacyCenterTelemetryStatusOff": {},
+  "privacyCenterTelemetryStatusOn": "Bekapcsolva — a döntésed rögzítve",
+  "@privacyCenterTelemetryStatusOn": {},
+  "privacyCenterTelemetryStatusUnavailable": "Ebben az alkalmazásváltozatban nem érhető el",
+  "@privacyCenterTelemetryStatusUnavailable": {},
+  "privacyCenterTelemetrySubtitle": "Alapból ki van kapcsolva. Bármikor újra kikapcsolhatod.",
+  "@privacyCenterTelemetrySubtitle": {},
+  "privacyCenterTelemetryTitle": "Segíts pontosabbá tenni a felismerést (béta)",
+  "@privacyCenterTelemetryTitle": {},
+  "privacyCenterTelemetryToggleLabel": "Névtelen felismerési statisztika küldése",
+  "@privacyCenterTelemetryToggleLabel": {},
+  "privacyCenterTelemetryToggleSubtitle": "Csak darabszámok és minőségi sávok — soha nem az, amit játszottál",
+  "@privacyCenterTelemetryToggleSubtitle": {},
   "privacyCenterTitle": "Adatvédelem és adatok",
   "profileHubAccountSectionTitle": "Fiók",
   "profileHubAchievementsSectionTitle": "Eredmények",
@@ -3815,6 +4123,8 @@
   },
   "profileHubLocalOnlyMessage": "Fiók nélkül használod a StrumSightot — minden ezen az eszközön marad.",
   "profileHubLocalOnlyTitle": "Helyi profil",
+  "profileHubOpenCommunityCta": "Közösség megnyitása",
+  "@profileHubOpenCommunityCta": {},
   "profileHubProgressSectionTitle": "Fejlődés",
   "profileHubSignInCta": "Bejelentkezés",
   "profileHubSignOutCta": "Kijelentkezés",
@@ -4614,6 +4924,10 @@
   "songEditorRedo": "Újra",
   "songEditorSave": "Mentés",
   "songEditorSaveCopy": "Mentés másolatként",
+  "songEditorSaveDisabledLoading": "A mentés akkor válik aktívvá, ha a dal betöltődött.",
+  "@songEditorSaveDisabledLoading": {
+    "description": "Helper text under the disabled Save action in the song editor while no draft is loaded yet."
+  },
   "songEditorSaveFailed": "Mentés sikertelen: {code}. A szerkesztésed megmaradt.",
   "@songEditorSaveFailed": {
     "placeholders": {
@@ -4911,8 +5225,28 @@
   "songTrainerSpeedLabel": "Sebesség",
   "songTrainerSpeedResumesOnRestart": "Szünet: a sebesség a session újraindításakor tér vissza.",
   "songTrainerTitle": "Song Trainer",
+  "songTrainerTransportPause": "Szünet",
+  "@songTrainerTransportPause": {
+    "description": "Tooltip of the Song Trainer transport's pause button (audit U7)."
+  },
+  "songTrainerTransportPlay": "Lejátszás",
+  "@songTrainerTransportPlay": {
+    "description": "Tooltip of the Song Trainer transport's play button (audit U7)."
+  },
+  "songTrainerTransportRestart": "Vissza az elejére",
+  "@songTrainerTransportRestart": {
+    "description": "Tooltip of the Song Trainer transport's rewind button (audit U7)."
+  },
+  "songTrainerTransportResume": "Folytatás",
+  "@songTrainerTransportResume": {
+    "description": "Tooltip of the Song Trainer transport's play button while paused (audit U7)."
+  },
   "songVisionLoopQualityUnavailable": "Ehhez a loophoz nem volt elérhető megfelelő vizuális minőség. A hangalapú pontozás változatlan.",
   "songsEmpty": "Építsd meg a saját dalod — válassz akkordokat, tervezz ↓/↑ pengetésmintát, majd játszd le. Pontoz, mint egy lecke.",
+  "songsEmptyTitle": "Még nincs dalod",
+  "@songsEmptyTitle": {
+    "description": "One-line title of the empty songbook (audit U4)."
+  },
   "songsTitle": "Dalaim",
   "speedBuilderAttempt": "Próbálkozás: {current} / {maximum}",
   "@speedBuilderAttempt": {
@@ -5241,6 +5575,58 @@
   "todayHubPrivacyTitle": "Alapból privát",
   "todayHubStartFirstPracticeCta": "Első gyakorlás indítása",
   "todayHubStartPracticeCta": "Gyakorlás indítása",
+  "todayHubTenMinuteLeaveCta": "Kilépés a gyakorlásból",
+  "@todayHubTenMinuteLeaveCta": {
+    "description": "Secondary action that abandons a running guided 10-minute chain."
+  },
+  "todayHubTenMinutePlayCta": "Gyakorlat indítása",
+  "@todayHubTenMinutePlayCta": {
+    "description": "Primary CTA label that opens the recommended practice as step 2 of the guided 10-minute chain."
+  },
+  "todayHubTenMinutePlayMessage": "Most jöhet a mai gyakorlat. Nagyjából 7 perc.",
+  "@todayHubTenMinutePlayMessage": {
+    "description": "Hero message for the practice step of the guided 10-minute chain."
+  },
+  "todayHubTenMinuteReviewCta": "Befejezés",
+  "@todayHubTenMinuteReviewCta": {
+    "description": "Primary CTA label that closes the guided 10-minute chain from its recap step."
+  },
+  "todayHubTenMinuteReviewMessage": "Íme, amit ma valóban játszottál.",
+  "@todayHubTenMinuteReviewMessage": {
+    "description": "Hero message for the recap step; the numbers below it are measured practice minutes, never a planned budget."
+  },
+  "todayHubTenMinuteReviewTitle": "Megvan a 10 perc",
+  "@todayHubTenMinuteReviewTitle": {
+    "description": "Hero title for the recap step of the guided 10-minute chain."
+  },
+  "todayHubTenMinuteStartCta": "Kezdj egy 10 perces gyakorlást",
+  "@todayHubTenMinuteStartCta": {
+    "description": "Today hub secondary action that starts the guided 10-minute practice chain (tune -> exercise -> recap)."
+  },
+  "todayHubTenMinuteStepLabel": "{step}. lépés / {total}",
+  "@todayHubTenMinuteStepLabel": {
+    "description": "Position in the guided 10-minute chain, shown as visible text above the hero title.",
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "todayHubTenMinuteTitle": "A te 10 perced",
+  "@todayHubTenMinuteTitle": {
+    "description": "Title of the Today hub hero card while the guided 10-minute chain is running."
+  },
+  "todayHubTenMinuteTuneCta": "Hangolás",
+  "@todayHubTenMinuteTuneCta": {
+    "description": "Primary CTA label that opens the tuner as step 1 of the guided 10-minute chain."
+  },
+  "todayHubTenMinuteTuneMessage": "Először hangolj. Nagyjából 2 perc.",
+  "@todayHubTenMinuteTuneMessage": {
+    "description": "Hero message for the tuning step of the guided 10-minute chain."
+  },
   "todayHubTitle": "Ma",
   "todayHubViewProgressCta": "Fejlődés megtekintése",
   "todayHubVisionCardMessage": "Ellenőrizd a kamerával a képkivágást és a fényt játék előtt.",
@@ -5368,6 +5754,22 @@
       },
       "state": {
         "type": "String"
+      }
+    }
+  },
+  "tunerTenMinuteContinueCta": "Kész a hangolás",
+  "@tunerTenMinuteContinueCta": {
+    "description": "Tuner button that ends step 1 of the guided 10-minute chain and opens the practice exercise. Only the player ends this step; the app never infers that all six strings are in tune."
+  },
+  "tunerTenMinuteStepLabel": "{step}. lépés / {total}",
+  "@tunerTenMinuteStepLabel": {
+    "description": "Position in the guided 10-minute chain, shown above the tuner's hand-off button.",
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
       }
     }
   },

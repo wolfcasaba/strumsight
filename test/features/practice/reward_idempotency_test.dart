@@ -113,7 +113,8 @@ void main() {
       await pumpResult(tester, entry, ledger);
 
       expect(find.text(l10n().practiceResultRewardXp(25)), findsOneWidget);
-      expect(find.text(l10n().practiceResultRewardNone), findsNothing);
+      // Audit U11: the empty-reward copy is `practiceRewardNone` now.
+      expect(find.text(l10n().practiceRewardNone), findsNothing);
       // The screen never writes — only reads.
       expect(ledger.appendCallCount, 0);
     },

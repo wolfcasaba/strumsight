@@ -39,6 +39,7 @@ import '../../domain/model/practice_definition.dart';
 import '../../domain/model/practice_mode.dart';
 import '../../domain/model/practice_session_config.dart';
 import '../../domain/model/practice_validation.dart';
+import '../../domain/model/scoring_profile.dart';
 import '../../domain/model/tempo.dart';
 import '../../application/practice_catalog_controller.dart';
 import '../practice_effect_listener.dart';
@@ -231,103 +232,172 @@ class _SetupFormState extends ConsumerState<_SetupForm> {
     final canStart = state.isValid;
     final firstFailure = failures.isEmpty ? null : failures.first;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+    // Audit U1: the form scrolls, the Start CTA does not. The button used
+    // to be the last child of the `ListView`, so on a compact screen it sat
+    // below the fold with nothing signalling it was there. It now lives in
+    // a pinned bar that RESERVES its own layout space (like the song
+    // editor's `_SaveActionBar`), so it is reachable without scrolling and
+    // never covers the last setting.
+    return Column(
+      // The bar must span the full width, like the CTA did as a `ListView`
+      // child — a loose cross-axis constraint would shrink it to the
+      // button's intrinsic width.
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _SectionLabel(practiceDefinitionDisplayTitle(l10n, widget.definition)),
-        const SizedBox(height: 4),
-        Text(
-          practiceModeLabel(l10n, widget.definition.mode),
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 12),
-        // SDD Ch13 UI-18 "readiness checklist" — the tuning entry belongs
-        // here first: before a session exists there is nothing to lose by
-        // leaving the screen, unlike the running-session surface (review
-        // E13-R21 MAJOR-1/MINOR-1). Weak-signal / degraded-capability have
-        // no meaning yet (no capture is active), so only the tuning
-        // affordance renders.
-        Align(
-          alignment: Alignment.centerLeft,
-          child: PracticeTuningEntry(
-            onOpenTuner: () => context.push(AppRoutes.practiceTuner),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+            children: [
+              _SectionLabel(
+                practiceDefinitionDisplayTitle(l10n, widget.definition),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                practiceModeLabel(l10n, widget.definition.mode),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              // SDD Ch13 UI-18 "readiness checklist" — the tuning entry
+              // belongs here first: before a session exists there is
+              // nothing to lose by leaving the screen, unlike the
+              // running-session surface (review E13-R21
+              // MAJOR-1/MINOR-1). Weak-signal / degraded-capability have
+              // no meaning yet (no capture is active), so only the
+              // tuning affordance renders.
+              Align(
+                alignment: Alignment.centerLeft,
+                child: PracticeTuningEntry(
+                  onOpenTuner: () => context.push(AppRoutes.practiceTuner),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SsValueSlider(
+                label: l10n.practiceSetupBpmLabel,
+                value: config.effectiveTempo.bpm,
+                min: Tempo.minimumBpm,
+                max: Tempo.maximumBpm,
+                unitLabel: l10n.practiceSetupBpmUnit,
+                onChanged: controller.setTempoBpm,
+              ),
+              Text(
+                l10n.practiceSetupBpmHelp,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 16),
+              SsValueSlider(
+                label: l10n.practiceSetupCountInLabel,
+                value: config.countInBars.toDouble(),
+                min: PracticeSessionConfig.minimumCountInBars.toDouble(),
+                max: PracticeSessionConfig.maximumCountInBars.toDouble(),
+                // Audit U3: without a unit the numeric field falls
+                // back to the row label, printing "Count-in bars" twice
+                // side by side. The setting is named once (the row);
+                // the field carries only the unit.
+                unitLabel: l10n.practiceSetupCountInUnit,
+                onChanged: (v) => controller.setCountInBars(v.round()),
+              ),
+              Text(
+                l10n.practiceSetupCountInHelp,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 16),
+              SsValueSlider(
+                label: l10n.practiceSetupLoopLabel,
+                value: config.loopCount.toDouble(),
+                min: PracticeSessionConfig.minimumLoopCount.toDouble(),
+                max: PracticeSessionConfig.maximumLoopCount.toDouble(),
+                // Audit U3 — see the count-in slider above.
+                unitLabel: l10n.practiceSetupLoopUnit,
+                onChanged: (v) => controller.setLoopCount(v.round()),
+              ),
+              Text(
+                l10n.practiceSetupLoopHelp,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 16),
+              _MeterReadout(meter: widget.definition.meter),
+              const SizedBox(height: 16),
+              SsSwitchRow(
+                label: l10n.practiceSetupMetronomeLabel,
+                value: config.metronomeEnabled,
+                onChanged: controller.setMetronomeEnabled,
+              ),
+              SsSwitchRow(
+                label: l10n.practiceSetupAccentLabel,
+                value: config.accentEnabled,
+                onChanged: controller.setAccentEnabled,
+              ),
+              if (widget.definition.mode != PracticeMode.rhythmOnly)
+                SsSwitchRow(
+                  label: l10n.practiceSetupChordHintLabel,
+                  value: config.expectedChordHintEnabled,
+                  onChanged: controller.setChordHintEnabled,
+                ),
+              if (widget.definition.mode != PracticeMode.freePractice) ...[
+                const SizedBox(height: 12),
+                _ScoringProfileReadout(
+                  label: l10n.practiceSetupScoringProfileLabel,
+                  value: practiceScoringProfileLabel(
+                    l10n,
+                    widget.definition.scoringProfile,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
-        const SizedBox(height: 20),
-        SsValueSlider(
-          label: l10n.practiceSetupBpmLabel,
-          value: config.effectiveTempo.bpm,
-          min: Tempo.minimumBpm,
-          max: Tempo.maximumBpm,
-          unitLabel: l10n.practiceSetupBpmUnit,
-          onChanged: controller.setTempoBpm,
+        _StartActionBar(
+          onStart: canStart ? _startAndOpenSession : null,
+          failure: firstFailure,
         ),
-        Text(
-          l10n.practiceSetupBpmHelp,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 16),
-        SsValueSlider(
-          label: l10n.practiceSetupCountInLabel,
-          value: config.countInBars.toDouble(),
-          min: PracticeSessionConfig.minimumCountInBars.toDouble(),
-          max: PracticeSessionConfig.maximumCountInBars.toDouble(),
-          onChanged: (v) => controller.setCountInBars(v.round()),
-        ),
-        Text(
-          l10n.practiceSetupCountInHelp,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 16),
-        SsValueSlider(
-          label: l10n.practiceSetupLoopLabel,
-          value: config.loopCount.toDouble(),
-          min: PracticeSessionConfig.minimumLoopCount.toDouble(),
-          max: PracticeSessionConfig.maximumLoopCount.toDouble(),
-          onChanged: (v) => controller.setLoopCount(v.round()),
-        ),
-        Text(
-          l10n.practiceSetupLoopHelp,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 16),
-        _MeterReadout(meter: widget.definition.meter),
-        const SizedBox(height: 16),
-        SsSwitchRow(
-          label: l10n.practiceSetupMetronomeLabel,
-          value: config.metronomeEnabled,
-          onChanged: controller.setMetronomeEnabled,
-        ),
-        SsSwitchRow(
-          label: l10n.practiceSetupAccentLabel,
-          value: config.accentEnabled,
-          onChanged: controller.setAccentEnabled,
-        ),
-        if (widget.definition.mode != PracticeMode.rhythmOnly)
-          SsSwitchRow(
-            label: l10n.practiceSetupChordHintLabel,
-            value: config.expectedChordHintEnabled,
-            onChanged: controller.setChordHintEnabled,
-          ),
-        if (widget.definition.mode != PracticeMode.freePractice) ...[
-          const SizedBox(height: 12),
-          _ScoringProfileReadout(
-            label: l10n.practiceSetupScoringProfileLabel,
-            profileId: widget.definition.scoringProfile.id,
-          ),
-        ],
-        const SizedBox(height: 24),
-        FilledButton.icon(
-          onPressed: canStart ? _startAndOpenSession : null,
-          icon: const Icon(Icons.play_arrow),
-          label: Text(l10n.practiceSetupStart),
-          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-        ),
-        if (firstFailure != null) ...[
-          const SizedBox(height: 12),
-          _ValidationMessage(failure: firstFailure),
-        ],
       ],
+    );
+  }
+}
+
+/// The pinned Start bar (audit U1).
+///
+/// Rendered below the scrolling form, in a slot that is laid out rather
+/// than overlaid, so the CTA is always on screen and never hides the last
+/// setting. The validation message travels with it: the reason Start is
+/// disabled must be visible at the same moment the disabled button is.
+class _StartActionBar extends StatelessWidget {
+  const _StartActionBar({required this.onStart, required this.failure});
+
+  /// `null` disables the CTA — the same predicate that gated it before.
+  final VoidCallback? onStart;
+
+  /// The first validation problem, or `null` when the config is valid.
+  final PracticeValidationFailure? failure;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final currentFailure = failure;
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (currentFailure != null) ...[
+              _ValidationMessage(failure: currentFailure),
+              const SizedBox(height: 12),
+            ],
+            FilledButton.icon(
+              onPressed: onStart,
+              icon: const Icon(Icons.play_arrow),
+              label: Text(l10n.practiceSetupStart),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -428,62 +498,76 @@ class _MeterReadout extends StatelessWidget {
   }
 }
 
+/// The localized, human-readable label of a [ScoringProfile] (audit H14).
+///
+/// [ScoringProfile.id] is a machine identifier ("legacyLearnParity") and
+/// must never be rendered. The label says WHAT the session scores, which
+/// is the only part of the profile that carries user value. The built-in
+/// set is closed; a profile outside it (a future or user-defined one)
+/// falls back to the localized "custom" label rather than leaking its id.
+String practiceScoringProfileLabel(
+  AppLocalizations l10n,
+  ScoringProfile profile,
+) {
+  final id = profile.id;
+  if (id == ScoringProfile.legacyLearnParity.id) {
+    return l10n.practiceScoringProfileLegacyLearnParity;
+  }
+  if (id == ScoringProfile.chordChangeDefault.id) {
+    return l10n.practiceScoringProfileChordChangeDefault;
+  }
+  if (id == ScoringProfile.chordProgressionDefault.id) {
+    return l10n.practiceScoringProfileChordProgressionDefault;
+  }
+  if (id == ScoringProfile.rhythmOnlyDefault.id) {
+    return l10n.practiceScoringProfileRhythmOnlyDefault;
+  }
+  if (id == ScoringProfile.freePracticeOpen.id) {
+    return l10n.practiceScoringProfileFreePracticeOpen;
+  }
+  return l10n.practiceScoringProfileCustom;
+}
+
 class _ScoringProfileReadout extends StatelessWidget {
-  const _ScoringProfileReadout({required this.label, required this.profileId});
+  const _ScoringProfileReadout({required this.label, required this.value});
 
   final String label;
-  final String profileId;
+  final String value;
 
-  /// The profile id is the row's only INFLEXIBLE child, and a `Row`
-  /// measures such a child with an unbounded main-axis constraint. At
-  /// `textScale 2.0` the id — a non-localised 17-character slug — alone
-  /// measured wider than the 372px content column, so the `RenderFlex`
-  /// overflowed by 43px, identically in both locales (the id never
-  /// translates). The cap therefore has to arrive from OUTSIDE the row,
-  /// which is what the [LayoutBuilder] provides: the id can never claim
-  /// more than the column it lives in, and ellipsises instead.
-  ///
-  /// Deliberately NOT `Flexible` on the id: that makes both children
-  /// flexible, so the row would split its width evenly and at
-  /// `textScale 1.0` the id would jump from the right edge to the
-  /// mid-point (and ellipsise there) — moving pixels in the pinned
-  /// `e13_r21_practice_setup_compact` golden. The [ConstrainedBox] is
-  /// inert at 1.0: the id fits far inside the column, so both children
-  /// keep the exact widths and offsets that golden recorded.
+  /// The readout used to render the scoring profile's raw ID — a
+  /// non-localised 17-character slug that was also the row's only
+  /// INFLEXIBLE child, so at `textScale 2.0` it measured wider than the
+  /// 372px content column and the `RenderFlex` overflowed by 43px in both
+  /// locales (the E12-R20 audit's `setup-scoring-profile-overflow`
+  /// finding). E14 audit H14/U3 removed the cause rather than capping it:
+  /// [value] is a localized human phrase now
+  /// ([practiceScoringProfileLabel]), and a phrase is allowed to wrap, so
+  /// the row carries it in a `Flexible`. The `known-exceptions.yaml`
+  /// entry and its `knownOverflows` mirror were removed with it — a stale
+  /// tolerance is a red gate cell by design.
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // The id keeps its natural width — so the un-scaled layout (and its
-        // pixel goldens) is unchanged — but may take at most 60 % of the
-        // row: at textScale 2.0 it wraps instead of overflowing (E18-R01;
-        // the E12-R20 audit's `setup-scoring-profile-overflow` finding).
-        final idMaxWidth = constraints.maxWidth.isFinite
-            ? constraints.maxWidth * 0.6
-            : double.infinity;
-        return Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-            // No `textAlign: end`: with the paragraph laid out at its own
-            // intrinsic width the end-alignment lands on a sub-pixel offset
-            // (bodySmall's letter spacing) and shifts every glyph — the
-            // e13_r21 compact golden moved by 240 px. Start-aligned lines are
-            // pixel-identical to the pre-fix render.
-            ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: idMaxWidth),
-              child: Text(
-                profileId,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          ],
-        );
-      },
+    // The value is a human phrase now, not a short machine id (H14), so
+    // it must be allowed to wrap: a non-flexible Text here overflowed the
+    // row at large text scales.
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+      ],
     );
   }
 }

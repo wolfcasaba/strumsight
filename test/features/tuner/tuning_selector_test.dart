@@ -7,6 +7,7 @@ import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
 import '../../support/preference_store.dart';
 
@@ -17,6 +18,7 @@ Future<void> pumpTuner(WidgetTester tester, FakeTunerEngine engine) =>
       ProviderScope(
         overrides: [
           ...preferenceOverrides(),
+          ...fakeAudioOverrides(),
           tunerEngineProvider.overrideWithValue(engine),
         ],
         child: const MaterialApp(

@@ -78,6 +78,12 @@ class _ChordLibraryScreenState extends ConsumerState<ChordLibraryScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
           children: [
+            // Tapping a chord plays it; when the device refuses the pad the
+            // tap used to be silently mute (audit H20 / L12). Renders
+            // nothing while the output is healthy.
+            AudioOutputErrorNotice(
+              sources: [ref.watch(backingProvider).lastError],
+            ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
               child: TextField(

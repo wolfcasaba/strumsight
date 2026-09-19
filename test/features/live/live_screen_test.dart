@@ -11,6 +11,7 @@ import 'package:strumsight/features/live/widgets/strum_arrow.dart';
 import 'package:strumsight/features/settings/providers/capo_provider.dart';
 import 'package:strumsight/main.dart';
 
+import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
 import '../../support/preference_store.dart';
 
@@ -54,6 +55,7 @@ void main() {
         tester,
         overrides: [
           ...preferenceOverrides(),
+          ...fakeAudioOverrides(),
           strumEngineProvider.overrideWithValue(engine),
         ],
       );
@@ -94,6 +96,7 @@ void main() {
       tester,
       overrides: [
         ...preferenceOverrides(),
+        ...fakeAudioOverrides(),
         strumEngineProvider.overrideWithValue(engine),
         capoProvider.overrideWith(() => _FixedCapo(2)),
       ],
@@ -124,6 +127,7 @@ void main() {
       tester,
       overrides: [
         ...preferenceOverrides(),
+        ...fakeAudioOverrides(),
         strumEngineProvider.overrideWithValue(engine),
       ],
     );
@@ -167,6 +171,7 @@ void main() {
       tester,
       overrides: [
         ...preferenceOverrides(),
+        ...fakeAudioOverrides(),
         strumEngineProvider.overrideWithValue(engine),
       ],
     );
@@ -203,6 +208,7 @@ void main() {
       tester,
       overrides: [
         ...preferenceOverrides(),
+        ...fakeAudioOverrides(),
         strumEngineProvider.overrideWithValue(engine),
       ],
     );

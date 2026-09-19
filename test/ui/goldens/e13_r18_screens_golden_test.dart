@@ -21,6 +21,7 @@ import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/live/screens/live_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
+import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
 import '../../support/preference_store.dart';
 
@@ -38,6 +39,7 @@ Future<void> _pump(WidgetTester tester, {double textScale = 1.0}) async {
     ProviderScope(
       overrides: [
         ...preferenceOverrides(),
+        ...fakeAudioOverrides(),
         strumEngineProvider.overrideWithValue(engine),
       ],
       child: MaterialApp(

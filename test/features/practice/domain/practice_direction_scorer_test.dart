@@ -17,6 +17,10 @@ void main() {
       'practice.metric.no_signal',
       'practice.metric.no_applicable_targets',
       'practice.metric.chord_unstable',
+      // E14-R38 (ADR 0551 D4): "the app was unsure" is its own code, split
+      // out of chord_unstable ("the player was unsteady"). The two are
+      // different statements and must not share a bucket.
+      'practice.metric.chord_uncertain',
       'practice.metric.insufficient_samples',
     };
 
@@ -24,6 +28,7 @@ void main() {
       PracticeMetricReasonCode.noSignal,
       PracticeMetricReasonCode.noApplicableTargets,
       PracticeMetricReasonCode.chordUnstable,
+      PracticeMetricReasonCode.chordUncertain,
       PracticeMetricReasonCode.insufficientSamples,
     }, expected);
     expect(PracticeMetricReasonCode.values, expected);

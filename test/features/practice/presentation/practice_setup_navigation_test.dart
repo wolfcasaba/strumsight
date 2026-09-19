@@ -35,6 +35,7 @@ import 'package:strumsight/features/auth/providers/auth_providers.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
 import 'package:strumsight/features/practice/application/practice_catalog_controller.dart';
+import 'package:strumsight/features/practice/application/practice_session_providers.dart';
 import 'package:strumsight/features/practice/domain/model/beat_position.dart';
 import 'package:strumsight/features/practice/domain/model/meter.dart';
 import 'package:strumsight/features/practice/domain/model/practice_definition.dart';
@@ -53,6 +54,7 @@ import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../../support/fake_audio.dart';
 import '../../../support/fake_auth.dart';
+import '../../../support/fake_clock.dart';
 import '../../../support/fake_engines.dart';
 import '../../../support/preference_store.dart';
 
@@ -116,10 +118,22 @@ AppConfig _config() => AppConfig.resolve(
 /// preferences) — the practice provider graph itself is production wiring.
 Future<ProviderContainer> _pumpSetup(WidgetTester tester) async {
   final engine = FakeStrumEngine();
+  // The Session screen auto-starts the session it is handed (L4), so the
+  // production `TimerPracticeTickSource` — a 16 ms `Timer.periodic` —
+  // really runs here. `UncontrolledProviderScope` does not dispose the
+  // container it is given, so unmounting the tree at the end of the test
+  // left that timer pending ("A Timer is still pending even after the widget
+  // tree was disposed"). The wall clock is a platform edge like the mic: the
+  // e2e harness already replaces both halves of it with one `HarnessClock`,
+  // and this test does the same (L122 — advancing one without the other lets
+  // the sync clock and the tick stream disagree).
+  final clock = HarnessClock();
   final container = ProviderContainer(
     overrides: [
       ...preferenceOverrides(),
       ...fakeAudioOverrides(),
+      practiceSessionClockProvider.overrideWithValue(clock.clock),
+      practiceTickSourceProvider.overrideWithValue(clock.tickSource),
       strumEngineProvider.overrideWithValue(engine),
       onboardingSeenProvider.overrideWith(() => OnboardingController(true)),
       accountEnabledProvider.overrideWithValue(false),
@@ -155,8 +169,9 @@ Future<ProviderContainer> _pumpSetup(WidgetTester tester) async {
   return container;
 }
 
-/// Scrolls the Start CTA into the viewport and taps it. The Start button
-/// sits at the bottom of a long form — the same pattern
+/// Taps the Start CTA. Audit U1 pinned it into a bottom action bar, so it
+/// is always on screen; the `scrollUntilVisible` below is kept because it
+/// is a no-op once the finder already resolves — the same pattern
 /// `practice_setup_screen_test.dart` uses.
 Future<void> _tapStart(WidgetTester tester) async {
   final start = find.widgetWithText(FilledButton, 'Start practice');

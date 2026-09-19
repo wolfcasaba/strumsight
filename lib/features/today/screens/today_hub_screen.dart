@@ -11,7 +11,12 @@ import '../../curriculum/public.dart' show curriculumMissionName;
 import '../../progress/public.dart';
 import '../../streak/public.dart';
 import '../../strum_challenge/public.dart' show strumChallengeBestProvider;
+import '../../practice/public.dart'
+    show PracticeDefinition, practiceCatalogProvider;
+import '../domain/ten_minute_flow.dart';
+import '../domain/ten_minute_flow_destinations.dart';
 import '../domain/today_plan_snapshot.dart';
+import '../providers/ten_minute_flow_providers.dart';
 import '../providers/today_providers.dart';
 
 /// The Today Hub (UI-05, SDD Ch13 §UI-05) — the daily control center: one
@@ -20,7 +25,9 @@ import '../providers/today_providers.dart';
 ///
 /// Deliberately resource-free (A4, ADR 0276): this file imports no
 /// microphone, camera, or screen-wakelock API — the primary action only
-/// *navigates* to Practice; starting a session happens on a Stage screen.
+/// *navigates* into Practice; starting a session happens on a Stage screen.
+/// Reading [practiceCatalogProvider] (audit L1) is a const-list lookup, not
+/// a resource open — the same read `PracticeAreaHubScreen` does.
 ///
 /// Styled with plain Material widgets + [AppColors] (the same convention
 /// `ProgressScreen`/`SettingsScreen` use) rather than the `core/design_system`
@@ -51,6 +58,22 @@ class TodayHubScreen extends ConsumerWidget {
     final today = StreakLogic.epochDayOf(nowDate);
     final todaySeconds = ref.watch(dailyGoalActiveSecondsProvider(today));
     final flags = ref.watch(appConfigProvider).flags;
+    final catalog = ref.watch(practiceCatalogProvider);
+    final practiceEngineEnabled = flags.practiceEngineV2Enabled;
+    final primaryCtaLocation = practiceStartLocation(
+      practiceEngineEnabled: practiceEngineEnabled,
+      catalog: catalog,
+    );
+
+    // E14-R36 — the "10 useful minutes" chain. `resolveTenMinuteFlow` is a
+    // PURE read (interruption + measured play-evidence rules); nothing is
+    // written during build, so an abandoned or completed chain can never be
+    // resurrected by a rebuild.
+    final flow = resolveTenMinuteFlow(
+      ref.watch(tenMinuteFlowProvider),
+      now: nowDate,
+      activeSecondsToday: todaySeconds,
+    );
 
     // A8 — "new user" is derived from REAL zero-state signals only, never an
     // invented number.
@@ -72,7 +95,9 @@ class TodayHubScreen extends ConsumerWidget {
     final isNewUser =
         stats.totalSessions == 0 && streak.current == 0 && !planShowsHistory;
 
-    final hero = _heroContent(l10n, snapshot: snapshot, isNewUser: isNewUser);
+    final hero = flow != null
+        ? _flowHeroContent(l10n, flow)
+        : _heroContent(l10n, snapshot: snapshot, isNewUser: isNewUser);
     final todayMinutes = todaySeconds ~/ 60;
     // The daily-goal ring (Ch18 spec §1): fills to today's minutes over the
     // goal; a zero goal is an explicit "not applicable", never a fake 0 %.
@@ -126,6 +151,19 @@ class TodayHubScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // "Where am I in the chain" — a visible, scalable
+                        // text counter, never a colour-only progress dot
+                        // (E14-R36 A3).
+                        if (flow != null) ...[
+                          Text(
+                            l10n.todayHubTenMinuteStepLabel(
+                              flow.stepNumber,
+                              flow.stepCount,
+                            ),
+                            style: Theme.of(context).textTheme.labelMedium,
+                          ),
+                          const SizedBox(height: 4),
+                        ],
                         Text(
                           hero.title,
                           style: Theme.of(context).textTheme.titleLarge,
@@ -148,14 +186,44 @@ class TodayHubScreen extends ConsumerWidget {
                 // nem maradna alatta lap, amire vissza lehetne lépni
                 // (`hub_back_navigation_test` N1).
                 onPressed: () {
+                  // E14-R36: while the ten-minute chain is running it OWNS
+                  // the primary CTA — the chain's next step, not the day's
+                  // recommendation, is what the learner asked for.
+                  if (flow != null) {
+                    _onFlowCta(
+                      context,
+                      ref,
+                      flow,
+                      practiceEngineEnabled: practiceEngineEnabled,
+                      catalog: catalog,
+                    );
+                    return;
+                  }
                   if (snapshot.recommendedMissionId == null) {
-                    context.go(AppRoutes.practiceHub);
+                    context.go(primaryCtaLocation);
                   } else {
                     context.push(AppRoutes.curriculumLadder);
                   }
                 },
                 child: Text(hero.ctaLabel),
               ),
+              // The chain is opt-in and always leavable: one secondary
+              // action, never a second FILLED button (E14-R36 A1).
+              if (flow == null)
+                OutlinedButton(
+                  key: const ValueKey('today-hub-ten-minute-start'),
+                  onPressed: () => ref
+                      .read(tenMinuteFlowProvider.notifier)
+                      .start(now: nowDate, activeSecondsToday: todaySeconds),
+                  child: Text(l10n.todayHubTenMinuteStartCta),
+                )
+              else
+                TextButton(
+                  key: const ValueKey('today-hub-ten-minute-leave'),
+                  onPressed: () =>
+                      ref.read(tenMinuteFlowProvider.notifier).abandon(),
+                  child: Text(l10n.todayHubTenMinuteLeaveCta),
+                ),
             ],
           ),
         ),
@@ -219,6 +287,59 @@ class TodayHubScreen extends ConsumerWidget {
       ),
     );
   }
+
+  /// Audit L1 — where the ONE primary CTA goes when no chain is running.
+  ///
+  /// The rule itself lives in `practiceStartLocation`
+  /// (`domain/ten_minute_flow_destinations.dart`) so the ordinary CTA and
+  /// the chain's play step can never drift apart: the catalog's first
+  /// definition carried to the setup route as `?id=` (ADR 0508 D3/D4), and
+  /// the two hub-fallback cases (empty catalog, Practice Engine V2 off).
+  ///
+  /// E14-R36 — what the CTA does while a chain IS running. The chain never
+  /// advances itself here: [TenMinuteStep.tune] hands off to the tuner,
+  /// which advances it only when the user says they are done tuning, and
+  /// [TenMinuteStep.play] is promoted to the recap by MEASURED practice time
+  /// (`resolveTenMinuteFlow`), not by having opened the setup screen. The
+  /// recap step has no route of its own — it is this card — so its CTA only
+  /// closes the chain.
+  void _onFlowCta(
+    BuildContext context,
+    WidgetRef ref,
+    TenMinuteFlowState flow, {
+    required bool practiceEngineEnabled,
+    required List<PracticeDefinition> catalog,
+  }) {
+    final location = tenMinuteStepLocation(
+      flow.step,
+      practiceEngineEnabled: practiceEngineEnabled,
+      catalog: catalog,
+    );
+    if (location == null) {
+      ref.read(tenMinuteFlowProvider.notifier).advance(from: flow.step);
+      return;
+    }
+    context.go(location);
+  }
+
+  _HeroContent _flowHeroContent(AppLocalizations l10n, TenMinuteFlowState f) =>
+      switch (f.step) {
+        TenMinuteStep.tune => _HeroContent(
+          title: l10n.todayHubTenMinuteTitle,
+          message: l10n.todayHubTenMinuteTuneMessage,
+          ctaLabel: l10n.todayHubTenMinuteTuneCta,
+        ),
+        TenMinuteStep.play => _HeroContent(
+          title: l10n.todayHubTenMinuteTitle,
+          message: l10n.todayHubTenMinutePlayMessage,
+          ctaLabel: l10n.todayHubTenMinutePlayCta,
+        ),
+        TenMinuteStep.review => _HeroContent(
+          title: l10n.todayHubTenMinuteReviewTitle,
+          message: l10n.todayHubTenMinuteReviewMessage,
+          ctaLabel: l10n.todayHubTenMinuteReviewCta,
+        ),
+      };
 
   _HeroContent _heroContent(
     AppLocalizations l10n, {

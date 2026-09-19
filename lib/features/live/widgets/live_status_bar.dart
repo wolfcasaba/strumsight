@@ -55,15 +55,34 @@ class LiveStatusBar extends StatelessWidget {
         ],
         const Spacer(),
         Flexible(
-          child: SsTempoDisplay(
-            bpm: frame.bpm,
-            tuningLabel: 'A=$a4',
-            capoLabel: capo > 0 ? l10n.liveCapo(capo) : null,
-            color: palette.muted,
-          ),
+          // "0 BPM" is the ABSENCE of a tempo measurement, not a measured
+          // zero, and a tempo read off an unusable signal is not a
+          // measurement either (AGENTS.md §5) — both say so instead of
+          // printing a number the engine never stood behind.
+          child: frame.hasMeasuredTempo
+              ? SsTempoDisplay(
+                  bpm: frame.bpm,
+                  tuningLabel: 'A=$a4',
+                  capoLabel: capo > 0 ? l10n.liveCapo(capo) : null,
+                  color: palette.muted,
+                )
+              : Text(
+                  _unmeasuredTempoText(l10n),
+                  textAlign: TextAlign.end,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: labelStyle,
+                ),
         ),
       ],
     );
+  }
+
+  /// Same "tempo · tuning · capo" shape [SsTempoDisplay] renders, with the
+  /// tempo slot replaced by the stated absence of a measurement.
+  String _unmeasuredTempoText(AppLocalizations l10n) {
+    final capoLabel = capo > 0 ? ' · ${l10n.liveCapo(capo)}' : '';
+    return '${l10n.liveTempoNotMeasured} · A=$a4$capoLabel';
   }
 }
 

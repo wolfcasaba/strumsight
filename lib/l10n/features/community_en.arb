@@ -128,10 +128,8 @@
   "@followingFeedRefresh": {},
   "followingFeedPracticeNotAvailable": "Starting practice is available in future builds.",
   "@followingFeedPracticeNotAvailable": {},
-
   "followingFeedCompose": "New post",
   "@followingFeedCompose": {},
-
   "followingFeedSearch": "Search people",
   "@followingFeedSearch": {},
   "feedCardPracticeSummaryTitle": "Practice summary",
@@ -298,7 +296,6 @@
   "@communityNotificationsTitle": {},
   "communityNotificationsMarkAllRead": "Mark all as read",
   "@communityNotificationsMarkAllRead": {},
-
   "communityNotificationsOpenChallenges": "Challenges",
   "@communityNotificationsOpenChallenges": {},
   "communityNotificationsEmpty": "No notifications yet.",
@@ -733,13 +730,17 @@
   "communityReactionCountSemantics": "{count, plural, =1{1 reaction} other{{count} reactions}}",
   "@communityReactionCountSemantics": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "communityReactWithSemantics": "React with {reaction}",
   "@communityReactWithSemantics": {
     "placeholders": {
-      "reaction": {"type": "String"}
+      "reaction": {
+        "type": "String"
+      }
     }
   },
   "communityReactionSupport": "Support",
@@ -849,5 +850,19 @@
   "shareCardLessonBestComboLabel": "BEST COMBO",
   "@shareCardLessonBestComboLabel": {},
   "shareCardLessonMoatLine": "Graded on my strum direction",
-  "@shareCardLessonMoatLine": {}
+  "@shareCardLessonMoatLine": {},
+  "communityBookmarkUntitledPost": "Saved post",
+  "@communityBookmarkUntitledPost": {
+    "description": "Fallback label for a bookmark row whose post title/excerpt could not be loaded. Replaces the raw post id the row used to show (audit H15)."
+  },
+  "communityBookmarkSavedOn": "Saved on {date}",
+  "@communityBookmarkSavedOn": {
+    "description": "Subtitle of a bookmark row: the day the post was saved, formatted with the app's locale-aware date formatter (never an ISO timestamp).",
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "Aug 20, 2026"
+      }
+    }
+  }
 }

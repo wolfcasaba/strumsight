@@ -3448,11 +3448,11 @@
   "songTrainerBackToLibrary": "Back to the library",
   "songTrainerPermissionTitle": "The microphone is off",
   "songImportChooseAudioFile": "Audio file (draft)",
-  "songImportAudioHint": "An audio file becomes a DRAFT song: StrumSight detects the chords and strums on your device, and nothing is uploaded. Review it in the editor before you practise \u2014 chord detection is roughly 57% accurate on full-band music and 76-92% on solo guitar.",
-  "songImportAudioDecoding": "Reading the audio file\u2026",
-  "songImportAudioAnalyzing": "Detecting chords and strums\u2026",
-  "songImportAudioSaving": "Creating the draft song\u2026",
-  "songEditorDraftBannerTitle": "Draft \u2014 review it before you practise",
+  "songImportAudioHint": "An audio file becomes a DRAFT song: StrumSight detects the chords and strums on your device, and nothing is uploaded. Review it in the editor before you practise — chord detection is roughly 57% accurate on full-band music and 76-92% on solo guitar.",
+  "songImportAudioDecoding": "Reading the audio file…",
+  "songImportAudioAnalyzing": "Detecting chords and strums…",
+  "songImportAudioSaving": "Creating the draft song…",
+  "songEditorDraftBannerTitle": "Draft — review it before you practise",
   "songEditorDraftBannerBody": "This song was derived from an audio file on your device. The chords, the strums and the tempo are estimates, not a transcription: check them and fix what is wrong.",
   "authEmailTakenHint": "Already have an account? Switch to sign-in below.",
   "setlistRunnerTitle": "Run a setlist",
@@ -3478,5 +3478,403 @@
       }
     }
   },
-  "tutorPlanNotBuildable": "This practice plan cannot be prepared right now."
+  "tutorPlanNotBuildable": "This practice plan cannot be prepared right now.",
+  "liveRejectSignalClipping": "Distorting (clipping) — back away from the mic and ease up on the strum",
+  "@liveRejectSignalClipping": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalClipping (ADR 0535)."
+  },
+  "liveRejectSignalSpeechLike": "Hearing speech or other sound — let only the guitar play",
+  "@liveRejectSignalSpeechLike": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalSpeechLike (ADR 0535)."
+  },
+  "liveRejectSignalTooLoud": "Too loud — move back from the mic or play softer",
+  "@liveRejectSignalTooLoud": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooLoud (ADR 0535)."
+  },
+  "liveRejectSignalTooNoisy": "Too much background noise — find a quieter spot",
+  "@liveRejectSignalTooNoisy": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooNoisy (ADR 0535)."
+  },
+  "liveRejectSignalTooQuiet": "Too quiet — move closer to the mic or play louder",
+  "@liveRejectSignalTooQuiet": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooQuiet (ADR 0535)."
+  },
+  "liveRejectSignalUnstable": "Level keeps jumping — hold the phone steady and strum evenly",
+  "@liveRejectSignalUnstable": {
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalUnstable (ADR 0535)."
+  },
+  "audioOutputMetronomeFailed": "The metronome click could not be played. Check the volume and try again.",
+  "@audioOutputMetronomeFailed": {
+    "description": "Inline notice shown on the metronome and lesson screens when the device refused to play the metronome click, so the metronome is running silently (audit H20/L12)."
+  },
+  "audioOutputChordFailed": "The chord could not be played. Check the volume and try again.",
+  "@audioOutputChordFailed": {
+    "description": "Inline notice shown on the chord/jam screens when the device refused to play a chord pad or reference tone, so a tap stayed silent (audit H20/L12)."
+  },
+  "songEditorSaveDisabledLoading": "Save turns on once the song is open.",
+  "@songEditorSaveDisabledLoading": {
+    "description": "Helper text under the disabled Save action in the song editor while no draft is loaded yet (audit H18)."
+  },
+  "liveTempoNotMeasured": "Tempo not measured",
+  "@liveTempoNotMeasured": {
+    "description": "Live status header: shown in place of a BPM number when no tempo has been measured yet, or when the signal-quality gate rejected the frame so any tempo reading would be an unsupported claim. Replaces the old, misleading \"0 BPM\"."
+  },
+  "practiceSessionIdleBody": "No session is running yet. Start one from Practice setup.",
+  "@practiceSessionIdleBody": {
+    "description": "Body copy of the designed idle state on the practice session screen. Replaces the developer dump \"Session state: idle\" (audit H16)."
+  },
+  "practiceSessionCompletedBody": "Nice work — your result is ready.",
+  "@practiceSessionCompletedBody": {
+    "description": "Body copy of the designed completed state on the practice session screen. Replaces the developer dump \"Session state: completed\" (audit H16)."
+  },
+  "practiceSessionCancelledBody": "The session was stopped. You can start it again any time.",
+  "@practiceSessionCancelledBody": {
+    "description": "Body copy of the designed cancelled state on the practice session screen. Replaces the developer dump \"Session state: cancelled\" (audit H16)."
+  },
+  "practiceScoringProfileLegacyLearnParity": "Rhythm and strum direction",
+  "@practiceScoringProfileLegacyLearnParity": {
+    "description": "Human label of the legacyLearnParity scoring profile on the Practice setup screen — says what the session scores. Replaces the raw profile id (audit H14)."
+  },
+  "practiceScoringProfileChordChangeDefault": "Chords and rhythm",
+  "@practiceScoringProfileChordChangeDefault": {
+    "description": "Human label of the chordChangeDefault scoring profile on the Practice setup screen (audit H14)."
+  },
+  "practiceScoringProfileChordProgressionDefault": "Rhythm, direction and chords",
+  "@practiceScoringProfileChordProgressionDefault": {
+    "description": "Human label of the chordProgressionDefault scoring profile on the Practice setup screen (audit H14)."
+  },
+  "practiceScoringProfileRhythmOnlyDefault": "Rhythm only",
+  "@practiceScoringProfileRhythmOnlyDefault": {
+    "description": "Human label of the rhythmOnlyDefault scoring profile on the Practice setup screen (audit H14)."
+  },
+  "practiceScoringProfileFreePracticeOpen": "No scoring",
+  "@practiceScoringProfileFreePracticeOpen": {
+    "description": "Human label of the freePracticeOpen scoring profile on the Practice setup screen (audit H14)."
+  },
+  "practiceScoringProfileCustom": "Custom",
+  "@practiceScoringProfileCustom": {
+    "description": "Fallback label for a scoring profile outside the built-in set, so the raw profile id is never shown (audit H14)."
+  },
+  "practiceSessionFinishHint": "Ends the session and saves your result",
+  "@practiceSessionFinishHint": {
+    "description": "Semantics hint and tooltip on the Finish transport button of the practice session screen. States the consequence: Finish keeps the result (audit L9)."
+  },
+  "practiceSessionExitHint": "Leaves without saving — this session is discarded",
+  "@practiceSessionExitHint": {
+    "description": "Semantics hint and tooltip on the Exit transport button of the practice session screen, shown only while an exit would really cancel a live session. States the consequence: Exit discards the session (audit L9)."
+  },
+  "practiceSetupCountInUnit": "bars",
+  "@practiceSetupCountInUnit": {
+    "description": "Unit label of the count-in numeric field on the practice setup screen. The setting is named once by the row label (\"Count-in bars\"); the field carries only the unit (audit U3)."
+  },
+  "practiceSetupLoopUnit": "loops",
+  "@practiceSetupLoopUnit": {
+    "description": "Unit label of the loop-count numeric field on the practice setup screen. The setting is named once by the row label (\"Loop count\"); the field carries only the unit (audit U3)."
+  },
+  "practiceResultShareUnavailable": "Nothing to share from this session — no strums were detected",
+  "@practiceResultShareUnavailable": {
+    "description": "Reason shown next to the disabled Share button on the practice result screen when the session resolved no targets and recorded no attempt, so the share card would carry no evidence (audit U10)."
+  },
+  "practiceRewardNone": "No reward for this session",
+  "@practiceRewardNone": {
+    "description": "Shown in the Reward card of the practice result screen when the ledger holds no reward for the finished session. Replaces practiceResultRewardNone, whose \"yet\" promised a reward that is never coming (audit U11)."
+  },
+  "profileHubOpenCommunityCta": "Open Community",
+  "@profileHubOpenCommunityCta": {
+    "description": "Profile Hub — the filled (primary) action on the Community card. Rendered only for a signed-in user, for whom Community really is one tap away (audit L10); signed out the card renders the outlined communityGateLoggedOutTitle instead, so the sign-in wall is announced on the card."
+  },
+  "songsEmptyTitle": "No songs yet",
+  "@songsEmptyTitle": {
+    "description": "One-line title of the empty songbook. The explanatory sentence (songsEmpty) moved out of the title slot into body text, and the create action is now inline in the empty state (audit U4)."
+  },
+  "songTrainerTransportPlay": "Play",
+  "@songTrainerTransportPlay": {
+    "description": "Tooltip of the Song Trainer transport's play button (icon-only control, audit U7)."
+  },
+  "songTrainerTransportPause": "Pause",
+  "@songTrainerTransportPause": {
+    "description": "Tooltip of the Song Trainer transport's pause button (icon-only control, audit U7)."
+  },
+  "songTrainerTransportResume": "Resume",
+  "@songTrainerTransportResume": {
+    "description": "Tooltip of the Song Trainer transport's play button while the session is paused — the same glyph performs a different action, so the tooltip names it (audit U7)."
+  },
+  "songTrainerTransportRestart": "Back to start",
+  "@songTrainerTransportRestart": {
+    "description": "Tooltip of the Song Trainer transport's rewind button, which seeks back to position zero (audit U7)."
+  },
+  "metronomeTempoDecrease": "Slower by 1 BPM",
+  "@metronomeTempoDecrease": {
+    "description": "Tooltip of the metronome's minus button (icon-only control, audit U7)."
+  },
+  "metronomeTempoIncrease": "Faster by 1 BPM",
+  "@metronomeTempoIncrease": {
+    "description": "Tooltip of the metronome's plus button (icon-only control, audit U7)."
+  },
+  "todayHubTenMinuteStartCta": "Start a 10-minute session",
+  "@todayHubTenMinuteStartCta": {
+    "description": "Today hub secondary action that starts the guided 10-minute practice chain (tune -> exercise -> recap)."
+  },
+  "todayHubTenMinuteTitle": "Your 10 minutes",
+  "@todayHubTenMinuteTitle": {
+    "description": "Title of the Today hub hero card while the guided 10-minute chain is running."
+  },
+  "todayHubTenMinuteStepLabel": "Step {step} of {total}",
+  "@todayHubTenMinuteStepLabel": {
+    "description": "Position in the guided 10-minute chain, shown as visible text above the hero title.",
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "todayHubTenMinuteTuneMessage": "First, get in tune. About 2 minutes.",
+  "@todayHubTenMinuteTuneMessage": {
+    "description": "Hero message for the tuning step of the guided 10-minute chain."
+  },
+  "todayHubTenMinuteTuneCta": "Tune up",
+  "@todayHubTenMinuteTuneCta": {
+    "description": "Primary CTA label that opens the tuner as step 1 of the guided 10-minute chain."
+  },
+  "todayHubTenMinutePlayMessage": "Now play today's exercise. About 7 minutes.",
+  "@todayHubTenMinutePlayMessage": {
+    "description": "Hero message for the practice step of the guided 10-minute chain."
+  },
+  "todayHubTenMinutePlayCta": "Start the exercise",
+  "@todayHubTenMinutePlayCta": {
+    "description": "Primary CTA label that opens the recommended practice as step 2 of the guided 10-minute chain."
+  },
+  "todayHubTenMinuteReviewTitle": "That's your 10 minutes",
+  "@todayHubTenMinuteReviewTitle": {
+    "description": "Hero title for the recap step of the guided 10-minute chain."
+  },
+  "todayHubTenMinuteReviewMessage": "Here's what you actually played today.",
+  "@todayHubTenMinuteReviewMessage": {
+    "description": "Hero message for the recap step; the numbers below it are measured practice minutes, never a planned budget."
+  },
+  "todayHubTenMinuteReviewCta": "Finish",
+  "@todayHubTenMinuteReviewCta": {
+    "description": "Primary CTA label that closes the guided 10-minute chain from its recap step."
+  },
+  "todayHubTenMinuteLeaveCta": "Leave the session",
+  "@todayHubTenMinuteLeaveCta": {
+    "description": "Secondary action that abandons a running guided 10-minute chain."
+  },
+  "privacyCenterTelemetryTitle": "Help improve recognition (beta)",
+  "@privacyCenterTelemetryTitle": {
+    "description": "Privacy Center — heading of the opt-in beta telemetry card (SDD Ch14 Kör 41). Names the benefit and marks the programme as beta, so the user knows this is not a shipped, always-on feature."
+  },
+  "privacyCenterTelemetrySubtitle": "Off unless you turn it on. You can turn it off again at any time.",
+  "@privacyCenterTelemetrySubtitle": {
+    "description": "Privacy Center — subtitle under the beta telemetry heading. States the two properties that make this an opt-in: it defaults to off, and it is revocable."
+  },
+  "privacyCenterTelemetryToggleLabel": "Share anonymous recognition stats",
+  "@privacyCenterTelemetryToggleLabel": {
+    "description": "Privacy Center — label of the beta telemetry switch row. 'Stats' (not 'data') because only aggregates are ever included."
+  },
+  "privacyCenterTelemetryToggleSubtitle": "Counts and quality bands only — never what you played",
+  "@privacyCenterTelemetryToggleSubtitle": {
+    "description": "Privacy Center — subtitle of the beta telemetry switch row, naming the boundary of what is shared."
+  },
+  "privacyCenterTelemetryScopeNote": "What would be included: how many detections were accepted or rejected, the input-quality band, how long a verdict took, and whether you corrected it.",
+  "@privacyCenterTelemetryScopeNote": {
+    "description": "Privacy Center — the full, honest inventory of the beta telemetry event fields, written as what the user would recognise rather than as field names."
+  },
+  "privacyCenterTelemetryNeverNote": "Never included: audio, anything you typed, your songs, or any identifier for you or your phone. Reports carry only a random code that is replaced every week.",
+  "@privacyCenterTelemetryNeverNote": {
+    "description": "Privacy Center — the exclusion list for beta telemetry: no raw audio, no free text, no device or account identifier, only a rotating pseudonymous id."
+  },
+  "privacyCenterTelemetryPendingTransportNote": "Nothing is sent yet. This build has no reporting channel — your choice is remembered for when beta reporting starts.",
+  "@privacyCenterTelemetryPendingTransportNote": {
+    "description": "Privacy Center — honesty note (SDD Ch14 §9): the consent switch exists but no transport is built, so the app must not imply that data is leaving the device."
+  },
+  "privacyCenterTelemetryStatusOn": "On — your choice is recorded",
+  "@privacyCenterTelemetryStatusOn": {
+    "description": "Privacy Center — status line when beta telemetry consent has been granted. Deliberately does not say 'sending', because no transport exists yet."
+  },
+  "privacyCenterTelemetryStatusNotAsked": "Not decided yet — nothing is collected",
+  "@privacyCenterTelemetryStatusNotAsked": {
+    "description": "Privacy Center — status line when no beta telemetry decision has been recorded (the default state), or when the consent text has changed since the last decision."
+  },
+  "privacyCenterTelemetryStatusOff": "Off — nothing is collected",
+  "@privacyCenterTelemetryStatusOff": {
+    "description": "Privacy Center — status line after the user declined or revoked beta telemetry consent."
+  },
+  "privacyCenterTelemetryStatusUnavailable": "Not available in this version of the app",
+  "@privacyCenterTelemetryStatusUnavailable": {
+    "description": "Privacy Center — status line when the build itself does not offer beta telemetry (feature flag or diagnostics path off). Shown instead of a switch the user could not act on."
+  },
+  "privacyCenterTelemetryRevokeNote": "Turning it off also deletes the random code from this device.",
+  "@privacyCenterTelemetryRevokeNote": {
+    "description": "Privacy Center — explains that revoking consent erases the rotating pseudonymous id rather than keeping it for later."
+  },
+  "liveLabShadowTitle": "Shadow comparison",
+  "@liveLabShadowTitle": {
+    "description": "Live Lab panel — heading of the E14-R23/R26 shadow-mode card. Lab-only; a candidate recognition model is compared against the shipped one."
+  },
+  "liveLabShadowOff": "Both shadow bands are off in this build — nothing was run.",
+  "@liveLabShadowOff": {
+    "description": "Live Lab shadow card — shown when both shadow gates are closed. Says nothing ran, rather than showing an empty report that could be mistaken for a zero result."
+  },
+  "liveLabShadowNeverShown": "Shadow results never change what Live shows.",
+  "@liveLabShadowNeverShown": {
+    "description": "Live Lab shadow card — the invariant footnote: a shadow band's output can never reach the Live screen, a score, or any user-visible verdict."
+  },
+  "liveLabShadowStrumAgreement": "Strum: {agreed} of {compared} verdicts match the shipped path",
+  "@liveLabShadowStrumAgreement": {
+    "description": "Live Lab shadow card — strum-band agreement line. Deliberately a fraction and not a percentage, so a tiny sample cannot read as a confident rate.",
+    "placeholders": {
+      "agreed": {
+        "type": "int"
+      },
+      "compared": {
+        "type": "int"
+      }
+    }
+  },
+  "liveLabShadowStrumNoData": "Strum: nothing comparable in this capture.",
+  "@liveLabShadowStrumNoData": {
+    "description": "Live Lab shadow card — shown when the strum band produced no comparable verdict. An empty sample has no agreement rate, so none is displayed."
+  },
+  "liveLabShadowStrumAbstained": "Strum: {abstained} of {verdicts} verdicts declined to answer",
+  "@liveLabShadowStrumAbstained": {
+    "description": "Live Lab shadow card — how often the candidate strum model abstained (no-strum class, or a margin inside the uncertainty band).",
+    "placeholders": {
+      "abstained": {
+        "type": "int"
+      },
+      "verdicts": {
+        "type": "int"
+      }
+    }
+  },
+  "liveLabShadowChordAgreement": "Chord model: {agreed} of {compared} frames match the shipped chord path",
+  "@liveLabShadowChordAgreement": {
+    "description": "Live Lab shadow card — chord-band agreement line between the shadow chord model and the shipped chord path.",
+    "placeholders": {
+      "agreed": {
+        "type": "int"
+      },
+      "compared": {
+        "type": "int"
+      }
+    }
+  },
+  "liveLabShadowChordNoData": "Chord model: nothing comparable in this capture.",
+  "@liveLabShadowChordNoData": {
+    "description": "Live Lab shadow card — shown when the chord band produced no comparable frame."
+  },
+  "liveLabShadowChordFallbackAssetMissing": "Chord model: the model file is not in this build.",
+  "@liveLabShadowChordFallbackAssetMissing": {
+    "description": "Live Lab shadow card — the chord shadow model could not start because its weights asset is absent. Named explicitly instead of silently showing no chord row."
+  },
+  "liveLabShadowChordFallbackUnreadable": "Chord model: the model file could not be read.",
+  "@liveLabShadowChordFallbackUnreadable": {
+    "description": "Live Lab shadow card — the chord shadow model's weights file exists but could not be read."
+  },
+  "liveLabShadowChordFallbackParse": "Chord model: the model file failed its integrity check.",
+  "@liveLabShadowChordFallbackParse": {
+    "description": "Live Lab shadow card — the chord weights did not match the expected checksum or could not be parsed. Fail-closed: the model is not used."
+  },
+  "liveLabShadowChordFallbackShape": "Chord model: the model does not match this build's input format.",
+  "@liveLabShadowChordFallbackShape": {
+    "description": "Live Lab shadow card — the chord model parsed but its input/output shape does not match the build's feature front-end."
+  },
+  "liveLabShadowChordFallbackDisabled": "Chord model: switched off.",
+  "@liveLabShadowChordFallbackDisabled": {
+    "description": "Live Lab shadow card — the chord shadow band was explicitly disabled rather than failing."
+  },
+  "liveLabShadowWindow": "Window: the most recent {kept} comparisons ({dropped} older ones dropped)",
+  "@liveLabShadowWindow": {
+    "description": "Live Lab shadow card — states that the sample list is a bounded ring, so the reader knows the report is a window and not a session total.",
+    "placeholders": {
+      "kept": {
+        "type": "int"
+      },
+      "dropped": {
+        "type": "int"
+      }
+    }
+  },
+  "liveDecisionCandidate": "Picking up a chord…",
+  "@liveDecisionCandidate": {
+    "description": "Live stage decision chip for RecognitionDecision.candidate (E14-R37, ADR 0550): a verdict is forming but has cleared no threshold, so no chord is claimed."
+  },
+  "liveDecisionProvisional": "Settling on a chord…",
+  "@liveDecisionProvisional": {
+    "description": "Live stage decision chip for RecognitionDecision.provisional when no chord label is known yet. Hedged on purpose: the reading is leaning somewhere but is not confirmed."
+  },
+  "liveDecisionProvisionalNamed": "Settling on {chord}…",
+  "@liveDecisionProvisionalNamed": {
+    "description": "Live stage decision chip for RecognitionDecision.provisional when a chord label is known. The chord is named ONLY inside this hedged sentence — never as a confirmed verdict (ADR 0550 D1).",
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "C"
+      }
+    }
+  },
+  "liveDecisionConfirmed": "Chord confirmed",
+  "@liveDecisionConfirmed": {
+    "description": "Live stage decision chip for RecognitionDecision.confirmed — the only state in which the hero may present a chord."
+  },
+  "liveDecisionUncertain": "Not sure yet",
+  "@liveDecisionUncertain": {
+    "description": "Live stage decision chip for RecognitionDecision.uncertain: below the confirmation threshold, so nothing is shown as a recognised chord."
+  },
+  "liveDecisionRejected": "No chord reading",
+  "@liveDecisionRejected": {
+    "description": "Live stage decision chip for RecognitionDecision.rejected. The paired uncertainty banner states WHY; this chip only states that there is no reading."
+  },
+  "liveDecisionExpired": "Last chord faded",
+  "@liveDecisionExpired": {
+    "description": "Live stage decision chip for RecognitionDecision.expired: a chord was confirmed earlier and has since aged out."
+  },
+  "liveModeFreePlay": "Free play",
+  "@liveModeFreePlay": {
+    "description": "Live stage mode chip: nothing is being asked of the player, the stage mirrors what it hears (E14-R37, ADR 0550 D2)."
+  },
+  "liveModeGuided": "Guided",
+  "@liveModeGuided": {
+    "description": "Live stage mode chip: a lesson/song target is on screen (E14-R37, ADR 0550 D2)."
+  },
+  "liveGuidedTarget": "Target",
+  "@liveGuidedTarget": {
+    "description": "Label of the Guided-mode target card on the Live stage. Names the ROLE of the chord next to it — what the app is asking for, not what it heard."
+  },
+  "liveGuidedTargetSemantics": "Target chord {chord}",
+  "@liveGuidedTargetSemantics": {
+    "description": "Screen-reader label of the Guided-mode target card: the role is spoken before the value, so a target is never mistaken for a detection.",
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "Am"
+      }
+    }
+  },
+  "practiceCorrectionTitle": "Next fix",
+  "@practiceCorrectionTitle": {
+    "description": "Heading of the practice session's correction banner (E14-R38, ADR 0551 D6) — the one concrete thing to change on the next target."
+  },
+  "practiceCorrectionPlayChord": "Play {chord} on the next target.",
+  "@practiceCorrectionPlayChord": {
+    "description": "Correction shown after a missed target, or a chord the recognizer confidently heard as a different one.",
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "C"
+      }
+    }
+  },
+  "practiceCorrectionHitTarget": "That target went by — aim for the next one.",
+  "@practiceCorrectionHitTarget": {
+    "description": "Correction shown when a missed target carries no chord (a rhythm / strum-pattern exercise), so no chord can honestly be named."
+  },
+  "practiceCorrectionUnclear": "The app could not tell what it heard — play that part again.",
+  "@practiceCorrectionUnclear": {
+    "description": "Correction shown when the recognizer abstained and gave no typed reason. Blames the app, never the player (ADR 0551 D6); when a reason IS available the localized liveReject* sentence is shown instead."
+  }
 }

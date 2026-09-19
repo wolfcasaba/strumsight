@@ -187,14 +187,21 @@ final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
               icon: const Icon(Icons.redo),
               tooltip: l10n.songEditorRedo,
             ),
-            TextButton(
-              key: const Key('song-editor-save'),
-              onPressed: (state.isLoaded && canPersist)
-                  ? controller.save
-                  : null,
-              child: Text(l10n.songEditorSave),
-            ),
           ],
+        ),
+        // Audit H18 — Save moved out of the toolbar into a bottom action
+        // bar. As a `Scaffold` bottom slot it RESERVES its own layout space,
+        // so it can never cover the editor content below it (the chord chips
+        // the audit saw obscured), and the `ListView`'s last element is no
+        // longer trapped behind the system navigation bar (the bar's
+        // `SafeArea` owns that inset). A disabled Save now also states WHY.
+        bottomNavigationBar: _SaveActionBar(
+          onSave: (state.isLoaded && canPersist) ? controller.save : null,
+          disabledReason: switch ((state.isLoaded, canPersist)) {
+            (false, _) => l10n.songEditorSaveDisabledLoading,
+            (true, false) => l10n.songEditorReadOnlySource,
+            (true, true) => null,
+          },
         ),
         body: switch (state.status) {
           SongEditorStatus.loading => const _EditorLoading(),
@@ -255,6 +262,61 @@ final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
   }
 }
 
+/// The editor's persistent Save affordance (audit H18).
+///
+/// Rendered in the `Scaffold`'s bottom slot: full width, always reachable
+/// without scrolling, and — because the slot is laid out, not overlaid —
+/// it never covers the content above it. When Save is disabled the bar
+/// names the reason instead of leaving a silently greyed-out button.
+final class _SaveActionBar extends StatelessWidget {
+  const _SaveActionBar({required this.onSave, required this.disabledReason});
+
+  /// `null` disables the button (the same predicate that gates the write).
+  final VoidCallback? onSave;
+
+  /// A localized sentence explaining why Save is off; `null` when enabled.
+  final String? disabledReason;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final reason = disabledReason;
+    return Material(
+      color: theme.colorScheme.surface,
+      child: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(
+          SsSpacing.space4,
+          SsSpacing.space2,
+          SsSpacing.space4,
+          SsSpacing.space2,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            if (reason != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: SsSpacing.space2),
+                child: Text(
+                  reason,
+                  key: const Key('song-editor-save-disabled-reason'),
+                  style: theme.textTheme.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            TextButton(
+              key: const Key('song-editor-save'),
+              onPressed: onSave,
+              child: Text(l10n.songEditorSave),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 final class _EditorBody extends ConsumerWidget {
   const _EditorBody({
     required this.id,
@@ -279,8 +341,17 @@ final class _EditorBody extends ConsumerWidget {
     // the editor body is mounted (ADR 0535 D2).
     final audition = ref.watch(chordAuditionProvider);
     return SafeArea(
+      // The bottom Save bar owns the system-navigation inset; the extra
+      // bottom padding here keeps the last editor block clear of it
+      // instead of ending flush against the bar (audit H18).
+      bottom: false,
       child: ListView(
-        padding: const EdgeInsets.all(SsSpacing.space4),
+        padding: const EdgeInsets.fromLTRB(
+          SsSpacing.space4,
+          SsSpacing.space4,
+          SsSpacing.space4,
+          SsSpacing.space6,
+        ),
         children: <Widget>[
           if (state.status == SongEditorStatus.conflict)
             Text(

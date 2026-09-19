@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
+import 'package:strumsight/core/theme/app_colors.dart';
 import 'package:strumsight/features/song_trainer/application/setlists/setlist_controller.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_id.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_setlist.dart';
@@ -58,7 +59,10 @@ void main() {
         ),
       );
       expect(readyIcon.icon, Icons.check_circle_outline);
-      expect(readyIcon.color, Colors.green);
+      // Audit U9: the "ready" badge is the brand success token, contrast-
+      // tuned for the theme, not a raw Material green. This cell used to
+      // pin `Colors.green` — the very literal the audit removed.
+      expect(readyIcon.color, AppColors.successOn(Brightness.light));
 
       final missingAssetIcon = tester.widget<Icon>(
         find.descendant(

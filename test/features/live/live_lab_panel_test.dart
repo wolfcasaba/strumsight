@@ -8,6 +8,7 @@ import 'package:strumsight/features/settings/providers/lab_mode_provider.dart';
 import 'package:strumsight/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/fake_audio.dart';
 import '../../support/fake_engines.dart';
 import '../../support/preference_store.dart';
 
@@ -55,6 +56,7 @@ void main() {
       tester,
       overrides: [
         ...preferenceOverrides(),
+        ...fakeAudioOverrides(),
         strumEngineProvider.overrideWithValue(engine),
         labModeProvider.overrideWith(() => _FixedLabMode(false)),
       ],
@@ -77,6 +79,7 @@ void main() {
         tester,
         overrides: [
           ...preferenceOverrides(),
+          ...fakeAudioOverrides(),
           strumEngineProvider.overrideWithValue(engine),
           labModeProvider.overrideWith(() => _FixedLabMode(true)),
         ],
@@ -100,6 +103,7 @@ void main() {
       tester,
       overrides: [
         ...preferenceOverrides(),
+        ...fakeAudioOverrides(),
         strumEngineProvider.overrideWithValue(engine),
         labModeProvider.overrideWith(() => _FixedLabMode(true)),
       ],

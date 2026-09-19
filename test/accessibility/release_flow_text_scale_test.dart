@@ -108,9 +108,9 @@ Future<void> _walkCoreFlow(
   await tester.tap(setupStart);
   await tester.pumpAndSettle();
 
-  await tester.tap(
-    find.widgetWithText(ElevatedButton, l10n.practiceSessionStart),
-  );
+  // Audit L4: the Setup CTA above already started the session and the
+  // screen auto-starts once the target is compiled — there is no second
+  // Start button here.
   await tester.pump();
   await _driveSessionUntil(
     tester,
@@ -239,11 +239,14 @@ final class KnownOverflow {
 /// Public: see [KnownOverflow]'s doc comment — the A6 guard cell in
 /// `release_flow_semantics_test.dart` imports this list.
 const knownOverflows = <KnownOverflow>[
-  // `setup-scoring-profile-overflow` (practice_setup_screen.dart:418, 43px,
-  // en+hu) was FIXED in E18-R01 — `_ScoringProfileReadout`'s id is capped at
-  // 60 % of the row and wraps — and its entry removed here and in the YAML
-  // mirror.
-  //
+  // `setup-scoring-profile-overflow` was REMOVED (audit H14/U3): the
+  // scoring-profile row no longer renders a raw, fixed-width
+  // `Text(profileId)` next to an `Expanded` label — the value is a
+  // localized phrase inside a `Flexible`, so the `Row` cannot overflow at
+  // any text scale. The entry could only stay here as a STALE tolerance,
+  // which this file's own `_assertFlowCell` treats as a failure; its
+  // `docs/accessibility/known-exceptions.yaml` mirror was removed in the
+  // same change.
   // The combo-count `Row` (practice_feedback.dart:89-101) has neither Text
   // child `Expanded` — hu's longer `practiceFeedbackComboLabel` translation
   // overflows at textScale 2.0 where en's shorter "Combo" does not.

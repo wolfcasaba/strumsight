@@ -7,7 +7,9 @@ import '../../../app/config/app_config.dart';
 import '../../../core/logging/logger_provider.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/dio_factory.dart';
+import '../../../core/telemetry/public.dart';
 import '../../analyze/public.dart';
+import '../../settings/public.dart';
 import '../data/diagnostics_uploader.dart';
 import '../model/diagnostics_session.dart';
 
@@ -19,7 +21,9 @@ final diagnosticsConsentProvider = Provider<bool>((_) => false);
 /// interceptor. Disabled builds never instantiate it.
 final diagnosticsApiClientProvider = Provider<ApiClient?>((ref) {
   final config = ref.watch(appConfigProvider);
-  if (!config.flags.diagnosticsEnabled) return null;
+  // An empty token is "diagnostics disabled" (audit H6) — never an empty
+  // X-Diag-Token on the wire.
+  if (!config.diagnosticsUsable) return null;
 
   final client = DioFactory(
     baseUrl: config.apiBaseUrl,
@@ -79,6 +83,14 @@ class DiagnosticsUploadNotifier extends Notifier<DiagnosticsUploadStatus> {
       surface: surface,
       events: DiagnosticsSession.eventsFrom(result),
       audioClips: clip == null ? const [] : [clip],
+      // SDD Ch14 Kör 40 (ADR 0542 D7): the tag is resolved in the settings
+      // layer that owns the opt-in, and comes back null unless the build
+      // flag, the enrolment and a live pseudonym ALL say yes. A null tag
+      // means an untagged capture — never an invented one.
+      fieldSessionTag: resolveFieldSessionTag(
+        ref,
+        task: FieldStudyTask.freePlay,
+      ),
     );
 
     final status = await ref

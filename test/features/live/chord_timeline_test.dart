@@ -56,6 +56,23 @@ void main() {
     expect(find.text(l10n.liveWaitingForChord), findsOneWidget);
   });
 
+  testWidgets('no idle prompt when the mic cannot hear anything (H8)', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      const ChordTimeline(events: [], capo: 0, idlePromptEnabled: false),
+    );
+    await tester.pumpAndSettle();
+
+    final l10n = AppLocalizations.of(
+      tester.element(find.byType(ChordTimeline)),
+    );
+    // Inviting a strum into a microphone the app was never given is a dead
+    // end — the caller's permission/error banner is the whole message.
+    expect(find.text(l10n.liveWaitingForChord), findsNothing);
+  });
+
   testWidgets('renders each chord label with its strum arrow, newest as hero', (
     tester,
   ) async {

@@ -11,6 +11,13 @@ import '../domain/recognition/recognition_decision.dart';
 /// no `default`/`_` arm, so a future enum member is a compile error here, not
 /// a silently-generic message (D2).
 ///
+/// The dictionary covers ELEVEN reasons: the merged signal-quality reason was
+/// split into six typed ones (`signalTooQuiet`, `signalTooLoud`,
+/// `signalClipping`, `signalTooNoisy`, `signalSpeechLike`, `signalUnstable`)
+/// so the advice matches the diagnosis instead of always saying "move closer"
+/// — ADR 0535 D3, whose content guard forbids a harmful direction (no
+/// "closer" for too-loud/clipping, no "back" for too-quiet).
+///
 /// Shown only when `LiveFrame.chordRejectReason != null`; when it is `null`
 /// (no decision yet, or a confirmed chord) the caller keeps using the
 /// pre-existing heuristic feedback instead (ADR 0520 D5) — this widget makes
@@ -29,7 +36,12 @@ class UncertaintyReasonBanner extends StatelessWidget {
   ) => switch (reason) {
     RecognitionRejectReason.lowConfidence => l10n.liveRejectLowConfidence,
     RecognitionRejectReason.unstable => l10n.liveRejectUnstable,
-    RecognitionRejectReason.signalQuality => l10n.liveRejectSignalQuality,
+    RecognitionRejectReason.signalTooQuiet => l10n.liveRejectSignalTooQuiet,
+    RecognitionRejectReason.signalTooLoud => l10n.liveRejectSignalTooLoud,
+    RecognitionRejectReason.signalClipping => l10n.liveRejectSignalClipping,
+    RecognitionRejectReason.signalTooNoisy => l10n.liveRejectSignalTooNoisy,
+    RecognitionRejectReason.signalSpeechLike => l10n.liveRejectSignalSpeechLike,
+    RecognitionRejectReason.signalUnstable => l10n.liveRejectSignalUnstable,
     RecognitionRejectReason.noChord => l10n.liveRejectNoChord,
     RecognitionRejectReason.modelUnavailable => l10n.liveRejectModelUnavailable,
     RecognitionRejectReason.timeout => l10n.liveRejectTimeout,

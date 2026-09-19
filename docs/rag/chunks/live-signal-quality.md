@@ -204,3 +204,28 @@ separation held up under measurement (not just assumption), this round ships
 band stays intentionally narrow, and any fixture that fails to separate
 cleanly under future real-audio calibration should widen the corridor toward
 `unknown`, never toward a source classification.
+
+## Reject-reason mapping (ADR 0535, E17-R15)
+
+`LivePipeline.debugDeriveChordDecision` maps the analyzer state to the Live
+reject reason with an EXHAUSTIVE `switch` (no `default` arm), so every future
+state must be mapped explicitly instead of falling into a collector bucket:
+
+| `SignalQualityState` | `RecognitionRejectReason` |
+|---|---|
+| `tooQuiet` | `signalTooQuiet` |
+| `tooLoud` | `signalTooLoud` |
+| `clipping` | `signalClipping` |
+| `tooNoisy` | `signalTooNoisy` |
+| `speechLike` | `signalSpeechLike` |
+| `unstable` | `signalUnstable` |
+
+`good` and `unknown` yield NO signal reason (the decision falls through to
+`noChord`/`lowConfidence`), and the priority is unchanged (ADR 0516 D4):
+`confirmed` → signal reason → `noChord` → `lowConfidence`. The `signal`
+prefix is mandatory: `signalUnstable` (the input LEVEL swings) is a different
+diagnosis from the chord-level `unstable`.
+
+**No threshold changed in this round** — the classifier, its thresholds and
+its hysteresis (`enterFrames = 5`, `exitFrames = 8`) are untouched; only the
+mapping from state to reject reason was split.

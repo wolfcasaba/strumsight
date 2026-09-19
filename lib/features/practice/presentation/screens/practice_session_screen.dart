@@ -14,6 +14,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../settings/public.dart';
 import '../../application/practice_session_command.dart';
 import '../../application/practice_strum_feedback.dart';
+import '../../application/practice_session_providers.dart';
 import '../../domain/model/practice_mode.dart';
 import '../../domain/model/practice_session_state.dart';
 import '../../domain/model/speed_builder_state.dart';
@@ -25,6 +26,7 @@ import '../views/rhythm_only_view.dart';
 import '../views/strum_pattern_view.dart';
 import '../widgets/adaptive_suggestion_banner.dart';
 import '../widgets/practice_controls.dart';
+import '../widgets/practice_correction_banner.dart';
 import '../widgets/practice_count_in_overlay.dart';
 import '../widgets/practice_error_panel.dart';
 import '../widgets/practice_hud.dart';
@@ -67,6 +69,7 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
   PracticeStrumFeedback? _lastStrum;
   int _strumSeq = 0;
   bool _exitInProgress = false;
+  bool _autoStarted = false;
   late final void Function(AppLifecycleState) _lifecycleListener;
   late final AppLifecycleEvents _lifecycle;
 
@@ -78,7 +81,9 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
     if (host != null) {
       _state = host.state;
       _states = host.states.listen((state) {
-        if (mounted) setState(() => _state = state);
+        if (!mounted) return;
+        setState(() => _state = state);
+        _maybeAutoStart(state);
       });
       _strums = host.strumFeedback.listen((feedback) {
         if (!mounted) return;
@@ -87,6 +92,7 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
           _strumSeq++;
         });
       });
+      _maybeAutoStart(_state);
     }
     _lifecycleListener = (state) {
       final host = _host;
@@ -102,6 +108,26 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
     _strums?.cancel();
     _lifecycle.removeListener(_lifecycleListener);
     super.dispose();
+  }
+
+  /// Audit L4 — one Start is enough.
+  ///
+  /// Arriving here from Setup ("Start practice") already IS the user's
+  /// start gesture, so the screen must not stop on an empty `ready` screen
+  /// asking for a second one: as soon as the target is compiled the
+  /// count-in begins on its own. Fires at most once per screen entry.
+  ///
+  /// The guard is `target == null`, not the status alone: `ready` is also
+  /// reachable with an invalidated target (a tempo change before the
+  /// attempt, `ChangeTempoBeforeAttempt`), and the reducer rejects
+  /// `StartPractice` there. In that state the explicit Start control in
+  /// [PracticeControls] stays the user's affordance.
+  void _maybeAutoStart(PracticeSessionState state) {
+    if (_autoStarted) return;
+    if (state.status != PracticeSessionStatus.ready) return;
+    if (state.target == null) return;
+    _autoStarted = true;
+    _host?.send(const StartPractice());
   }
 
   /// True only when the session is in a non-terminal phase AND the user
@@ -239,6 +265,15 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
           liveOverallPerMille: host.liveOverallPerMille,
         ),
       );
+      // The correction loop (E14-R38, ADR 0551 D6): after a missed target —
+      // or after the recognizer abstained on one — say the ONE concrete
+      // thing to change next. A projection of the scoring pass, so no
+      // reducer state was added for it; `null` (nothing to correct, or no
+      // active session) simply renders nothing.
+      final correction = ref.watch(practiceLatestCorrectionProvider).value;
+      if (correction != null) {
+        children.add(PracticeCorrectionBanner(correction: correction));
+      }
       // Weak signal: no live score yet while capture is active. Degraded
       // capability: a recoverable failure is currently surfaced. Both are
       // presentation-visible primitives — never a domain/service import

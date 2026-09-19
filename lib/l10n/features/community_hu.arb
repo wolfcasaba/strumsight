@@ -128,10 +128,8 @@
   "@followingFeedRefresh": {},
   "followingFeedPracticeNotAvailable": "A gyakorlás indítása a jövőbeli körökben érhető el.",
   "@followingFeedPracticeNotAvailable": {},
-
   "followingFeedCompose": "Új poszt",
   "@followingFeedCompose": {},
-
   "followingFeedSearch": "Emberek keresése",
   "@followingFeedSearch": {},
   "feedCardPracticeSummaryTitle": "Gyakorlás összegzés",
@@ -298,7 +296,6 @@
   "@communityNotificationsTitle": {},
   "communityNotificationsMarkAllRead": "Összes olvasottnak jelölése",
   "@communityNotificationsMarkAllRead": {},
-
   "communityNotificationsOpenChallenges": "Kihívások",
   "@communityNotificationsOpenChallenges": {},
   "communityNotificationsEmpty": "Még nincsenek értesítések.",
@@ -627,10 +624,8 @@
   },
   "communityChallengeResultVerifiedIcon": "Ellenőrizve",
   "@communityChallengeResultVerifiedIcon": {},
-
   "communityChallengeMyResultAction": "Saját eredmény megtekintése",
   "communityOpenCta": "Közösség megnyitása",
-  "communityChallengeMyResultAction": "Saját eredmény megtekintése",
   "communityClubComposeCta": "Új poszt",
   "@communityClubComposeCta": {},
   "communityComposerClubTarget": "Ez a poszt a klubba kerül, nem a saját feededbe.",
@@ -734,13 +729,17 @@
   "communityReactionCountSemantics": "{count} reakció",
   "@communityReactionCountSemantics": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "communityReactWithSemantics": "Reagálás ezzel: {reaction}",
   "@communityReactWithSemantics": {
     "placeholders": {
-      "reaction": {"type": "String"}
+      "reaction": {
+        "type": "String"
+      }
     }
   },
   "communityReactionSupport": "Támogatás",
@@ -850,5 +849,19 @@
   "shareCardLessonBestComboLabel": "LEGJOBB KOMBÓ",
   "@shareCardLessonBestComboLabel": {},
   "shareCardLessonMoatLine": "Strumirány szerint osztályozva",
-  "@shareCardLessonMoatLine": {}
+  "@shareCardLessonMoatLine": {},
+  "communityBookmarkUntitledPost": "Mentett bejegyzés",
+  "@communityBookmarkUntitledPost": {
+    "description": "Fallback label for a bookmark row whose post title/excerpt could not be loaded."
+  },
+  "communityBookmarkSavedOn": "Mentve: {date}",
+  "@communityBookmarkSavedOn": {
+    "description": "Subtitle of a bookmark row: the day the post was saved.",
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "2026. aug. 20."
+      }
+    }
+  }
 }

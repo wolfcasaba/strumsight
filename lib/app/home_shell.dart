@@ -10,9 +10,10 @@ import '../l10n/app_localizations.dart';
 import 'routing/adaptive_shell_routes.dart';
 import 'routing/app_route.dart';
 
-/// The bottom-navigation shell hosting the four top-level tabs. The current
-/// tab's screen is rendered as [child]; switching tabs disposes the previous
-/// screen (so the Live engine + wakelock stop when you leave Live).
+/// The bottom-navigation shell hosting the five top-level tabs of
+/// [AppRoutes.shellTabs] (Live, Analyze, Learn, Library, Settings). The
+/// current tab's screen is rendered as [child]; switching tabs disposes the
+/// previous screen (so the Live engine + wakelock stop when you leave Live).
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key, required this.child, required this.location});
 

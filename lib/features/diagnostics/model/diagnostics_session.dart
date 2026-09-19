@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/telemetry/public.dart';
 import '../../analyze/public.dart';
 
 /// One ML-vs-DSP comparison point, sampled at an ML chord segment (Lab mode,
@@ -85,6 +86,7 @@ class DiagnosticsSession {
     required this.events,
     this.surface = 'analyze',
     this.audioClips = const [],
+    this.fieldSessionTag,
   });
 
   final String sessionId;
@@ -100,12 +102,21 @@ class DiagnosticsSession {
   final List<DiagnosticsEvent> events;
   final List<DiagnosticsAudioClip> audioClips;
 
+  /// SDD Ch14 Kör 40 field-study tag, or `null` when the build flag is off,
+  /// the participant is not enrolled, or no pseudonym exists (ADR 0542 D7).
+  ///
+  /// Resolved by `resolveFieldSessionTag` — a capture site must never build
+  /// one itself, because a half-formed tag would be a fabricated study
+  /// record. An untagged capture is a perfectly valid capture.
+  final FieldSessionTag? fieldSessionTag;
+
   Map<String, dynamic> toJson() => {
     'sessionId': sessionId,
     'appVersion': appVersion,
     'device': device,
     'startedAt': startedAt,
     'surface': surface,
+    if (fieldSessionTag case final tag?) ...tag.toHeader(),
     'events': events.map((e) => e.toJson()).toList(),
     'audioClips': audioClips.map((c) => c.toJson()).toList(),
   };

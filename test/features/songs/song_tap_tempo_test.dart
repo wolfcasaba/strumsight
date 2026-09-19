@@ -28,8 +28,12 @@ void main() {
     await tester.pumpAndSettle();
 
     // Bring the tempo section into view (multiple scrollables on screen, so
-    // drag the outer list directly instead of scrollUntilVisible).
-    await tester.drag(find.byType(ListView).first, const Offset(0, -500));
+    // drag the outer list directly instead of scrollUntilVisible). The drag
+    // overshoots the list's scroll extent deliberately — it clamps at the
+    // end, so the tempo row (the last block) is always in view no matter how
+    // tall the blocks above it are. The grouped, filterable add-chord picker
+    // (audit U5) made them taller than the previous fixed -500 reached.
+    await tester.drag(find.byType(ListView).first, const Offset(0, -1400));
     await tester.pump();
     final tap = find.byIcon(Icons.touch_app_outlined);
     expect(tap, findsOneWidget);

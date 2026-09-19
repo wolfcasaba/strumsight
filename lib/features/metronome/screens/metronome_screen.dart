@@ -20,7 +20,12 @@ import '../tap_tempo.dart';
 /// signature is an "advanced" setting behind the app-bar action, presented
 /// through the R13 overlay system ([SsOverlayHost]).
 class MetronomeScreen extends StatefulWidget {
-  const MetronomeScreen({super.key});
+  const MetronomeScreen({super.key, this.metronome});
+
+  /// Injectable click player, mirroring `StrumReelScreen` — the tests use it
+  /// to prove a REFUSED click reaches the player as a visible message
+  /// (audit H20 / L12). Production passes nothing and gets the real one.
+  final Metronome? metronome;
 
   @override
   State<MetronomeScreen> createState() => _MetronomeScreenState();
@@ -31,7 +36,7 @@ class _MetronomeScreenState extends State<MetronomeScreen>
   static const _minBpm = 40;
   static const _maxBpm = 240;
 
-  final Metronome _metronome = Metronome();
+  late final Metronome _metronome = widget.metronome ?? Metronome();
   final TapTempo _tapTempo = TapTempo(minBpm: _minBpm, maxBpm: _maxBpm);
 
   /// Phase-preserving clock: a mid-play tempo change keeps the beat position
@@ -65,7 +70,8 @@ class _MetronomeScreenState extends State<MetronomeScreen>
   @override
   void dispose() {
     _ticker.dispose();
-    _metronome.dispose();
+    // Only ours to dispose — an injected metronome belongs to the caller.
+    if (widget.metronome == null) _metronome.dispose();
     super.dispose();
   }
 
@@ -85,6 +91,9 @@ class _MetronomeScreenState extends State<MetronomeScreen>
     setState(() {
       _playing = !_playing;
       if (_playing) {
+        // A fresh run gets a fresh verdict on the audio output: the notice
+        // below re-appears only if this run's clicks fail again.
+        _metronome.clearError();
         // Ticker elapsed restarts at zero on each start(), so count from 0.
         _lastBeat = -1;
         _currentBeat = 0;
@@ -208,16 +217,29 @@ class _MetronomeScreenState extends State<MetronomeScreen>
           ),
         ],
       ),
-      hero: _bpmHero(l10n),
-      // The audio-clock-bound visual pulse (A4) — never a `Timer.periodic`.
-      feedback: BeatPulseDot(
-        playing: _playing,
-        clock: _beatClockAdapter,
-        beatDuration: beatDuration,
-        color: AppColors.primary,
-        mutedColor: palette.track,
+      // U6 — the stage's middle region packs hero/feedback/timeline against
+      // the header, leaving the screen's middle third empty while the content
+      // crowds top and bottom. Until `SsStageScaffold._CompactStage` centres
+      // that region itself (proposed patch in the round report), the screen
+      // distributes the spare height with token spacing of its own: the group
+      // starts lower and its parts sit further apart. Slot contract, keys and
+      // semantics are unchanged.
+      hero: Padding(
+        padding: const EdgeInsets.only(top: SsSpacing.space10),
+        child: _bpmHero(l10n),
       ),
-      timeline: _beatDots(),
+      // The audio-clock-bound visual pulse (A4) — never a `Timer.periodic`.
+      feedback: Padding(
+        padding: const EdgeInsets.symmetric(vertical: SsSpacing.space6),
+        child: BeatPulseDot(
+          playing: _playing,
+          clock: _beatClockAdapter,
+          beatDuration: beatDuration,
+          color: AppColors.primary,
+          mutedColor: palette.track,
+        ),
+      ),
+      timeline: _timeline(),
       bottomAction: _actions(l10n),
     );
   }
@@ -247,6 +269,7 @@ class _MetronomeScreenState extends State<MetronomeScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton.filledTonal(
+            tooltip: l10n.metronomeTempoDecrease,
             onPressed: () => _setBpm(_bpm - 1),
             icon: const Icon(Icons.remove),
           ),
@@ -260,11 +283,23 @@ class _MetronomeScreenState extends State<MetronomeScreen>
             ),
           ),
           IconButton.filledTonal(
+            tooltip: l10n.metronomeTempoIncrease,
             onPressed: () => _setBpm(_bpm + 1),
             icon: const Icon(Icons.add),
           ),
         ],
       ),
+    ],
+  );
+
+  /// The beat dots plus the audio-output failure notice: a metronome that
+  /// cannot make a sound must SAY so instead of only looking busy — the
+  /// click used to fail into an empty `catch` (audit H20 / L12).
+  Widget _timeline() => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      _beatDots(),
+      AudioOutputErrorNotice(sources: [_metronome.lastError]),
     ],
   );
 
@@ -318,7 +353,12 @@ class _BeatDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final base = downbeat ? AppColors.primary : AppColors.confidenceHigh;
+    // Brand tokens only: copper for the downbeat, warm amber for the other
+    // beats. The dots used to flash `AppColors.confidenceHigh` (a teal-green
+    // from the SEPARATE confidence ramp), which read as a foreign colour in
+    // the copper/amber stage and as a "high confidence" claim the metronome
+    // never makes (audit U9).
+    final base = downbeat ? AppColors.primary : AppColors.secondary;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 80),
       width: active ? 26 : 16,

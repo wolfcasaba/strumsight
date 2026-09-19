@@ -265,6 +265,18 @@ List<RecognitionGroupBreakdown> _breakdownsFor(
 
 String _fmt(double? value) => value == null ? 'n/a' : value.toStringAsFixed(4);
 
+/// A finding's rendered verdict. A DISABLED (informational) row never prints
+/// a bare `FAIL`: it does not gate the release, and a reader must not be
+/// able to mistake an un-enabled Beta target for a blocking failure — nor
+/// an informational row that happens to clear its threshold for evidence
+/// that the stage is met (ADR 0537 D3).
+String _gateStatus(RecognitionGateFinding finding) {
+  if (!finding.enabled) {
+    return finding.passed ? 'INFO (above target)' : 'INFO (below target)';
+  }
+  return finding.passed ? 'PASS' : 'FAIL';
+}
+
 String _mdCell(String value) =>
     value.replaceAll('\\', r'\\').replaceAll('|', r'\|').replaceAll('\n', ' ');
 
@@ -301,15 +313,16 @@ final class RecognitionReportRenderer {
     buffer.writeln('## Release gate');
     buffer.writeln();
     buffer.writeln(
-      '| Metric | Threshold | Higher is better | Value | Verdict | '
+      '| Metric | Stage | Threshold | Higher is better | Value | Verdict | '
       'Thresholds version |',
     );
-    buffer.writeln('|---|---:|---|---:|---|---|');
+    buffer.writeln('|---|---|---:|---|---:|---|---|');
     for (final finding in report.gate.findings) {
       buffer.writeln(
-        '| ${_mdCell(finding.metricPath)} | ${finding.threshold} | '
+        '| ${_mdCell(finding.metricPath)} | ${finding.stage.toJson()} | '
+        '${finding.threshold} | '
         '${finding.higherIsBetter} | ${_fmt(finding.value)} | '
-        '${finding.passed ? 'PASS' : 'FAIL'} | '
+        '${_gateStatus(finding)} | '
         '${_mdCell(finding.thresholdsVersion)} |',
       );
     }
@@ -406,16 +419,18 @@ final class RecognitionReportRenderer {
     buffer.writeln('<h2>Release gate</h2>');
     buffer.writeln('<table>');
     buffer.writeln(
-      '<tr><th>Metric</th><th>Threshold</th><th>Higher is better</th>'
+      '<tr><th>Metric</th><th>Stage</th><th>Threshold</th>'
+      '<th>Higher is better</th>'
       '<th>Value</th><th>Verdict</th><th>Thresholds version</th></tr>',
     );
     for (final finding in report.gate.findings) {
       buffer.writeln(
         '<tr><td>${_htmlEscape(finding.metricPath)}</td>'
+        '<td>${finding.stage.toJson()}</td>'
         '<td>${finding.threshold}</td>'
         '<td>${finding.higherIsBetter}</td>'
         '<td>${_fmt(finding.value)}</td>'
-        '<td>${finding.passed ? 'PASS' : 'FAIL'}</td>'
+        '<td>${_gateStatus(finding)}</td>'
         '<td>${_htmlEscape(finding.thresholdsVersion)}</td></tr>',
       );
     }

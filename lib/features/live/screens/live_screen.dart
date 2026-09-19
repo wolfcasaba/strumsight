@@ -20,15 +20,19 @@ import '../../../core/widgets/mic_permission_banner.dart';
 import '../../../core/widgets/strum_burst_overlay.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../settings/public.dart';
+import '../domain/recognition/recognition_decision.dart';
 import '../engine/strum_engine.dart';
 import '../model/live_frame.dart';
 import '../providers/chord_timeline_provider.dart';
 import '../providers/live_providers.dart';
+import '../providers/live_stage_mode.dart';
 import '../widgets/beat_counter.dart';
 import '../widgets/chord_timeline.dart';
+import '../widgets/guided_target_card.dart';
 import '../widgets/live_lab_panel.dart';
 import '../widgets/live_status_bar.dart';
 import '../widgets/live_summary_dialog.dart';
+import '../widgets/recognition_state_chip.dart';
 import '../widgets/uncertainty_reason_banner.dart';
 import '../../progress/public.dart';
 import '../../streak/public.dart';
@@ -93,19 +97,43 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // listening while nothing is (E01-R09 §9.4).
     _lifecycle = ref.read(appLifecycleEventsProvider);
     _lifecycle.addListener(_onAppLifecycle);
-    // Defence in depth (r146): free-play must never inherit a lesson's
-    // expected-chord bias — clear it explicitly instead of trusting the nav
-    // invariant that LearnScreen was disposed first (chunk 016 residual).
+    // Free-play must never inherit a lesson's expected-chord bias. Since
+    // E14-R30 (ADR 0544) that is a MACHINE guarantee, not a convention: the
+    // shared engine is constructed in `RecognitionMode.free`
+    // (`liveRecognitionModeProvider`), and `ExpectedChordHint.forMode`
+    // returns `null` for that regime, so a label handed to
+    // `setExpectedChord` cannot reach the decoder at all. This explicit
+    // clear is kept as the belt to that braces (r146): it costs nothing, it
+    // is the ONLY `setExpectedChord` call this screen ever makes, and it
+    // always passes `null` — pinned by
+    // `test/features/live/screens/live_stage_mode_test.dart`.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) ref.read(strumEngineProvider).setExpectedChord(null);
+      if (!mounted) return;
+      ref.read(strumEngineProvider).setExpectedChord(null);
+      // Opening Live IS the user intent to listen, so this is where the
+      // system dialog may be shown — once per app run, and never as a side
+      // effect of a rebuild (L6). Reading `micPermissionProvider` itself only
+      // ever checks.
+      unawaited(ref.read(micPermissionProvider.notifier).requestOnce());
     });
   }
 
   /// Backgrounded: release the screen wakelock and show the session as paused.
   /// The microphone itself is stopped by the AudioLifecycleGuard — resuming
   /// must NOT restart it behind the user's back (§9.4).
+  ///
+  /// Resumed: re-read the microphone permission (L5). The banner's "Open
+  /// settings" leaves the app, so a grant made there lands while we are
+  /// backgrounded — without this re-read the screen went on claiming there is
+  /// no microphone until the app was restarted. The read is a CHECK: it never
+  /// shows a dialog and never restarts the mic.
   void _onAppLifecycle(AppLifecycleState state) {
-    if (!isBackgroundLifecycleState(state) || !mounted || _paused) return;
+    if (!mounted) return;
+    if (state == AppLifecycleState.resumed) {
+      unawaited(ref.read(micPermissionProvider.notifier).refresh());
+      return;
+    }
+    if (!isBackgroundLifecycleState(state) || _paused) return;
     unawaited(_wakelock.disable());
     setState(() {
       _frozen = ref.read(liveFrameProvider).asData?.value;
@@ -383,14 +411,33 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final timeline = ref.watch(chordTimelineProvider);
     // Capo: the detector hears concert pitch; show the fretted shape (−capo).
     final capo = ref.watch(capoProvider);
+    // The stage's PRODUCT mode (ADR 0550 D2) — derived from the on-screen
+    // target, so "guided" and "there is a target" can never disagree.
+    final stageMode = ref.watch(liveStageModeProvider);
+    final guidedTarget = ref.watch(liveGuidedTargetProvider);
     // Discrete beat index off the engine clock — a new value fires ONE finite
     // hero pulse (see ChordTimeline.beat). No free-running metronome, so widget
     // tests still settle. Guards keep it 0 (disabled) when there's no clock/BPM.
-    final beat = (frame.bpm > 0 && frame.engineTimeSec >= 0)
+    final beat = (frame.hasMeasuredTempo && frame.engineTimeSec >= 0)
         ? (frame.engineTimeSec * frame.bpm / 60).floor()
         : 0;
 
-    final micGranted = ref.watch(micPermissionProvider).asData?.value ?? true;
+    // Fail-closed (L7): ONLY a confirmed grant counts. A read that is still
+    // in flight or came back as an error is "not granted" — the previous
+    // `?? true` turned every unknown into consent and rendered a screen that
+    // claimed to be listening on a microphone it had never been given.
+    //
+    // But "not granted" is TWO states, not one (audit F1). The permission is
+    // an `AsyncNotifier` whose first frame is `AsyncLoading`, so treating the
+    // in-flight read like a measured denial flashed the settings banner on
+    // every Live mount — and in a test that pumps a single frame it never
+    // went away. While the answer is unknown the screen says nothing at all:
+    // no banner, no "Starting…", no "play a chord" invitation — only the
+    // level meter, which honestly reads `listening: false`. Actions stay
+    // fail-closed (the transport below is disabled until the grant lands).
+    final micPermission = ref.watch(micPermissionProvider);
+    final micGranted = micPermission.value?.isGranted ?? false;
+    final micUnknown = !micPermission.hasValue && !micPermission.hasError;
     // The mic failed to start (busy / platform error) — surface it, never a
     // silent no-op. Not shown while paused (the engine is intentionally off).
     final micError = liveAsync.hasError && !_paused;
@@ -410,6 +457,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         frame.listening &&
         frame.current != null &&
         announcedChord != null &&
+        _decisionClaimsChord(frame.chordDecision) &&
         frame.engineTimeSec >= 0) {
       final micros = (frame.engineTimeSec * 1e6).round();
       _liveRegion.report(
@@ -420,7 +468,11 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
 
     // ---- Derived Stage state (§0.0/R8 — LiveFrame carries no state enum;
     // every state below is derived from a measured input). ----
-    final isLoading = !_paused && liveAsync.isLoading;
+    // "Starting…" is only true while a mic we are ALLOWED to open is coming
+    // up. Without the permission nothing is starting, and showing both that
+    // and the permission banner told the user two contradictory things at
+    // once.
+    final isLoading = !_paused && liveAsync.isLoading && micGranted;
     // The heuristic weak-signal warning is the "no decision" fallback (ADR
     // 0520 D5): once the merged recognizer HAS a reject reason, the banner
     // below is the one place that states why, and this generic warning steps
@@ -430,7 +482,14 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         frame.listening &&
         frame.chordRejectReason == null &&
         frame.inputLevel < SsSignalQualityIndicator.defaultWeakThreshold;
-    final hasChord = frame.current != null;
+    // ADR 0550 D1: a chord reaches the DETECTION hero only under a decision
+    // that actually claims one. `LivePipeline` already only fills `current`
+    // on a `confirmed` verdict (`showChord == chordLatched && hasMatch`), so
+    // on today's production path this changes nothing — it turns that
+    // producer-side coincidence into a screen-side machine guard that also
+    // holds for the stabilizer, the adapter and any future producer.
+    final claimsChord = _decisionClaimsChord(frame.chordDecision);
+    final hasChord = frame.current != null && claimsChord;
 
     // The transport only distinguishes disabled/finishing/paused/active — a
     // session autostarts on mount (no `countIn`, no separate "not yet
@@ -448,7 +507,11 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         ? SsSessionTransportStatus.paused
         : SsSessionTransportStatus.active;
 
-    final latestStrum = frame.latestStrum;
+    // `displayStrum`, not `latestStrum`: an indicator EXPIRES without a fresh
+    // detection (E14 audit L11) and is never shown next to a stated "the
+    // signal is unusable" — a stale ↑ under a "too quiet" banner is a
+    // confident claim the engine is not making (AGENTS.md §5).
+    final latestStrum = frame.displayStrum;
     // The hero shows the STABILIZED label (the timeline's newest card — only
     // a label that survived the RecognitionStabilizer's agreement window
     // ever becomes a card), not the raw per-frame decision: a one-or-two
@@ -460,8 +523,12 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final chordLabel = hasChord
         ? (stableChord ?? frame.current!).transposed(-capo).label
         : null;
-    final confColor = AppColors.confidence(frame.confidence, brightness);
-    final confTier = AppColors.confidenceTier(frame.confidence);
+    // The confidence tier belongs to the strum that is actually ON SCREEN:
+    // once the indicator expires there is no direction left to colour, so
+    // the figure falls to 0 instead of standing on a stale detection.
+    final shownConfidence = latestStrum?.confidence ?? 0;
+    final confColor = AppColors.confidence(shownConfidence, brightness);
+    final confTier = AppColors.confidenceTier(shownConfidence);
 
     return SsStageScaffold(
       // Live is free-play with no session artifact to save — no unsaved-data
@@ -498,8 +565,13 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                 ),
               ),
             ),
-          if (!micGranted) const MicPermissionBanner(),
-          if (micGranted && micError)
+          // Only a RESOLVED "not granted" earns the banner — see `micUnknown`
+          // above.
+          if (!micGranted && !micUnknown) const MicPermissionBanner(),
+          // Shown REGARDLESS of the permission read: gating it on `micGranted`
+          // meant that whenever the permission was (wrongly) read as missing,
+          // the one message explaining why the engine is dead disappeared too.
+          if (micError)
             MicErrorBanner(onRetry: () => ref.invalidate(liveFrameProvider)),
         ],
       ),
@@ -570,22 +642,61 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                 ),
               ),
             ),
-      feedback: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SsLiveRegionAnnouncer(controller: _liveRegion),
-          SsSignalQualityIndicator(
-            level: frame.inputLevel,
-            listening: !_paused && frame.listening,
-            activeColor: AppColors.primary,
-            trackColor: palette.track,
-            warningColor: AppColors.danger,
-            levelSemanticLabel: l10n.liveInputLevel,
-            weakLabel: isWeakSignal ? l10n.liveWeakSignal : null,
-          ),
-          if (frame.chordRejectReason != null)
-            UncertaintyReasonBanner(reason: frame.chordRejectReason!),
-        ],
+      feedback: Padding(
+        padding: const EdgeInsets.symmetric(vertical: SsSpacing.space4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SsLiveRegionAnnouncer(controller: _liveRegion),
+            SsSignalQualityIndicator(
+              level: frame.inputLevel,
+              listening: !_paused && frame.listening,
+              activeColor: AppColors.primary,
+              trackColor: palette.track,
+              warningColor: AppColors.danger,
+              levelSemanticLabel: l10n.liveInputLevel,
+              weakLabel: isWeakSignal ? l10n.liveWeakSignal : null,
+            ),
+            // The stage's mode and — in Guided only — the target. The target
+            // lives HERE, in the feedback slot, never in `hero`: the hero is
+            // the detection slot, and a target rendered there would read as a
+            // recognition result (ADR 0550 D3).
+            //
+            // A `Column` of centred rows rather than a `Wrap`: `Wrap` hands
+            // its children UNBOUNDED main-axis constraints, under which the
+            // chips' `Flexible` text would throw instead of shrinking — and
+            // the whole point of these rows is that they survive 360 px and
+            // textScale 2.0. `Align` passes bounded, loose constraints, so
+            // each pill keeps its intrinsic size until it has to shrink.
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Align(child: _StageModeChip(mode: stageMode)),
+                  if (guidedTarget != null) ...[
+                    const SizedBox(height: 6),
+                    Align(child: GuidedTargetCard(chordLabel: guidedTarget)),
+                  ],
+                  // The recognizer's own decision state, whenever a producer
+                  // supplies one. An absent decision is not a state, so the
+                  // chip is simply not rendered for it.
+                  if (frame.chordDecision != null) ...[
+                    const SizedBox(height: 6),
+                    Align(
+                      child: RecognitionStateChip(
+                        decision: frame.chordDecision!,
+                        chordLabel: frame.current?.transposed(-capo).label,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (frame.chordRejectReason != null)
+              UncertaintyReasonBanner(reason: frame.chordRejectReason!),
+          ],
+        ),
       ),
       timeline: Column(
         mainAxisSize: MainAxisSize.min,
@@ -600,12 +711,15 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
             // hero — and no confidence figure — while the frame says
             // nothing is sounding, in step with the Stage hero above.
             hasCurrent: hasChord,
+            idlePromptEnabled: micGranted && !micError,
           ),
           if (frame.bar.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 10),
+              // `displayBar`: the grid keeps its "1 & 2 &" labels, but the
+              // strum marks expire with the arrow above (L11).
               child: BeatCounter(
-                bar: frame.bar,
+                bar: frame.displayBar,
                 activeIndex: _activeSlot(frame),
               ),
             ),
@@ -640,13 +754,84 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     );
   }
 
+  /// Whether [decision] lets the stage present a chord as RECOGNISED
+  /// (ADR 0550 D1). Exhaustive, no `default`: a seventh decision state is a
+  /// compile error here rather than a silent "yes".
+  ///
+  /// `null` — a producer that supplies no typed decision at all (mocks, the
+  /// onboarding first-win engine, the `LiveFrameAdapter` boundary) — keeps
+  /// the pre-E14-R37 behaviour: those producers gate the chord themselves and
+  /// this round does not invent a verdict for them.
+  static bool _decisionClaimsChord(RecognitionDecision? decision) =>
+      switch (decision) {
+        RecognitionDecision.confirmed => true,
+        RecognitionDecision.candidate ||
+        RecognitionDecision.provisional ||
+        RecognitionDecision.uncertain ||
+        RecognitionDecision.rejected ||
+        RecognitionDecision.expired => false,
+        null => true,
+      };
+
   int? _activeSlot(LiveFrame frame) {
-    final latest = frame.latestStrum;
+    final latest = frame.displayStrum;
     if (latest == null) return null;
     for (var i = frame.bar.length - 1; i >= 0; i--) {
       if (identical(frame.bar[i].strum, latest)) return i;
     }
     return null;
+  }
+}
+
+/// Names the stage's product mode in words (ADR 0550 D2). Free play and
+/// Guided are told apart by TEXT plus an icon, never by colour alone — the
+/// E14-R39 audit measured the confidence tokens as a single grey under full
+/// colour loss, so a hue-only mode cue would be no cue at all.
+class _StageModeChip extends StatelessWidget {
+  const _StageModeChip({required this.mode});
+
+  final LiveStageMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final palette = context.palette;
+    final (label, icon) = switch (mode) {
+      LiveStageMode.freePlay => (l10n.liveModeFreePlay, Icons.graphic_eq),
+      LiveStageMode.guided => (l10n.liveModeGuided, Icons.flag_outlined),
+    };
+    return Semantics(
+      label: label,
+      excludeSemantics: true,
+      child: Container(
+        key: ValueKey('live-stage-mode-${mode.name}'),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: palette.surface,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: palette.border, width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: palette.muted),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.4,
+                  color: palette.ink,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

@@ -8,6 +8,7 @@ import 'package:strumsight/features/learn/providers/chord_audition_provider.dart
 import 'package:strumsight/features/share/widgets/strum_card.dart';
 import 'package:strumsight/features/songs/model/song.dart';
 import 'package:strumsight/features/songs/providers/songs_provider.dart';
+import 'package:strumsight/features/songs/screens/song_builder_screen.dart';
 import 'package:strumsight/features/songs/screens/song_list_screen.dart';
 import 'package:strumsight/features/songs/widgets/strum_pattern_editor.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
@@ -55,6 +56,12 @@ Widget _app(Widget home, {List<Song>? seed}) => ProviderScope(
   ),
 );
 
+/// The explanatory sentence of the empty songbook (`songsEmpty`), reused
+/// verbatim by the U4 cell below.
+const _songsEmptySentence =
+    'Build your own song — pick chords, design a ↓/↑ strum pattern, then '
+    'play it. It scores just like a lesson.';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -64,6 +71,40 @@ void main() {
     expect(find.textContaining('Build your own song'), findsOneWidget);
   });
 
+  // Audit U4 — the empty songbook used to render its whole explanation in
+  // the loud 18px title slot, with the corner FAB as the only way out.
+  testWidgets(
+    'empty songbook: short title, one explanatory paragraph in body type, '
+    'and an inline button that opens the same builder as the FAB',
+    (tester) async {
+      await tester.pumpWidget(_app(const SongListScreen()));
+      await tester.pump();
+
+      // A one-line title, ABOVE the explanation.
+      final title = find.text('No songs yet');
+      expect(title, findsOneWidget);
+      expect(
+        tester.getTopLeft(title).dy,
+        lessThan(tester.getTopLeft(find.text(_songsEmptySentence)).dy),
+      );
+
+      // The explanation is body-sized and muted — no longer the title.
+      final body = tester.widget<Text>(find.text(_songsEmptySentence));
+      expect(body.style?.fontSize, 14);
+
+      // The inline action exists and goes where the FAB goes.
+      final action = find.byKey(const Key('songs-empty-create'));
+      expect(action, findsOneWidget);
+      expect(
+        find.descendant(of: action, matching: find.text('New song')),
+        findsOneWidget,
+      );
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+      expect(find.byType(SongBuilderScreen), findsOneWidget);
+    },
+  );
+
   testWidgets('create a song end-to-end: name → chord → save → appears', (
     tester,
   ) async {
@@ -71,11 +112,16 @@ void main() {
     await tester.pump();
 
     // Open the builder.
-    await tester.tap(find.text('New song'));
+    // Audit U4: the EMPTY songbook now also renders an inline "New song"
+    // action next to the FAB, so a bare `find.text` matches two widgets.
+    // The FAB is the affordance this cell has always used.
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'New song'));
     await tester.pumpAndSettle();
 
-    // Name it.
-    await tester.enterText(find.byType(TextField), 'Test Song');
+    // Name it. `.first` — the builder now also carries the add-chord
+    // filter field below (audit U5), so `byType(TextField)` is no longer
+    // unique; the name field is the first one in the list.
+    await tester.enterText(find.byType(TextField).first, 'Test Song');
     await tester.pump();
 
     // Add the first available chord.
@@ -100,9 +146,13 @@ void main() {
     // Round 116 — author a waltz, not just play the curriculum's.
     await tester.pumpWidget(_app(const SongListScreen()));
     await tester.pump();
-    await tester.tap(find.text('New song'));
+    // Audit U4: the EMPTY songbook now also renders an inline "New song"
+    // action next to the FAB, so a bare `find.text` matches two widgets.
+    // The FAB is the affordance this cell has always used.
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'New song'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'Waltz Draft');
+    // `.first` — the name field; the add-chord filter (audit U5) is second.
+    await tester.enterText(find.byType(TextField).first, 'Waltz Draft');
     await tester.pump();
     final label = ChordShapes.allLabels.first;
     final chip = find.widgetWithText(ActionChip, label).first;
@@ -148,7 +198,10 @@ void main() {
   testWidgets('suggest-a-progression fills the chord list', (tester) async {
     await tester.pumpWidget(_app(const SongListScreen()));
     await tester.pump();
-    await tester.tap(find.text('New song'));
+    // Audit U4: the EMPTY songbook now also renders an inline "New song"
+    // action next to the FAB, so a bare `find.text` matches two widgets.
+    // The FAB is the affordance this cell has always used.
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'New song'));
     await tester.pumpAndSettle();
 
     // Open the suggestion sheet and pick the Pop progression (default key C).
@@ -189,7 +242,10 @@ void main() {
   testWidgets('a strum-pattern preset fills the editor', (tester) async {
     await tester.pumpWidget(_app(const SongListScreen()));
     await tester.pump();
-    await tester.tap(find.text('New song'));
+    // Audit U4: the EMPTY songbook now also renders an inline "New song"
+    // action next to the FAB, so a bare `find.text` matches two widgets.
+    // The FAB is the affordance this cell has always used.
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'New song'));
     await tester.pumpAndSettle();
 
     // The preset row + editor are below the fold — scroll them into view.

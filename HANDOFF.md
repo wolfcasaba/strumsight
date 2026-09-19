@@ -1,5 +1,32 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔀 INTEGRÁCIÓ 2026-09-19: az Epic 14 vonal (laptop-apk-debug-prompt-kys4oa) a mainbe
+
+A `claude/laptop-apk-debug-prompt-kys4oa` (Epic 14, R20–R42, 29 commit, merge-base
+`1ae9e55a`) az `integration/epic14` ágon a `main`-be merge-elve — 40 ütköző fájl,
+mind SZEMANTIKUSAN feloldva. Ez a NEGYEDIK (utolsó) beolvasztott vonal.
+Vezérelv változatlan: ahol mindkét vonal UGYANAZT kötötte be, a `main` marad;
+az Epic 14-ből minden olyan javítás átjön, amit a `main` NEM tartalmaz.
+
+| Terület | Döntés |
+|---|---|
+| `LiveFrame` onset-óra | a `main` `onsetSeq` + `latestOnsetTime` marad; az Epic 14 `onsetTimeSec` mezője UGYANAZ → elejtve, a fogyasztók (`RecognitionStabilizer._isOnsetAligned`, shadow-tesztek) átportolva |
+| `StrumAnalyzer` | `lastOnsetTimeSec` (main) marad, a settled-tier logikával együtt; `lastOnsetSec` (E14) elejtve |
+| `LivePipeline` | UNIÓ: main whitening-paraméterei + E14 `mode`/`shadowObserver`/`preprocessing`/`deviceProfile`/`calibration`; a preprocessed `input` bekötve; `setExpectedChord` a decoder felé `ExpectedChordHint.forMode` (ADR 0544), a shape-cue (ADR 0581) a NYERS címkén marad |
+| `RealStrumEngine` | UNIÓ: main `AppLogger` + E14 mode/preprocessing/deviceProfile/shadow-factory |
+| `ChordTimeline` / Live stage | UNIÓ: main `hasCurrent` (visszahúzódó hero) + E14 `idlePromptEnabled` (mikrofon-őszinte üres állapot) + E14 reduced-motion; a Live hero a main onset-first `StrumBurstOverlay` + `SsStrumStrings` változata marad, az E14 U6 hero-padding elejtve (a feedback-padding átjött) |
+| Live hero forrás | main stabilizált címkéje (ADR 0539) + E14 `displayStrum` lejárati kapuja (L11): a konfidencia a MEGJELENÍTETT leütéshez tartozik |
+| Today hub | main `SsStaggeredEntrance` szekció-listája marad; az E14 R36 tízperces lánc (lépésszámláló, lánc-CTA, start/leave) BEPORTOLVA a main szekcióiba |
+| Today CTA | main szabálya marad: ha a nap terve rungot nevez meg → `/curriculum`; rung nélkül → `practiceStartLocation` (E14 L1 javítás). Az E14 L1 cellák erre a rung-nélküli állapotra célozva |
+| Practice result | main A7-ajánlója (`recommendNextPractice`) marad; az E14 L3 „ugyanaz a drill, ugyanazok a beállítások" újraindítás beportolva a „Practice again" gombokra; E14 U11 (jutalom-nélküli szöveg) elejtve — a main a KÁRTYÁT nem rendereli, így nincs mit állítania |
+| Practice setup | E14 H14/U3 nyer: a pontozási profil lokalizált mondat `Flexible`-ben, nem nyers id 60 %-os sapkával |
+| Practice session | UNIÓ: main strum-feedback listener + E14 L4 auto-start, L9 Finish/Exit hierarchia |
+| Song builder | UNIÓ: main PopScope + akkord-audition + E14 U5 szűrhető, minőség szerint csoportosított akkordválasztó |
+| Profile hub | main nyer teljesen: az E14 `onOpenCommunity`/`_CommunityAction` premisszája („nincs Community route") a mainen már HAMIS; az E14 U12/U13 cellák a main WP-D belépési pontjaival ütköznek |
+| Community bookmarks | main nyer: az E14 verzió régebbi állapot (inline osztályok, `_l10n*` konstansok), és a lokalizált címke `BookmarkRow.title`-t kér, ami a main entitásán nincs; az E14 teszt-fájl törölve |
+| `lab_build.json` | E14 H6 nyer a titok-részre: a diagnosztikai token ÜRES (AGENTS.md §5); a main flag-készlete, API-URL-je és build-tagje marad. A `lab-apk.yml` MÉG NEM injektál titkot — a Lab-diagnosztika addig ki van kapcsolva, és a korábban commitolt token cserélendő |
+| Migrációs lánc | 23 lépés, baseline 23 — az Epic 14 nem hozott saját migrációt |
+
 ## 🔀 INTEGRÁCIÓ 2026-09-19: az audit-javító vonal (e17-r15) a mainbe
 
 A `claude/e17-r15-bekotes-audit-fix` (JAVÍTÓ SÁV 2, 115 commit, 36 kör) a
@@ -2780,6 +2807,106 @@ effect-listener, tervező preview/change-review `extra` nélkül, a 3 elérhetet
 képernyő (`setlist_session`, `practice_plan_preview`, `SetlistListScreenV2`),
 community media (R-SEC-01/R-PRIV-01). A **végső mérce a valós-gitár APK-teszt**
 — a merge a felhasználó visszajelzése után.
+
+## 🎯 EPIC 14 BEFEJEZŐ HULLÁM — R20–R42 a kódoldalon (37/42 `done`, 5 `hold`) — branch `claude/laptop-apk-debug-prompt-kys4oa` (2026-09-09)
+
+A Chapter 14 nyitott 23 köre hat párhuzamos Opus-csomagban (PKG-A…F + A2)
+készült, **remote konténerben, Dart/Flutter SDK nélkül** — semmi nem fordult
+le lokálisan, a bizonyíték az egyetlen záró CI-futás. Terv és státusz körönként:
+`docs/rounds/epic-14-completion-plan.md`; ADR 0536–0552; briefek
+`docs/rounds/e14-r20…r42-*.md`; a §7 kapuk mért állapota
+`docs/release/ch14-production-gate.md` (**NOT PASSING** — a kapuk nem mértek zöldre,
+csak a mechanizmusok készültek el).
+
+**Kódként megvalósult (mechanizmus, mérés nélkül, ahol jelezve):**
+- R30 mód-izoláció (`RecognitionMode`, az expected-chord prior additív torzításból
+  tie-break, free módban strukturálisan nem alkalmazható — ADR 0544) · R28
+  onset-igazított akkordváltás + H3 latch-diagnosztika (ADR 0545) · R31
+  jelminőség-tudatos előfeldolgozó seam + `DeviceAudioProfile`, zászlóval zárva (ADR 0552).
+- R21/R32 modell-kötött kalibrációs artefaktum + szelektív predikció + open-set döntés
+  (identitás alapértékkel, in-sample knot-ok tiltva — ADR 0536, 0540) · R25 korpusz-manifest
+  + szintetikus generátor (ADR 0538) · R27 NNLS vs CRNN harness (döntés: NEEDS-MEASUREMENT — ADR 0539)
+  · R24/R33 kapu-fokozatok + rollout-clamp (ADR 0537, 0541).
+- R23 strum shadow-mód (kimenet-tap, nem modell-A-vs-B — ADR 0548) · R26 Chord CRNN
+  élő shadow-runner Lab-ból (ADR 0549) · zászlók `off` minden környezetben.
+- R36 tízperces gyakorlás-lánc (ADR 0546) · R37 Live Stage V2 döntésállapotok + mód-chip
+  (ADR 0550) · R38 akkord-evidencia: a bizonytalan akkord SOHA nem büntet (ADR 0551) ·
+  R39 audit (ADR 0547: világos téma outdoor-kontraszt 2,40:1 — lelet, nem javítva) ·
+  R41 opt-in béta-telemetria + privacy-kapu (ADR 0542) · R42 production gate + traceability (ADR 0543).
+
+**Hold (itt nem hozható):** R20 tanítás grouped holdouttal (§7.1 korpusz nem létezik),
+R22 distillation (nincs R20-modell), R29 root+quality modell-spike (GPU/adat), R35
+`adaptiveShellEnabled` GA-kapcsolás (emberi döntés), R40 field study (emberek).
+
+**Ismert CI-piros, amit csak a box old:** golden PNG-k — a korábbi 12 golden-fájl
+plusz `e13_r17` (today hub), `e13_r18` (live mód-chip), `e13_r35` (privacy center):
+`tools/golden-x86.sh record test/ui/goldens/e13_r{17,18,19,20,21,22,23,24,25,30,33,35}_*_test.dart`.
+
+
+## 🔧 AUDIT-JAVÍTÓ KÖRÖK — E17-R15 (H4, ADR 0535) + 2. és 3. hullám (H1–H23, L1/L3–L12, U1–U13) — branch `claude/laptop-apk-debug-prompt-kys4oa` (2026-09-08)
+
+A 2026-09-08-i emulátoros hibaaudit (24 hiba + 12 logikai + 15 UI javaslat, APK
+`1.0.0-1-3102673`, CI run 34244853752) javítása három hullámban, párhuzamos
+Opus-agentekkel, **remote konténerben — Flutter/Dart SDK NÉLKÜL**: egyetlen
+sor sem fordult le lokálisan, két csak-olvasó reviewer (R, R2) fésülte át a
+diffet, a bizonyíték a CI. Kör-brief: `docs/rounds/e17-r15-live-signal-quality-reasons.md`,
+agent-jelentések a session scratchpadjában (nem a repóban).
+
+- **E17-R15 / H4 (`5ad7050`, ADR [0535](docs/adr/0535-live-signal-quality-reject-reasons-split.md)):**
+  a `RecognitionRejectReason.signalQuality` gyűjtő helyett HAT tipizált ok
+  (`signalTooQuiet … signalUnstable`), kimerítő `switch` a motorban, hat saját
+  EN/HU tanács; gépi őr: túl hangos/clipping SOHA nem mond „közelebb"-et.
+- **2. hullám (`8babd9a`, 78 fájl):** engedély-lánc (H1, H7, H8, H11, H12, H13 —
+  `MicPermissionController`, check/request szétválasztva, fail-closed, resume-frissítés),
+  Live őszinteség (H9, H10, H19), gyakorlás-életciklus (H2, H14, H16, L3, L4),
+  navigáció/UI (H5, H15, H17, H18, H22, H23), audio-hiba kimondása (H20, L12),
+  `.value!` őrzés (H21), diag-token kivezetése (H6 — **a token visszavonása és a
+  `STRUMSIGHT_DIAG_TOKEN` repo-secret + `lab-apk.yml` injektálás a felhasználóé**).
+- **3. hullám (`5683437`, 39 fájl):** L1, L8, L9, U1–U13 (U2 nem reprodukálódott,
+  csak őr-teszt; U13-nak nem volt mit törölnie; U15 szándékos tulajdonnév, nem változott).
+- **NEM javítva (mérés kell, ADR 0053/AGENTS §9):** **H3 / L2** — a P agent
+  diagnózisa: a jel-minőség-kapu csak CÍMKÉZ, a latch (`_chordConfEma` ≥ 0.54)
+  nem húz be; három jelölt (EMA nem ér fel az ütések között · a `margin`-tag
+  ~0.5·winSim-re fojtja a konfidenciát KS-jelen · N.C.-padló nyer). Mérendő
+  laptopon: `chordConfidence`, `debugChordConfEma`, `debugTonalness`,
+  `signalQuality.state` chord-frame-enként (`test/tools/real_audio_probe_test.dart`).
+
+**Ismert piros a CI-ban, amit csak a box tud feloldani:** a `a36d5f8` CI-futás
+(run 34297344123) **32 piros cellája golden-PNG eltérés** — a fenti hullámok
+minden érintett képernyőt átrajzoltak. A korábbi 7 fájlos lista (`e13_r17/18/19/
+21/22/23/35`) **hiányos volt**: a megváltozott képernyők/widgetek → golden-fájl
+leképezés (mért, importokból) TIZENKÉT fájlt ad:
+
+| golden fájl | átrajzolt cella(k) | mi változott |
+|---|---|---|
+| `e13_r17` | today hub, practice area hub, profile hub | mind a három képernyő |
+| `e13_r18` | live stage | `live_screen` + `chord_timeline`/`live_status_bar`/`uncertainty_reason_banner`/`MicPermissionBanner` |
+| `e13_r19` | tuner, metronome | `tuner_screen`, `metronome_screen` |
+| `e13_r20` | chord library | `AudioOutputErrorNotice` beszúrása |
+| `e13_r21` | practice setup, session running, session paused | `practice_setup_screen`, `practice_session_screen`, `practice_controls`, `practice_hud` |
+| `e13_r22` | practice result | `practice_result_screen` |
+| `e13_r23` | song library, setlist list v2 | `song_capability_badges`, `setlist_item_availability_badge` (U9 success-token) |
+| `e13_r24` | song editor | `song_editor_screen` |
+| `e13_r25` | song trainer stage | `transport_controls` |
+| `e13_r30` | vision setup | `vision_setup_screen` |
+| `e13_r33` | community gate, bookmarks | `community_gate_screen` (H22 app-bar), `bookmarks_screen` |
+| `e13_r35` | settings | `settings_screen` |
+
+Újrafelvétel (a `record` mód a fenti tizenkét fájlra, majd a PNG-k commitja):
+`tools/golden-x86.sh record test/ui/goldens/e13_r{17,18,19,20,21,22,23,24,25,30,33,35}_*_test.dart`.
+**Forrás-szkennelő (pure-Dart) őr NEM piros:** a `test/tooling/**`, `test/l10n/**`,
+`test/app/**`, `test/accessibility/**` fixture- és forrás-őrök teljes szimulációja
+zöld a `a36d5f8` fán (ARB-szegmens unió + sorrend, en/hu paritás, magyar
+plural-nyelvtan, route-literál, design-system barrel, cross-feature import,
+képernyő-leltár (96), `Colors.green` (U9), `shared_preferences`, `Dio(`,
+diagnosztika-tárolás, örökölt azonosítók, known-exceptions ↔ teszt-tolerancia
+tükör) — golden-újrafelvétel után nem marad rejtett őr-piros.
+Laptopos APK a goldenektől függetlenül: `lab-apk.yml` dispatch (kapuk nélkül,
+`lab_build.json` üres tokennel = diagnosztika kikapcsolva).
+
+**Következő kör:** a golden-újrafelvétel + CI zöldre vitele ezen a branch-en, aztán
+H3 mérési kör valós gitárral.
+
 
 ## ✅ E17-R01 KÉSZ — az onboarding First-Win állomása a szállított kompozícióban, VALÓS konfidencia-forrással — PR [#600](https://github.com/wolfcasaba/strumsight/pull/600), squash `c455e8ae` (2026-09-05)
 

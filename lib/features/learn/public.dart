@@ -30,3 +30,10 @@ export 'audio/metronome.dart';
 // that can play the click must also be able to honour the learner's choice
 // about hearing it (E18-R17).
 export 'providers/metronome_pref_provider.dart';
+
+/// The typed audio-output failure those players publish, the injectable
+/// player seam behind them, and the inline notice that makes a mute output
+/// visible on the consuming screens (audit H20 / L12).
+export 'audio/audio_playback_error.dart';
+export 'audio/clip_player.dart';
+export 'widgets/audio_error_notice.dart';

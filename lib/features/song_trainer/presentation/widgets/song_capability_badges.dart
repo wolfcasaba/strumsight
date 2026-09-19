@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/repositories/song_repository.dart';
 
@@ -14,6 +15,9 @@ final class SongCapabilityBadges extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final capability = summary.capability;
     if (capability == null) return const SizedBox.shrink();
+    // The "available" badges use the brand's success token, contrast-tuned
+    // for the current theme, instead of a raw Material green (audit U9).
+    final available = AppColors.successOn(Theme.of(context).brightness);
     return Wrap(
       spacing: 4,
       children: <Widget>[
@@ -24,7 +28,7 @@ final class SongCapabilityBadges extends StatelessWidget {
           label: capability.canTrain
               ? l10n.songCapabilityTrainerAvailable
               : l10n.songCapabilityTrainerUnavailable,
-          color: capability.canTrain ? Colors.green : Colors.orange,
+          color: capability.canTrain ? available : Colors.orange,
         ),
         _Badge(
           icon: capability.canExport
@@ -33,7 +37,7 @@ final class SongCapabilityBadges extends StatelessWidget {
           label: capability.canExport
               ? l10n.songCapabilityExportAvailable
               : l10n.songCapabilityExportUnavailable,
-          color: capability.canExport ? Colors.green : Colors.orange,
+          color: capability.canExport ? available : Colors.orange,
         ),
         if (!capability.canPersist)
           _Badge(

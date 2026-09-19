@@ -151,3 +151,62 @@ same sample clock as `latestStrumTime`) lets `_onFrame` hand the scorer
 `elapsed − (emit − attack)` — the jitter cancels exactly on the engine clock;
 only transport (~ms) and the mic constant (calibration) remain. Guards:
 lag ∈ (0, 0.5 s), clockless producers (−1, mocks) skip correction.
+
+---
+
+## AS-BUILT — E14-R23: what the strum SHADOW band actually compares (ADR 0548)
+
+Written 2026-09-09. This section exists because "shadow mode" is easy to read
+as more than it is, and the seam that carries it decides the answer.
+
+**The seam is an OUTPUT tap.** `RecognitionShadowObserver.onRecognitionFrame`
+receives the emitted `LiveFrame`, the production `ChordPrediction` and the
+last `StrumPrediction`. It receives **no features** — no log-mel window, no
+CQT frame. The E14 plan (§4, R23) also forbids a second FFT on the live path.
+Consequently the shipped shadow band compares:
+
+- **CANDIDATE** = the model's own verdict for the onset: `argmax(pDown, pUp,
+  pNoStrum)` from `StrumPrediction`, with the contract's own abstention rule
+  (`decision == uncertain`, i.e. `|pDown − pUp| <= 0.05`) applied;
+- **PRODUCTION** = what the pipeline PUBLISHED for that onset —
+  `frame.latestStrum` on the frame where `LiveFrame.strumSeq` advances.
+
+So the number it produces is **raw model verdict vs. shipped output**: how
+often the direction gate (ADR 0512), the learned no-strum suppression (r175)
+and the ~15 Hz emit cadence change the answer the network gave. Running a
+DIFFERENT candidate network on the same features needs a FEATURE tap in
+`live_pipeline.dart`; that does not exist on the tree, and no number here
+should be read as if it did.
+
+**Counting rules that keep the report honest** (all pinned by tests):
+
+| Situation | Recorded as |
+|---|---|
+| No `StrumPrediction` at all (heuristic ladder running) | `candidateUnavailableFrames` — NOT an abstention |
+| `pNoStrum` wins, or margin ≤ 0.05 | candidate abstained |
+| `strumSeq` did not advance | production abstained |
+| Both committed | agreed / disagreed |
+| Nothing compared | `agreementRate == null` — never 0.0, never 1.0 |
+
+A verdict held across several emitted frames is de-duplicated by object
+identity, so one strum counts once.
+
+**Bounds.** Recent comparisons live in a fixed-capacity drop-oldest ring
+(`ShadowRingBuffer`, default 128 ≈ 8 s at the emit cadence), the latency
+histogram is one `Int32List`, and the chord confusion matrix is one 26×26
+`Int32List`. Everything is allocated in the recorder's constructor: a
+ten-minute session retains exactly as many sample objects as the first eight
+seconds, and the ring reports how many older samples it dropped so a reader
+cannot mistake the window for the session. Latency bins (20/50/100/200 ms)
+are REPORTING bins — no recognition threshold reads them.
+
+**Gate.** `recognitionShadowModeEnabled && strumModelRolloutStage
+.runsInference` (ADR 0542 D2), evaluated only in
+`RecognitionShadowGate.fromFlags`. Closed → no pipeline is constructed, no
+weights are parsed, no CQT frame is computed. Both halves are `off`/`false`
+in every shipped environment.
+
+**Not measured:** device p50/p95, peak memory, thermal behaviour over a real
+ten-minute session; and whether the disagreements the report surfaces are
+musically right or wrong (that needs an annotated corpus). The final
+acceptance predicate is unchanged: the user's real-guitar APK test.

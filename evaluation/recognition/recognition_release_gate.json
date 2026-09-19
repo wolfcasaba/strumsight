@@ -5,52 +5,178 @@
     {
       "metricPath": "overall.acceptedAccuracy.value",
       "threshold": 0.9,
+      "stage": "alpha",
+      "band": "shared",
+      "enabled": true,
       "label": "Accepted accuracy (event-kind-agnostic; stands in for SDD Ch14 §7.2 \"accepted direction accuracy\" per ADR 0511 R6 — acceptedAccuracy is not restricted to direction events)"
     },
     {
       "metricPath": "overall.chordMacroF1.value",
       "threshold": 0.7,
+      "stage": "alpha",
+      "band": "chord",
+      "enabled": true,
       "label": "Chord macro-F1 (SDD Ch14 §7.4)"
     },
     {
       "metricPath": "overall.chordNoChordF1.f1",
       "threshold": 0.88,
+      "stage": "alpha",
+      "band": "chord",
+      "enabled": true,
       "label": "N.C./unknown F1 (SDD Ch14 §7.4)"
     },
     {
       "metricPath": "overall.chordWeightedAccuracy.value",
       "threshold": 0.8,
+      "stage": "alpha",
+      "band": "chord",
+      "enabled": true,
       "label": "Chord weighted accuracy (SDD Ch14 §7.4)"
     },
     {
       "metricPath": "overall.coverage.value",
       "threshold": 0.7,
+      "stage": "alpha",
+      "band": "shared",
+      "enabled": true,
       "label": "Coverage alongside accepted accuracy (SDD Ch14 §7.2)"
     },
     {
       "metricPath": "overall.directionF1.value",
       "threshold": 0.8,
+      "stage": "alpha",
+      "band": "strum",
+      "enabled": true,
       "label": "End-to-end direction macro-F1 (SDD Ch14 §7.2)"
     },
     {
       "metricPath": "overall.falseVisibleEventsPerMinute.value",
       "threshold": 2.0,
+      "stage": "alpha",
+      "band": "shared",
+      "enabled": true,
       "label": "False visible event rate, event-kind-agnostic (SDD Ch14 §7.2 \"false visible arrow hard-negative\")"
     },
     {
       "metricPath": "overall.latencyP50Ms.value",
       "threshold": 180.0,
+      "stage": "alpha",
+      "band": "shared",
+      "enabled": true,
       "label": "Verdict latency p50 (SDD Ch14 §7.2)"
     },
     {
       "metricPath": "overall.latencyP95Ms.value",
       "threshold": 280.0,
+      "stage": "alpha",
+      "band": "shared",
+      "enabled": true,
       "label": "Verdict latency p95 (SDD Ch14 §7.2)"
     },
     {
       "metricPath": "overall.onsetTolerance50Ms.f1",
       "threshold": 0.82,
+      "stage": "alpha",
+      "band": "strum",
+      "enabled": true,
       "label": "Onset F1 @50 ms (SDD Ch14 §7.2)"
+    },
+    {
+      "metricPath": "overall.acceptedAccuracy.value",
+      "threshold": 0.93,
+      "stage": "beta",
+      "band": "shared",
+      "enabled": false,
+      "label": "BETA TARGET, DISABLED (informational): accepted direction accuracy (SDD Ch14 §7.3). Enabling it requires the §7.1 corpus, which does not exist yet — see docs/eval/release-gate-stages.md."
+    },
+    {
+      "metricPath": "overall.coverage.value",
+      "threshold": 0.8,
+      "stage": "beta",
+      "band": "shared",
+      "enabled": false,
+      "label": "BETA TARGET, DISABLED (informational): coverage (SDD Ch14 §7.3)."
+    },
+    {
+      "metricPath": "overall.latencyP95Ms.value",
+      "threshold": 250.0,
+      "stage": "beta",
+      "band": "shared",
+      "enabled": false,
+      "label": "BETA TARGET, DISABLED (informational): verdict latency p95 (SDD Ch14 §7.3)."
+    },
+    {
+      "metricPath": "overall.onsetTolerance50Ms.f1",
+      "threshold": 0.87,
+      "stage": "beta",
+      "band": "strum",
+      "enabled": false,
+      "label": "BETA TARGET, DISABLED (informational): onset F1 @50 ms (SDD Ch14 §7.3)."
+    },
+    {
+      "metricPath": "overall.directionF1.perLabel.down.f1",
+      "threshold": 0.88,
+      "stage": "beta",
+      "band": "strum",
+      "enabled": false,
+      "label": "BETA TARGET, DISABLED (informational): Down F1 (SDD Ch14 §7.3). Read off the same per-label block the direction macro-F1 averages — no new measurement."
+    },
+    {
+      "metricPath": "overall.directionF1.perLabel.up.f1",
+      "threshold": 0.84,
+      "stage": "beta",
+      "band": "strum",
+      "enabled": false,
+      "label": "BETA TARGET, DISABLED (informational): Up F1 (SDD Ch14 §7.3)."
+    },
+    {
+      "metricPath": "overall.falseVisibleDirectionEventsPerMinute.value",
+      "threshold": 1.0,
+      "stage": "beta",
+      "band": "strum",
+      "enabled": false,
+      "label": "BETA TARGET, DISABLED (informational): false visible ARROW rate on hard-negative audio (SDD Ch14 §7.3). Uses the direction-scoped rate (ADR 0521 D1), which is narrower than the Alpha row's event-kind-agnostic rate."
+    },
+    {
+      "metricPath": "overall.chordWeightedAccuracy.value",
+      "threshold": 0.86,
+      "stage": "beta",
+      "band": "chord",
+      "enabled": false,
+      "label": "BETA TARGET, DISABLED (informational): chord weighted accuracy (SDD Ch14 §7.5)."
+    },
+    {
+      "metricPath": "overall.chordMacroF1.value",
+      "threshold": 0.78,
+      "stage": "beta",
+      "band": "chord",
+      "enabled": false,
+      "label": "BETA TARGET, DISABLED (informational): chord macro-F1 (SDD Ch14 §7.5)."
+    },
+    {
+      "metricPath": "overall.chordNoChordF1.f1",
+      "threshold": 0.92,
+      "stage": "beta",
+      "band": "chord",
+      "enabled": false,
+      "label": "BETA TARGET, DISABLED (informational): N.C./unknown F1 (SDD Ch14 §7.5)."
+    },
+    {
+      "metricPath": "overall.chordMacroF1.weakestSupportedRecall",
+      "threshold": 0.65,
+      "stage": "beta",
+      "band": "chord",
+      "enabled": false,
+      "label": "BETA TARGET, DISABLED (informational): weakest supported chord recall (SDD Ch14 §7.5). Derived from the per-label chord block, excluding the reserved noChord/unknown labels."
+    },
+    {
+      "metricPath": "overall.falseVisibleChordEventsPerMinute.value",
+      "threshold": 1.0,
+      "stage": "beta",
+      "band": "chord",
+      "enabled": false,
+      "label": "BETA TARGET, DISABLED (informational): false CONFIDENT chord rate on hard-negative audio (SDD Ch14 §7.5), read as the chord-scoped false visible event rate (ADR 0521 D1)."
     }
   ]
 }
