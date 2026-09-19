@@ -394,6 +394,46 @@ A gate a `format` → `analyze` → `test <minden útvonal külön>` → `archit
    **mind a 7 cella ZÖLD** (`git diff --stat` ismét a fenti 26 soros
    diffre esett vissza).
 
+3. **Javító kör (E17-R02, review MAJOR-1) — `watch`→`read` próba, A2-n.**
+   A review mérte, hogy ha a processing route builderében a
+   `final state = ref.watch(analysisControllerProvider);` sort
+   `ref.read(...)`-re cserélem, a régi (7-cellás) A2 cella ZÖLD marad,
+   mert csak a képernyő TÍPUSÁT és a controller állapotát mérte a
+   `container`-ből, a képernyő TARTALMÁT nem. Javítás: az A2 cella
+   `cancel()` utáni szakasza három tartalom-szintű assertet kapott —
+   `analysis-processing-cancelled-title` és `analysis-processing-restart`
+   kulcsok MEGJELENÉSE, `analysis-processing-step` kulcs ELTŰNÉSE (ez
+   utóbbi csak az Analyzing törzsében létezik). Új l10n-kulcs NEM
+   született — mindhárom kulcs a meglévő `_CancelledBody`/`_AnalyzingBody`
+   widgetekből jön.
+
+   Az így bővített cellával megismételve a próbát:
+   `final state = ref.watch(...)` → `ref.read(...)`:
+   `flutter test test/features/audio_analysis/capture_wiring_test.dart`:
+   **A2 PIROS** —
+   ```
+   Expected: exactly one matching candidate
+     Actual: _KeyWidgetFinder:<Found 0 widgets with key
+     [<'analysis-processing-cancelled-title'>]: []>
+      Which: means none were found but one was expected
+   ...
+   00:03 +6 -1: Some tests failed.
+   Failing tests:
+     .../capture_wiring_test.dart: A2 — ... renders exactly that state
+   ```
+   (mellékhatásként A6 mindkét cellája is elbukott, mert a próba-route
+   megszakítja a `Consumer` build-láncot a processing route-on túl —
+   ugyanaz a torzítatlan mellékhatás, mint az A3 próbánál.)
+   Visszaállítva `ref.watch(...)`-ra → `flutter test
+   test/features/audio_analysis/capture_wiring_test.dart`: **mind a 7
+   cella ZÖLD**, és `git diff --stat lib/app/routing/app_router.dart`
+   pontosan az egy sornyi MINOR-1 (`unawaited`) változásra esett vissza.
+
+**MINOR-1 (review) — `onOpenAnalysis` eldobott Future.** `app_router.dart`
+`onOpenAnalysis` ága mostantól `unawaited(_openStoredAnalysis(context, ref,
+summary))`-t hív a puszta `_openStoredAnalysis(...)` helyett, konzisztensen
+a fájl többi (`onFinished`, `_startSongTrainerSession`) ágával.
+
 **A5/A7 bizonyíték:**
 
 ```

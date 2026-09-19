@@ -1102,7 +1102,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   );
                 },
                 onOpenAnalysis: (summary) =>
-                    _openStoredAnalysis(context, ref, summary),
+                    unawaited(_openStoredAnalysis(context, ref, summary)),
               );
             },
           ),

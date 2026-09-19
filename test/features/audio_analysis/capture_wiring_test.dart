@@ -392,6 +392,24 @@ void main() {
           harness.container.read(analysisControllerProvider),
           isA<AnalysisCancelled>(),
         );
+
+        // MAJOR-1 (review): a `ref.watch` -> `ref.read` regression in the
+        // processing route builder leaves the widget tree on whatever it
+        // last built (the Analyzing body) even after the controller flips
+        // to `AnalysisCancelled` — a plain `find.byType(AnalysisProcessingScreen)`
+        // check would stay green through that regression because the
+        // STATEFUL widget instance never gets swapped out. Asserting the
+        // Cancelled body's own content is in, and the Analyzing body's is
+        // out, is what turns red.
+        expect(
+          find.byKey(const Key('analysis-processing-cancelled-title')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('analysis-processing-restart')),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('analysis-processing-step')), findsNothing);
         expect(tester.takeException(), isNull);
       },
     );
