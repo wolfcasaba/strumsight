@@ -8,8 +8,10 @@
 // `AppTheme.dark()` — `song_library`/`song_overview` now use design-system
 // components whose `Theme.of(context).extension<SsColorScheme>()!` null-check
 // crashes under the bare legacy theme (`SsDarkTheme.data()` is additive-only,
-// `AppTheme.dark()` + design-system extensions, ADR 0466 D2 — pixel-identical
-// for `SetlistListScreenV2`, still unmigrated).
+// `AppTheme.dark()` + design-system extensions, ADR 0466 D2).
+//
+// E17-R03: `setlist list v2` moved pixels too — it is now design-system
+// migrated (ADR 0585 D5), no longer pixel-identical to its pre-round frame.
 //
 // Recorded on x86_64 (ADR 0426, §0.0/B/R14) via `tools/golden-x86.sh record`
 // — NOT `flutter test --update-goldens` on this (aarch64) box.
@@ -21,6 +23,7 @@ import 'package:strumsight/core/design_system/public.dart' show SsDarkTheme;
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/song_trainer/application/setlists/setlist_controller.dart';
 import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
+import 'package:strumsight/features/song_trainer/data/local/in_memory_song_repository.dart';
 import 'package:strumsight/features/song_trainer/domain/models/meter_map.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_document.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_id.dart';
@@ -322,6 +325,10 @@ void main() {
         SetlistListScreenV2(
           controller: controller,
           clock: () => DateTime.utc(2026, 8, 1),
+          // Golden pixels only — no session-start affordance is tapped.
+          songRepository: InMemorySongRepository(),
+          sessionLauncher: (_) async =>
+              throw UnimplementedError('not exercised by this golden'),
         ),
         textScale: textScale,
       );
