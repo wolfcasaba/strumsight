@@ -278,13 +278,31 @@ def test_a3_writes_subflag_off_disables_write_routes_but_keeps_reads():
     assert "post" not in paths.get("/community/posts", {})
     assert "get" in paths.get("/community/posts/{public_id}", {})
 
-    # notifications: the inbox list + preferences reads stay; mark-read /
-    # read-all / preference PUT are gone.
+    # notifications: the WHOLE router stays mounted, reads and writes alike.
+    #
+    # Corrected 2026-09-19 (integration). `de4a5ba2` mounted the router
+    # unconditionally -- `build_community_router` states why: marking a
+    # notification read and writing a delivery preference are not members of
+    # the ADR 0395 s6 write domain ("post, comment, reaction,
+    # follow-request"), the same basis on which bookmarks / challenges /
+    # moderation / reports / safety stay all-or-nothing with the main gate.
+    # The same commit ALSO wrote the three assertions below expecting the
+    # write half to disappear, which the aggregate never did; the two could
+    # not both hold, and `main`'s backend-ci had not run green since
+    # (`4c12083c` predates it), so the contradiction stayed invisible.
+    #
+    # The contract this cell measures is the aggregate's: the inbox list,
+    # the preference read AND the mark-read write are all registered with
+    # writes off. `tests/community/test_notification_router.py` drives the
+    # same routes end to end on a default `Settings`
+    # (`community_writes_enabled=False`) and would fail on any other reading.
     assert "get" in paths.get("/community/notifications", {})
     assert "get" in paths.get("/community/notifications/preferences", {})
-    assert "post" not in paths.get("/community/notifications/read-all", {})
-    assert "post" not in paths.get("/community/notifications/{public_id}/read", {})
-    assert "put" not in paths.get("/community/notifications/preferences/{category}", {})
+    assert "post" in paths.get("/community/notifications/{public_id}/read", {})
+    assert "post" in paths.get(
+        "/community/notifications/{public_id}/read-up-to", {}
+    )
+    assert "put" in paths.get("/community/notifications/preferences", {})
 
     # social_graph: follow/unfollow (POST/DELETE) are gone; the follower /
     # following list reads stay.
