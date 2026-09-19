@@ -306,4 +306,141 @@ A gate a `format` → `analyze` → `test <minden útvonal külön>` → `archit
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Mit írtam át és miért:**
+
+- `lib/app/routing/app_router.dart` — két pontosan a §0.0.1/2 és §5.4 szerinti
+  változás:
+  1. Új privát top-level függvény, `_openStoredAnalysis(context, ref,
+     summary)` (a `_startSongTrainerSession` melletti, azonos mintát követő
+     helper): betölti a dokumentumot
+     (`ref.read(analysisRepositoryProvider).getById(summary.documentId)`,
+     a `library_item_detail_screen.dart:176` mért `_handleExport`
+     mintája), és Success esetén `context.go(AppRoutes.analysisTimeline,
+     extra: value)`-t hív; Failure esetén (vagy ha a widget már
+     unmounted) `context.go(AppRoutes.analysisTimeline)`-t extra NÉLKÜL,
+     ami a meglévő `redirect: (_, state) => state.extra is
+     AnalysisDocument ? null : AppRoutes.live` ágat (ADR 0241 §1)
+     változatlanul futtatja — nincs új felhasználói üzenet, nincs
+     lazított route-szerződés.
+  2. `analysisCapture` route `onOpenAnalysis` ága ezt a helpert hívja
+     a korábbi `context.go(AppRoutes.analysisTimeline, extra: summary)`
+     (az `AnalysisSummary`-t adta át egy `AnalysisDocument`-et kérő
+     route-nak) helyett.
+- `test/features/audio_analysis/capture_wiring_test.dart` — ÚJ fájl, a
+  brief A1–A6 celláival (A5/A7 bizonyítéka `git diff --name-only`, lásd
+  lent, nem külön cella):
+  - **A1/A3** — `container.read(routerProvider)` + `findMatch` mindkét
+    flag-álláson (`appConfigProvider`-override, alapérték változatlan):
+    flag ON → mindhárom capture-route feloldódik; flag OFF → mindhárom
+    hiányzik ÉS a legacy `/analyze` érintetlen.
+  - **A4** — forrás-szintű regex a három capture-fájlon
+    (`ref\.watch|ref\.read|ConsumerWidget`, mindhárom `0` találat) + egy
+    konstruktor-szerződés cella (a három widget a mai paraméterlistával
+    fordul).
+  - **A2** — a VALÓS `routerProvider`-en és a VALÓS
+    `analysisControllerProvider`/`analysisCaptureRecorderProvider`-en át
+    (`ProviderContainer` + `UncontrolledProviderScope`, a
+    `test/app/navigation/adaptive_scaffold_test.dart` mért minimál
+    override-készlete); override KIZÁRÓLAG a mikrofon-varraton
+    (`fakeAudioOverrides()`) és a repository-varraton (egy fájl-helyi
+    `_FakeAnalysisRepository`). A cella koppint `record` → `start` →
+    `stop`-ig, és a KÉPERNYŐ típusát (`AnalysisProcessingScreen`) ÉS a
+    controller állapotát (`AnalysisAnalyzing`) is méri (L654), majd a
+    valós `analyze()` által elindított V2 isolate-futást a controller
+    saját `cancel()`-jével zárja le determinisztikusan a teardown előtt.
+  - **A6** — két widget-teszt, ugyanazon harness felett: (1) egy tárolt
+    összefoglaló megnyitása VALÓS `getById`-lel `AnalysisTimelineScreen`-t
+    nyit (nem `LiveScreen`-t); (2) egy `getById`-hiba a MEGLÉVŐ
+    fail-closed útra (`LiveScreen`) küld, új üzenet nélkül.
+  - Megjegyzés a `flutter analyze`-nak: a `_FakeAnalysisRepository`
+    kezdetben `: field = param` inicializátort használt
+    (`prefer_initializing_formals` info-lelet) — javítva `this.field`
+    named-paraméterre.
+
+**A két falszifikációs próba (§6.1), mindkét kimenet dokumentálva:**
+
+1. **A3 próba** — az `analysisRecord` `GoRoute`-ot kiemeltem az `if
+   (audioAnalysisV2Enabled) [...]` blokkból egy feltétel nélküli
+   (kapun kívüli) `GoRoute`-ba (a `analysisComparisonEnabled` blokk elé
+   szúrva). `flutter test test/features/audio_analysis/capture_wiring_test.dart`:
+   **A3 PIROS** —
+   ```
+   A1/A3 — ... A3 — flag off: all three capture routes are unregistered ... [E]
+     Expected: true
+       Actual: <false>
+     /analysis/record
+   ```
+   (mellékhatásként A2 is pirosra váltott, mert a próba-route az
+   `onFinished`-ből kihagyta a valódi `analyze()`-hívást — ez a próba
+   torzítatlan mellékhatása, nem a mérce hibája). Visszaállítva a route
+   eredeti helyére és testére (`git diff --stat` a visszaállítás után:
+   `lib/app/routing/app_router.dart | 26 +++++++++++++++++++++++++-`,
+   pontosan az A6-javítás mérete) → `flutter test
+   test/features/audio_analysis/capture_wiring_test.dart`: **mind a 7
+   cella ZÖLD**.
+
+2. **A6 próba** — az `onOpenAnalysis` ágat visszaírtam a mai
+   `context.go(AppRoutes.analysisTimeline, extra: summary)` alakra.
+   `flutter test test/features/audio_analysis/capture_wiring_test.dart`:
+   **mindkét A6 cella PIROS** —
+   ```
+   A6 — ... tapping a recent analysis opens AnalysisTimelineScreen ... [E]
+     (find.byType(AnalysisTimelineScreen) / router.state.uri.path mismatch)
+   A6 — ... a load failure keeps the EXISTING fail-closed route ... [E]
+     Expected: <1>
+       Actual: <0>
+   ```
+   Visszaállítva a `_openStoredAnalysis(context, ref, summary)` hívásra →
+   **mind a 7 cella ZÖLD** (`git diff --stat` ismét a fenti 26 soros
+   diffre esett vissza).
+
+**A5/A7 bizonyíték:**
+
+```
+$ git diff --name-only HEAD
+lib/app/routing/app_router.dart
+$ git status --porcelain
+ M lib/app/routing/app_router.dart
+?? test/features/audio_analysis/capture_wiring_test.dart
+```
+
+A legacy `lib/features/analyze/**` NEM szerepel (A5). `lib/l10n/**` NEM
+szerepel, és `lib/app/config/feature_flags.dart` sem — az
+`audioAnalysisV2Enabled` alapértéke érintetlen (A7).
+
+**Szándékosan nyitva marad** (§0.0.1 utolsó bekezdése, ADR 0584
+"Következmények"): a kezdőlap "legutóbbi elemzések" listája a
+`analysisRecentSummariesProvider` betöltési HIBÁJÁT ma üres listaként
+mutatja (`recent.value ?? []`). Az őszinte hibaállapot új l10n-kulcsot
+kívánna, ami ennek a körnek az `allowed_paths`-án kívül esik — külön kör
+bemenete (HANDOFF.md §6-ba is bekerül).
+
+**A §7 kapu csonkítatlan záró kimenete** (a teljes, 1827 soros log
+kimenete `test/features/audio_analysis/` 692, `test/features/analyze/`
+124, `test/app/routing/` 76, `test/app/navigation/adaptive_scaffold_test.dart`
+24, `test/app/navigation/tab_state_restoration_test.dart` 1,
+`test/app/navigation/legacy_route_redirect_test.dart` 8,
+`test/app/navigation/` 48, `test/tooling/screen_reachability_test.dart`
+15 zöld cellával; a Gate-összegzés szó szerint):
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/audio_analysis/                         zöld
+    test test/features/analyze/                                zöld
+    test test/app/routing/                                     zöld
+    test test/app/navigation/adaptive_scaffold_test.dart       zöld
+    test test/app/navigation/tab_state_restoration_test.dart   zöld
+    test test/app/navigation/legacy_route_redirect_test.dart   zöld
+    test test/app/navigation/                                  zöld
+    test test/tooling/screen_reachability_test.dart            zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
 ## 11. Review — a Claude tölti ki
