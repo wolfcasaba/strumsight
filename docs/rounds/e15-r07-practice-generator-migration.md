@@ -1,6 +1,43 @@
 # E15-R07 — Practice Generator képernyők migrálása
 
-- **Státusz:** PREPARED (előre megírva 2026-08-28, kód olvasva: `main @ 4cb32eb0`)
+> ## Módosítás (ADR 0112 önjavító kör, 2026-08-29) — a kör HOLD-on, a tárgya nem végrehajtható
+>
+> **Ezt a briefet az `E15-R07` H2 haltja után egy önjavító kör revideálta. A
+> lenti §0.0–§10 az EREDETI, 2026-08-28-i szöveg — a történet nem íródik át —,
+> de két tényállítása MÉRVE HAMIS, és a kör tárgya egy MERGE-ELT döntéssel
+> ütközik. A sor-fájlban a kör `hold`, nem `pending`.**
+>
+> Mérés `main @ c2c38014`-en (tiszta munkafa), reprodukálható parancsokkal:
+>
+> | A brief állítása | A mérés |
+> |---|---|
+> | „Az `E15-R02` óta a Practice Generator flag BE van kapcsolva az előnézeti/nem-production buildekben" (§0.0) | **HAMIS.** `lib/app/config/feature_flags.dart:84` — a NEM-production profil is explicit `practiceGeneratorEnabled: false`; a fában sehol nincs `true` értékadás (`grep -rn "practiceGeneratorEnabled" lib/ --include=*.dart \| grep -i true` → 0 találat). |
+> | „a terv-képernyők a felhasználó útjába kerültek" (§0.0) | **HAMIS.** A hat képernyő típusára nulla hivatkozás van a saját fájljukon kívül, és a `lib/app/routing/**` egyszer sem említi a feature-t — a flag állásától FÜGGETLENÜL elérhetetlenek. |
+> | „**Előfeltétel:** `E15-R03` merge-elve (a visszavonási terv dönti el, mit KELL migrálni)" (fejléc) | A terv az ELLENKEZŐJÉT dönti: `docs/ui/retirement-plan.md` §6 mind a hat képernyőre `Reachable = no` / `Verdict = **unreachable**` / `Owner round = —`; a §3.2 kimondja: „Neither is a Chapter 15 design-migration concern (design tokens are moot on a screen nobody can open) … Owner: a future scoped round, unscheduled." |
+>
+> A kör MÁSIK olvasata sem végrehajtható: a terv §4 táblája az `E15-R07`
+> batch-ébe „Learn + Onboarding"-ot ír, de a 4 Learn képernyő az `E15-R04`-ben
+> MIGRÁLT (mérve: mind importálja a `core/design_system`-et), az egyetlen
+> maradék `OnboardingScreen` pedig a queue-ban álló `E15-R11` briefjének a
+> hatóköre. A körnek MÉRVE **nulla végrehajtható hatóköre** maradt.
+>
+> **A nyitott kérdés emberi termékdöntés** (ADR 0471 **D5/D7**): a Practice
+> Generator flow-t **bekötni** (route + flag) VAGY **visszavonni**. Amíg ez nem
+> születik meg, a §3 scope nem hajtható végre a lezárt `E15-R03` kör
+> felülírása nélkül. A döntés után ez a sor egy NEVESÍTETT bekötő/visszavonó
+> körrel tér vissza — nem ezzel a briefel változatlanul.
+>
+> Az önjavító kör a hibaosztályt géppel is megfogta: a `tools/brief-lint.py`
+> **S14** szabálya leletet ad minden olyan (nem `done`) briefre, amely a
+> merge-elt visszavonási terv `unreachable` verdiktű képernyőjét engedi az
+> `allowed_paths`-on anélkül, hogy a verdiktet kimondaná
+> (`tools/tests/test_brief_unreachable_screen_scope.py`, [L561](../LESSONS.md#l561)).
+> A teljes brief-korpuszon MÉRVE további három, RÉSZLEGES találat van
+> (`E15-R08`: 1, `E15-R10`: 3, `E15-R11`: 1 képernyő) — azok a körök
+> végrehajthatók maradnak, csak a listájukat kell a pre-flightjukon az ELÉRHETŐ
+> képernyőkre szűkíteni.
+
+- **Státusz:** HOLD (2026-08-29, ADR 0112 önjavító kör — H2; eredetileg PREPARED, előre megírva 2026-08-28, kód olvasva: `main @ 4cb32eb0`)
 - **Típus:** Chapter 15 (UI-aktiválás és -befejezés), Kör 7
 - **Kör-azonosító:** `E15-R07`
 - **Branch:** `<motor>/e15-r07-practice-generator-migration`

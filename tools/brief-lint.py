@@ -93,6 +93,15 @@ SIGNAL_MARKERS = ("kör-jelzés", "codex-round-status", "round-status", "Kör-je
 
 QUEUE_RELATIVE = Path("docs") / "execution" / "pipeline-queue.tsv"
 ROUTER_CONFIG_RELATIVE = Path(".ai") / "router.toml"
+# Az `E15-R03` (ADR 0471) MÉRT visszavonási terve: a §6 tábla minden képernyőre
+# `Reachable`/`Verdict` oszlopot ír. Az `S14` ezt olvassa forrásként — a lint
+# nem méri újra az elérhetőséget, hanem a MERGE-ELT mérésre hivatkozik.
+RETIREMENT_PLAN_RELATIVE = Path("docs") / "ui" / "retirement-plan.md"
+# `| `lib/....dart` | `Type` | reachable | gated | verdict | owner | adr | note |`
+RETIREMENT_ROW = re.compile(
+    r"^\|\s*`(?P<path>lib/[^`\s]+\.dart)`\s*\|[^|]*\|[^|]*\|[^|]*\|\s*(?P<verdict>[A-Za-z_]+)\s*\|",
+    re.MULTILINE,
+)
 # A `risk = "high"` indoklás-kötelezettség (D3 / S7) a
 # `.ai/router.toml` `[security] high_risk_path_fragments` listáját használja
 # — a szigorítás a router-ci mércéjének saját, hivatalos forrásához kötött,
@@ -241,6 +250,28 @@ def outside_screen_pins(repo: Path, screens, allowed_paths, gate_tests) -> dict[
             if import_uri in source and type_pattern.search(source):
                 pins.setdefault(screen, []).append(relative)
     return {screen: sorted(found) for screen, found in sorted(pins.items())}
+
+
+def unreachable_screens(repo: Path) -> dict[str, str]:
+    """képernyő-útvonal → verdikt, a MERGE-ELT visszavonási terv §6 táblájából.
+
+    Csak az `unreachable` verdiktű sorokat adja vissza: ezek azok a képernyők,
+    amelyekre az `E15-R03` mérése szerint NINCS route és NINCS konstrukciós hely
+    a `lib/**` fában, tehát — a terv §3.2 szavával — „design tokens are moot on
+    a screen nobody can open".
+
+    A hiányzó terv NEM lelet: ami az `E15-R03` előtt készült, arról nincs mit
+    mérni.
+    """
+    try:
+        text = (repo / RETIREMENT_PLAN_RELATIVE).read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    return {
+        match.group("path"): match.group("verdict")
+        for match in RETIREMENT_ROW.finditer(text)
+        if match.group("verdict").lower() == "unreachable"
+    }
 
 
 def tracked_directory_prefixes(repo: Path) -> set[str]:
@@ -974,6 +1005,56 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
                         "fán MÉRT rétegre (a csere szigorúan KEVESEBBET adjon, mint a "
                         "szomszéd kör user-jóváhagyott listája — a tágítás H3, L478), "
                         "vagy a §0.0 mondja ki, hogy a könyvtárat EZ a kör hozza létre",
+                    )
+                )
+
+    # --- S14: a MÉRT `unreachable` verdiktű képernyő vak migrálása ----------
+    # MÉRT GYÖKÉROK (E15-R07 / H2, 2026-08-29): az előre megírt Ch15 brief hat
+    # Practice-Generator-képernyő design-migrációját írta elő, két hamis
+    # premisszával (a flag „be van kapcsolva", a képernyők „a felhasználó útjába
+    # kerültek"). A merge-elt `docs/ui/retirement-plan.md` §6 mind a hatra
+    # `Reachable = no` / `Verdict = unreachable` / `Owner round = —` sort ír, a
+    # §3.2 pedig kifejezetten kimondja, hogy NEM Ch15-ös design-migrációs ügy.
+    # A lánc H2-vel állt meg, egy teljes orchestrátor-session árán.
+    #
+    # A hibaosztály általános: a Ch15 briefek MIND előre készültek
+    # (2026-08-28), a visszavonási terv verdiktjei viszont a sáv KÖZBEN
+    # landoltak. A szabály ezért nem az elérhetőséget méri újra, hanem a
+    # merge-elt mérésre hivatkozik.
+    #
+    # Hamis riasztás elleni mérce — a szabály NÉMA, ha:
+    #   * `status == "done"` (visszamenőleges riasztás tilos, mint S5/S7/S10/S11);
+    #   * nincs visszavonási terv a fában (az E15-R03 ELŐTTI briefek);
+    #   * a brief maga KIMONDJA a `unreachable` szót — akkor a kör tudatosan az
+    #     elérhetetlen felületről szól (bekötés vagy visszavonás, ADR 0471
+    #     D5/D7), nem vakon migrálja.
+    round_status_for_s14 = {row[0].upper(): row[2] for row in queue_rows(repo)}.get(
+        brief.task_id, ""
+    )
+    if round_status_for_s14 != "done" and "unreachable" not in text.lower():
+        unreachable = unreachable_screens(repo)
+        if unreachable:
+            scoped = [
+                screen
+                for screen in owned_existing_screens(repo, metadata.allowed_paths)
+                if screen in unreachable
+            ]
+            if scoped:
+                listed = "; ".join(f"`{screen}`" for screen in scoped)
+                findings.append(
+                    Finding(
+                        "strict",
+                        "S14",
+                        "az `allowed_paths` olyan képernyőt enged, amit a MERGE-ELT "
+                        f"`{RETIREMENT_PLAN_RELATIVE.as_posix()}` §6 táblája "
+                        f"`unreachable`-nek MÉR: {listed} — a terv §3.2 szerint "
+                        "„design tokens are moot on a screen nobody can open”, "
+                        "tehát a design-migráció rajtuk nem végrehajtható a lezárt "
+                        "kör döntésének felülírása nélkül (mérve E15-R07/H2, "
+                        "2026-08-29, [L561](../LESSONS.md#l561)). Vagy szűkítsd a "
+                        "listát az ELÉRHETŐ képernyőkre, vagy a brief mondja ki a "
+                        "`unreachable` verdiktet és azt, hogy a kör tárgya a "
+                        "bekötés/visszavonás termékdöntése (ADR 0471 D5/D7)",
                     )
                 )
 

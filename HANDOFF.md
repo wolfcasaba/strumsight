@@ -1,5 +1,44 @@
 # HANDOFF — StrumSight 🎸
 
+
+## ⏸️ E15-R07 HOLD — a Practice Generator migrációs kör tárgya elfogyott (ADR 0112 önjavító kör, H2, 2026-08-29)
+
+A Ch15 **Kör 7** briefje (előre megírva 2026-08-28) a Practice Generator hat
+képernyőjének design-migrációját írta elő. A kör pre-flightja **H2 halttal**
+állt meg, és az önjavító kör a mérést megerősítette (`main @ c2c38014`):
+
+| A brief állítása | A mérés |
+|---|---|
+| „a Practice Generator flag BE van kapcsolva az előnézeti buildekben" | **HAMIS** — `lib/app/config/feature_flags.dart:84`, a nem-production profil is `false`; a fában sehol nincs `true` |
+| „a terv-képernyők a felhasználó útjába kerültek" | **HAMIS** — nulla route- és nulla konstrukciós hivatkozás a saját fájljukon kívül |
+| „a visszavonási terv dönti el, mit KELL migrálni" | A terv az ELLENKEZŐJÉT dönti: [`docs/ui/retirement-plan.md`](docs/ui/retirement-plan.md) §6 mind a hatra `unreachable`, §3.2: „Neither is a Chapter 15 design-migration concern … Owner: a future scoped round, unscheduled" |
+
+A kör MÁSIK olvasata is elfogyott: a terv §4 táblájának `E15-R07` batch-e
+(Learn + Onboarding) közben megvalósult — a 4 Learn képernyő az `E15-R04`-ben
+migrált, az `OnboardingScreen` az `E15-R11` briefjéé. **A körnek MÉRVE nulla
+végrehajtható hatóköre maradt**, ezért a sor-fájlban `hold`, nem `pending`; a
+lánc a soron következő körrel (`E15-R08`) megy tovább.
+
+> ⚠ **NYITOTT, EMBERI termékdöntés (ADR 0471 D5/D7):** a Practice Generator
+> flow-t **bekötni** (route + `practiceGeneratorEnabled`) VAGY **visszavonni**.
+> Ugyanez a nyitott tétel áll az Audio Analysis capture-varázslóra (3 képernyő)
+> és a Community sávra (15 képernyő) is — mind a terv §3.2/§3.3 „unscheduled"
+> tételei. A döntés után az `E15-R07` sor egy NEVESÍTETT bekötő/visszavonó
+> körrel tér vissza; a Ch15 lezárása NEM függ tőle
+> (`docs/rounds/e15-r13-…md:17`: a cél az ELÉRHETŐ képernyők migrációja, nem a
+> formális 96/96).
+
+**A hibaosztályt géppel is megfogtuk** (a halt megismétlődése ellen):
+`tools/brief-lint.py` **S14** — lelet minden (nem `done`) briefre, amely a
+merge-elt visszavonási terv `unreachable` verdiktű képernyőjét engedi az
+`allowed_paths`-on anélkül, hogy a verdiktet kimondaná. Őrteszt:
+`tools/tests/test_brief_unreachable_screen_scope.py` (9 cella, valódi-sértés
+próbával). MÉRVE a teljes korpuszon 4 lelet: `E15-R07` (6/6 — ez volt a halt)
+és három RÉSZLEGES, végrehajtható kör, amelyek listáját a saját pre-flightjukon
+kell szűkíteni: **`E15-R08`** (`level_detail_screen.dart`), **`E15-R10`** (a 3
+capture-képernyő), **`E15-R11`** (`followers_screen.dart`). Lecke:
+[L561](docs/LESSONS.md#l561).
+
 ## ✅ E15-R06 KÉSZ — Setlist + Progress képernyők migrálása a design-rendszerre — PR [#510](https://github.com/wolfcasaba/strumsight/pull/510), squash `1c8e214a` (2026-08-29)
 
 A Ch15 **Kör 6** három képernyőt vitt át a design-rendszerre

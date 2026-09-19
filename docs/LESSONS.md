@@ -22043,3 +22043,57 @@ hálózatra váró művelet kint, `timeout`-tal.
 **Őrteszt:** nincs — a lelet operátori (a `docs/execution/08-round-brief.md` és
 az `AGENTS.md` záró-rituálé szövege a hordozója); a mérés reprodukciója
 `git ls-remote origin 'refs/notes/*' | wc -l` (ma 10+).
+
+## L561 — Az előre megírt brief premisszái a sáv KÖZBEN landoló mérés ellen elavulnak: a Ch15 migrációs kör olyan képernyőket kapott, amiket a saját fejezete `unreachable`-nek MÉRT (E15-R07 / H2, 2026-08-29)
+
+**Mit mértünk.** Az `E15-R07` briefje (előre megírva 2026-08-28, `main @
+4cb32eb0`) a Practice Generator hat képernyőjének Ch15 design-migrációját írta
+elő, két tényállítással a §0.0-ban. A kör pre-flightja `main @ c2c38014`-en
+MINDKETTŐT hamisnak mérte:
+
+```
+$ grep -rn "practiceGeneratorEnabled" lib/ --include=*.dart | grep -i true
+                                                    # 0 találat — a NEM-production
+                                                    # profil is `false`
+                                                    # (lib/app/config/feature_flags.dart:84)
+$ grep -rnE "\b(TodayPlanScreen|WeeklyPlanScreen|PlanSetupScreen|PlanPreviewScreen|\
+PlanChangeReviewScreen|PlanPrivacyScreen)\b" lib/ | grep -v "^lib/features/practice_generator/"
+                                                    # 0 találat — se route, se
+                                                    # konstrukciós hely
+```
+
+A mérés nem volt új: az **`E15-R03` (ADR 0471)** MÁR elvégezte, és a merge-elt
+`docs/ui/retirement-plan.md` §6 táblája mind a hatra `Reachable = no` /
+`Verdict = unreachable` / `Owner round = —` sort ír, a §3.2 pedig kimondja:
+„Neither is a Chapter 15 design-migration concern (design tokens are moot on a
+screen nobody can open) … Owner: a future scoped round, unscheduled." A kör
+tehát egy MÁR MEGHOZOTT, lezárt döntéssel ütközött → **H2**, egy teljes
+orchestrátor-session árán, egyetlen sor kód előtt.
+
+**A minta.** Egy epic briefjei előre készülnek, de a fejezet SAJÁT mérései a
+sáv közben landolnak — az előre megírt premissza így csendben elavul, és a
+konfliktus csak a dispatch pillanatában derül ki. A brief „Előfeltétel: X
+merge-elve" sora ezt nem védi ki: az `E15-R07` fejléce is hivatkozta az
+`E15-R03`-at, csak épp a terv az ELLENKEZŐJÉT döntötte. A kör másik olvasata
+(a terv §4 táblájának `E15-R07` batch-e: Learn + Onboarding) is elfogyott
+közben: a 4 Learn képernyő az `E15-R04`-ben migrált, az `OnboardingScreen` az
+`E15-R11` briefjéé — a körnek MÉRVE nulla végrehajtható hatóköre maradt, ezért
+`hold`, nem `pending`. A nyitott kérdés (bekötés VAGY visszavonás) az ADR 0471
+D5/D7 szerint emberi termékdöntés.
+
+**Általános szabály:** ha egy fejezet MÉRŐ kört futtat (leltár, elérhetőségi
+audit, visszavonási terv), akkor a fejezet többi, előre megírt briefjét a mérés
+kimenetéhez KELL kötni — géppel, nem emlékezetből. Az elavult premissza nem
+review-, hanem lint-kérdés: a dispatch előtt kell kiderülnie.
+
+**Őrteszt:** `tools/tests/test_brief_unreachable_screen_scope.py` — a
+`tools/brief-lint.py` új **S14** szabálya leletet ad minden (nem `done`)
+briefre, amely a merge-elt visszavonási terv `unreachable` verdiktű képernyőjét
+engedi az `allowed_paths`-on anélkül, hogy a verdiktet kimondaná; a repó-igazság
+cellák pedig azt pinnelik, hogy VÉGREHAJTHATÓ (`pending`/`prepared`) kör nem
+állhat 100%-ban elérhetetlen hatókörön. Valódi-sértés próba (mérve): az
+`E15-R07` sorát `hold` → `pending`-re állítva a két repó-igazság cella PIROS,
+visszaállítva zöld. A teljes brief-korpuszon az S14 négy leletet ad — az
+`E15-R07` (6/6, ez volt a halt) és három RÉSZLEGES (`E15-R08`: 1, `E15-R10`: 3,
+`E15-R11`: 1 képernyő), amelyek végrehajthatók maradnak, csak a pre-flightjukon
+szűkítendők.
