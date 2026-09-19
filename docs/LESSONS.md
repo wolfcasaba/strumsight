@@ -26650,3 +26650,64 @@ TARTALMÁT méri (`analysis-processing-cancelled-title` és
 reprodukálva az izolált review-klónban.
 
 **Őrteszt:** `test/features/audio_analysis/capture_wiring_test.dart`::`A2 — home to recording to processing, real providers`.
+
+### L658 — A „természetes belépési pont" premisszája NÉVAZONOSSÁGON állt, nem méren: két diszjunkt setlist-világ, és a bekötendő képernyő a MÁSIKHOZ tartozott (E17-R03 / H3, önjavító kör, 2026-09-19)
+
+**Mérve** (`main @ 3ffde512`, a kör pre-flightjában, motor indulása ELŐTT). Az
+E17-R03 briefje ezt állította: *„a `SetlistDetailScreen` (ami a
+`SetlistSessionScreen` természetes belépési pontja) imperatívan MÁR elérhető"* —
+és az `allowed_paths` `lib`-oldala pontosan három fájl volt, köztük a legacy
+részlet-képernyő. A premissza a KÉT KÉPERNYŐ NEVÉBŐL jött (`Setlist…` +
+`Setlist…`), nem mérésből. A tényleges tree:
+
+| | legacy (`songs`) | V2 (`song_trainer`) |
+|---|---|---|
+| modell | `Setlist{id,name,songIds}` | `SongSetlist{id,name,items:[SongSetlistItem{SongId,…}]}` |
+| azonosító | `'${microsecondsSinceEpoch}_$seq'` | `SongId` (seed-id / dokumentum-id) |
+| belépés | `SetlistListScreen` → `SetlistDetailScreen` (**reachable**) | `SetlistListScreenV2` (**unreachable**) |
+
+A `SetlistSessionScreen.setlist` mezője `SongSetlist`, a részlet-képernyő legacy
+`Setlist`-et tart, és a két ID-tér diszjunkt. Ráadásul a V2 setlist-tárnak
+**nulla produkciós írója** volt (`grep -rn "SongSetlist(" lib` → konstruktor,
+dekódoló, az elérhetetlen szerkesztő, és a `lib`-ből sehonnan nem hívott
+`LegacySetlistAdapter.persistV2`) — ez az [L606](#l606)/[L652](#l652)
+hibaosztály harmadik előfordulása.
+
+**A csapda, ami a „kis javítást" is megette.** A legacy-projekciós kifutás sem
+volt járható: a runner a `LearnScreen`-t futtatta volna, amely csak `lesson`-t
+vesz át és **semmit nem ad vissza** — minden `SetlistItemResult` kitalált lett
+volna, miközben a legacy részlet-képernyőnek már van működő `_playAll` útja.
+
+**Az új, MÉRT tény, amit egyik korábbi kör sem vett észre.** A V2 lista
+bekötése önmagában pirosra viszi a `test/tooling/screen_reachability_test.dart`
+**A3** celláját: az minden *elérhető ÉS nem design-rendszerre migrált*
+képernyőtől `migrate`/`retire` verdiktet + `^E15-R\d+$` gazda-kört követel a
+`docs/ui/retirement-plan.md`-ben. A `setlist_list_screen_v2.dart`-ban `0` db
+`design_system` van, és **minden E15-ös kör `done`** — gazdát nem lehet
+őszintén beírni. Ugyanazzal a logikával szimulálva:
+
+```
+NOW   ownerless: []
+AFTER wiring ownerless: ['…/screens/setlist_list_screen_v2.dart']
+```
+
+Vagyis a bekötés SIKERE zárta volna ki a kört a merge-ből — pontosan az
+[L612](#l612) alakja, csak itt nem egy önjavító őr, hanem egy fejezet-szintű
+mérce felől. A feloldás: a lista bekötése és design-migrációja UGYANAZ a kör.
+A `retirement-plan.md` §3.2 saját mondata megfordítva mondja ki, miért:
+*„design tokens are moot on a screen nobody can open"* — amint megnyitható,
+számítanak.
+
+**A tanulság.** Egy bekötő kör briefjének a belépési pontot a **típusból** kell
+levezetnie (mit vesz át a képernyő konstruktora), nem a névhasonlóságból; és a
+„ki írja ma ezt a tárat" grepet a §2-nek mérnie kell, mert egy író nélküli tár
+fölé kötött UI mindig kitalált adatot mutat. Amikor pedig egy kör ELÉRHETŐVÉ
+tesz egy képernyőt, a mércét a **landolás UTÁNI** állapotra kell szimulálni:
+ami ma zöld, attól lesz piros, hogy a kör sikerül.
+
+**Őrteszt:** `tools/tests/test_e17_r03_setlist_session_scope.py` (9 cella; a
+revízió előtti briefen 7 piros). A két élő-fa cellája a KÖVETELT VÉGÁLLAPOTOT
+méri (a katalógus vagy nem deklarál setlist-route-ot, vagy pontosan a pinnelt
+alakot `AppRoutes` konstansként; és amint a router megnevezi a
+`SetlistListScreenV2`-t, a képernyőnek vinnie kell a design-rendszert) — így a
+kör sikere nem fordul a saját őre ellen ([L612](#l612)).

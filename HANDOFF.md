@@ -1,5 +1,35 @@
 # HANDOFF — StrumSight 🎸
 
+## 🩹 ÖNJAVÍTÓ KÖR (ADR 0112) 2026-09-19 — E17-R03 / H3: a brief premisszája megdőlt, a bekötés V2-natívvá íródott át
+
+Az `E17-R03` a **dispatch ELŐTT** halt meg (`H3`), motor indulása nélkül. A brief-lint
+`S15` által kötelezővé tett §2-újramérés megcáfolta a brief premisszáját: *„a
+`SetlistDetailScreen` a `SetlistSessionScreen` természetes belépési pontja"*.
+
+**Mért gyökérok.** Két diszjunkt setlist-világ van — legacy `Setlist{songIds}`
+(timestamp-id, kulcs-érték tár, reachable) és V2 `SongSetlist{items:[SongId…]}`
+(fájl-tár, **unreachable**) —, és a session a MÁSIKHOZ tartozik
+(`SetlistSessionScreen.setlist : SongSetlist`). A V2 setlist-tárnak **nulla
+produkciós írója** volt. A legacy-projekciós kifutás sem járható: a runner a
+`LearnScreen`-t futtatná, amely semmit nem ad vissza → minden `SetlistItemResult`
+kitalált lenne. Teljes mérés: `.pipeline/halt-E17-R03-preflight.md`.
+
+**Az új, addig nem mért tény.** A V2 lista bekötése önmagában pirosra viszi a
+`test/tooling/screen_reachability_test.dart` **A3** celláját (elérhető + nem
+design-migrált képernyő `E15-Rxx` gazda nélkül), és minden E15-ös kör `done` —
+ezért a **bekötés és a design-migráció ugyanaz a kör**. A kör SIKERE zárta volna
+ki a merge-ből ([L612](docs/LESSONS.md#l612) alakja).
+
+**A javítás.** A brief §0.1 revízióval V2-natívvá íródott át (belépés a
+`/song-trainer/setlists` route-on a `SongLibraryScreen`-ből → `SetlistListScreenV2`
+→ session), az `allowed_paths` TÁGULT (route-katalógus, router, V2 lista,
+library-képernyő, session-route varrat, l10n forrás + generált aggregátum,
+retirement-plan, S11 pin-őrök, e13_r23 goldenek), a mércéből semmi nem került ki —
+a `screen_reachability_test.dart` szándékosan csak `gate_tests`-ben van.
+
+**Gépi őr:** `tools/tests/test_e17_r03_setlist_session_scope.py` — 9 cella, a
+revízió előtti briefen 7 piros. Lecke: [L658](docs/LESSONS.md#l658).
+
 ## ✅ E17-R02 KÉSZ — az Analysis V2 capture-ág GÉPI ŐRE + a „korábbi elemzés" navigációs hibája javítva — PR [#602](https://github.com/wolfcasaba/strumsight/pull/602), squash `c0e06a2e` (2026-09-19)
 
 **A kör fordulata.** A brief azt írta elő, hogy kösse be a három capture-képernyőt.
