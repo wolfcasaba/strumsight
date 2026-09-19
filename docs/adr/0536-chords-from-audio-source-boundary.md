@@ -7,7 +7,7 @@ ez az EGYETLEN kötő ADR-je (a kör nem kap sajátot).
 
 **Fejezet-terv:** [`docs/plans/chapter-18-composer-and-chords-from-audio.md`](../plans/chapter-18-composer-and-chords-from-audio.md)
 
-Kapcsolódik: [ADR 0535](0535-song-editor-chord-audition-and-progression-preview.md)
+Kapcsolódik: [ADR 0585](0585-song-editor-chord-audition-and-progression-preview.md)
 (a fejezet másik fele: komponálás füllel), [ADR 0284](0284-import-preview-is-not-a-commit.md)
 (az előnézet nem véglegesítés), [ADR 0217](0217-analysis-raw-audio-retention.md)
 (nyers audio retention), [ADR 0183](0183-vision-no-raw-frame-persistence.md)

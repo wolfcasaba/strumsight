@@ -1,4 +1,4 @@
-/// Selective prediction: abstain instead of guessing (E14-R21, ADR 0536).
+/// Selective prediction: abstain instead of guessing (E14-R21, ADR 0587).
 ///
 /// A selective predictor answers only when its CALIBRATED confidence clears
 /// a threshold, and reports the price of that silence — coverage. This file
@@ -104,7 +104,7 @@ final class SelectivePredictionPolicy {
 }
 
 /// Applies [policy] to one prediction's [calibratedConfidence] (`null` when
-/// no measured calibration is available — the shipped state, ADR 0536 D1).
+/// no measured calibration is available — the shipped state, ADR 0587 D1).
 SelectiveOutcome applySelectivePolicy({
   required double? calibratedConfidence,
   required SelectivePredictionPolicy policy,
@@ -233,7 +233,7 @@ RiskCoveragePoint _pointAt(
 ///
 /// Returns `null` when NO threshold reaches the target — the honest answer
 /// is "this model cannot promise that accuracy", never "here is the least
-/// bad threshold" (ADR 0536 D5). Ties break toward the LOWER threshold, so
+/// bad threshold" (ADR 0587 D5). Ties break toward the LOWER threshold, so
 /// the selection is deterministic.
 SelectivePredictionPolicy? selectCoverageMaximisingPolicy(
   List<SelectiveObservation> observations, {

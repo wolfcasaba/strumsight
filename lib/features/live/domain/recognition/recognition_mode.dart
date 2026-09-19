@@ -1,7 +1,7 @@
 import 'package:meta/meta.dart';
 
 /// In which recognition regime a Live detection engine was CONSTRUCTED
-/// (E14-R30, ADR 0544 D1).
+/// (E14-R30, ADR 0593 D1).
 ///
 /// This is not a UI mode and not a runtime setting: it is a construction-time
 /// property of the engine that decides whether an expected-chord hint is
@@ -11,11 +11,11 @@ import 'package:meta/meta.dart';
 /// * [free] — nothing outside the audio may influence the chord verdict. The
 ///   expected-chord prior is not merely ignored, it cannot be BUILT: an
 ///   [ExpectedChordHint] does not exist for a free-mode engine, so the code
-///   path that would apply it has no value to apply (ADR 0544 D2). A free
+///   path that would apply it has no value to apply (ADR 0593 D2). A free
 ///   engine therefore produces bit-identical output whether or not a caller
 ///   pushes an expected chord into it.
 /// * [guided] — a lesson/song target is known, so an [ExpectedChordHint] can
-///   exist. Even then the hint is only a TIE-BREAKER (ADR 0544 D3): it never
+///   exist. Even then the hint is only a TIE-BREAKER (ADR 0593 D3): it never
 ///   enters the decoder's trellis and can never overturn audio evidence that
 ///   actually separates two chords.
 enum RecognitionMode {
@@ -23,7 +23,7 @@ enum RecognitionMode {
   guided;
 
   /// Whether an expected-chord hint may exist in this mode at all. The single
-  /// machine-readable statement of ADR 0544 D2 — exhaustive, no `default`.
+  /// machine-readable statement of ADR 0593 D2 — exhaustive, no `default`.
   bool get allowsExpectedChordPrior => switch (this) {
     RecognitionMode.free => false,
     RecognitionMode.guided => true,
@@ -31,7 +31,7 @@ enum RecognitionMode {
 }
 
 /// The ONLY carrier through which an expected-chord label can reach the chord
-/// decoder (E14-R30, ADR 0544 D2).
+/// decoder (E14-R30, ADR 0593 D2).
 ///
 /// The constructor is private to this library, so no caller anywhere in the
 /// tree can hand the decoder a hint it did not obtain from [forMode]. And

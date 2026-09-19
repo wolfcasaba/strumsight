@@ -116,7 +116,7 @@ void main() {
     });
 
     test('signal quality: a bad mic reading rejects with its OWN typed '
-        'reason, never blamed as lowConfidence (ADR 0535 D1)', () {
+        'reason, never blamed as lowConfidence (ADR 0586 D1)', () {
       final (decision, reason) = LivePipeline.debugDeriveChordDecision(
         chordLatched: false,
         hasMatch: true,

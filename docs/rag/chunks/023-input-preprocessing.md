@@ -3,7 +3,7 @@ id: 023
 topic: Quality-aware input preprocessing and device adaptation on the Live path
 tags: [live, dsp, preprocessing, gain, device-profile, signal-quality, agc]
 sources:
-  - docs/adr/0552-quality-aware-preprocessing-and-live-calibration-wiring.md
+  - docs/adr/0601-quality-aware-preprocessing-and-live-calibration-wiring.md
   - docs/adr/0507 (Live signal quality) · docs/adr/0224 §4 (measurement boundary)
   - docs/rounds/epic-14-completion-plan.md §2 R31
   - lib/features/live/engine/dsp/quality_aware_preprocessor.dart
@@ -18,7 +18,7 @@ already-shipped `LiveSignalQualityAnalyzer` produced from the **raw** chunk,
 and applies at most ONE transform: a bounded, slew-limited broadband gain.
 
 **It is off in every shipped build** (`recognitionPreprocessingEnabled`,
-default `false`, ADR 0542). Off means `process` returns the caller's own list
+default `false`, ADR 0591). Off means `process` returns the caller's own list
 instance — identity, not equality — so the DSP path cannot observe that the
 stage exists.
 

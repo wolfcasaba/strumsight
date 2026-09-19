@@ -11,19 +11,19 @@ import '../engine/strum_engine.dart';
 import '../model/live_frame.dart';
 
 /// The regime the app-wide detection engine is CONSTRUCTED in (E14-R30,
-/// ADR 0544 D1 — read by [strumEngineProvider], never by a screen).
+/// ADR 0593 D1 — read by [strumEngineProvider], never by a screen).
 ///
 /// [RecognitionMode.free] is the fail-closed default and the ONLY value this
 /// build ships: an expected-chord hint cannot even be BUILT for a free
 /// engine, so no caller — Live, Learn, Practice — can bias the chord verdict
 /// with a lesson target, whatever it passes to
-/// [StrumEngine.setExpectedChord] (ADR 0550 D4).
+/// [StrumEngine.setExpectedChord] (ADR 0599 D4).
 ///
 /// It is a provider rather than a literal so the regime is one declared,
 /// overridable value instead of an implicit constructor default: a future
 /// round that decides the microphone-lease question can raise it here, in
 /// one place, and every consumer of the shared engine moves with it.
-/// Raising it is a PRODUCT decision with a measurable consequence (ADR 0544
+/// Raising it is a PRODUCT decision with a measurable consequence (ADR 0593
 /// D3 marks the tie-break's real-lesson value as UNKNOWN), so this round
 /// does not raise it.
 final liveRecognitionModeProvider = Provider<RecognitionMode>(
@@ -41,7 +41,7 @@ final strumEngineProvider = Provider<StrumEngine>((ref) {
   final engine = RealStrumEngine(
     mic: createMicCapture(ref, AudioOwner.live),
     mode: ref.watch(liveRecognitionModeProvider),
-    // ADR 0552 D2: the quality-aware preprocessor is fail-closed — it runs
+    // ADR 0601 D2: the quality-aware preprocessor is fail-closed — it runs
     // only when the build's flag says so (off in every environment today).
     preprocessingEnabled: ref
         .watch(appConfigProvider)

@@ -41,7 +41,7 @@ class ViterbiChordDecoder {
   /// Index of the no-chord state (always 0 in [ChordDictionary]).
   static const int _noChord = 0;
 
-  /// Expected-target TIE-BREAK band (E14-R30, ADR 0544 D3 — the successor of
+  /// Expected-target TIE-BREAK band (E14-R30, ADR 0593 D3 — the successor of
   /// round 137's `expectedPrior`, same numeric value, different mechanism).
   ///
   /// Round 137 added `expectedPrior = 0.05` to the expected state's trellis
@@ -71,7 +71,7 @@ class ViterbiChordDecoder {
   static const double expectedTieBreakBand = 0.05;
   int _expectedIdx = -1;
 
-  /// Set (or clear with null) the currently expected chord (E14-R30, ADR 0544
+  /// Set (or clear with null) the currently expected chord (E14-R30, ADR 0593
   /// D2). The parameter is an [ExpectedChordHint], NOT a `String`: a hint can
   /// only be obtained from [ExpectedChordHint.forMode], which returns `null`
   /// in [RecognitionMode.free]. A free-mode engine therefore has no value to
@@ -121,7 +121,7 @@ class ViterbiChordDecoder {
     final bonus = boosted ? selfBonus * _onsetBonusScale : selfBonus;
     if (boosted) _boostLeft--;
 
-    // The trellis is EXPECTED-HINT-FREE (ADR 0544 D3): the hint is applied
+    // The trellis is EXPECTED-HINT-FREE (ADR 0593 D3): the hint is applied
     // only at read-out, below, so it can never accumulate into the path.
     if (!_seeded) {
       for (var s = 0; s < n; s++) {
@@ -150,7 +150,7 @@ class ViterbiChordDecoder {
       }
     }
 
-    // Guided-mode tie-break (ADR 0544 D3): the expected state may take over
+    // Guided-mode tie-break (ADR 0593 D3): the expected state may take over
     // the REPORT only when it is tied with the winner on the accumulated path
     // AND on this frame's raw similarity, and never against the no-chord
     // state. Evaluated BEFORE renormalisation so the comparison is on the
@@ -183,7 +183,7 @@ class ViterbiChordDecoder {
   }
 
   // ---------------------------------------------------------------------
-  // H3 / L2 diagnostics (E14-R28, ADR 0545 D5). Written by [process] only —
+  // H3 / L2 diagnostics (E14-R28, ADR 0594 D5). Written by [process] only —
   // the batch paths never touch them — and read by nothing on the decision
   // path. They exist so the chord latch can be MEASURED without retuning it.
   // ---------------------------------------------------------------------

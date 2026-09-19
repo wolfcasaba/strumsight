@@ -1,4 +1,4 @@
-/// Three-way chord-engine comparison harness (E14-R27, ADR 0539).
+/// Three-way chord-engine comparison harness (E14-R27, ADR 0588).
 ///
 /// SDD Ch14 §4.5 asks which chord path should ship: the legacy NNLS-chroma
 /// to dictionary to Viterbi decoder, the shipped chord CRNN

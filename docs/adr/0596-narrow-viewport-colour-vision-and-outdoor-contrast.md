@@ -1,4 +1,4 @@
-# ADR 0547 — 360 px profil, szürkeárnyalatos színlátás-cella és a kültéri kontraszt mért határa
+# ADR 0596 — 360 px profil, szürkeárnyalatos színlátás-cella és a kültéri kontraszt mért határa
 
 **Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R39 · **Csomag:** PKG-C ·
 **Épít rá:** ADR 0274 (mozgás/reduced motion), ADR 0381 (szemantikus téma és

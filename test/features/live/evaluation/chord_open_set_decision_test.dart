@@ -1,4 +1,4 @@
-// E14-R32 (ADR 0540): the open-set chord decision.
+// E14-R32 (ADR 0589): the open-set chord decision.
 //
 // What these cells prove:
 //   * the SHIPPED default policy is the identity — it can emit neither

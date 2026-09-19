@@ -336,7 +336,7 @@ final class FeatureFlags {
       analysisPracticeIntegrationEnabled: nonProd,
       analysisTutorIntegrationEnabled: nonProd,
       recognitionRecoveryEnabled: false,
-      // E14-R23/R24/R33/R41 (ADR 0542). Every recognition-recovery gate
+      // E14-R23/R24/R33/R41 (ADR 0591). Every recognition-recovery gate
       // resolves to OFF in EVERY environment, including non-production:
       // none of the SDD Ch14 §7 thresholds is green on the measured
       // baseline (`evaluation/recognition/baseline_manifest.json`: onset
@@ -462,7 +462,7 @@ final class FeatureFlags {
     recognitionRecoveryEnabled: true,
     // OFF by design — cost without a visible surface (ADR 0271).
     recognitionShadowModeEnabled: recognitionShadowModeEnabled,
-    // E14 (ADR 0537/0541/0542/0552): the recognition shadow/preprocessing
+    // E14 (ADR 0537/0590/0591/0601): the recognition shadow/preprocessing
     // bands and the beta-telemetry consent gate are rollout surfaces with
     // their own gates — neither overlay opens them, so they pass through
     // UNTOUCHED. Leaving them out made the copy fall back to the
@@ -536,7 +536,7 @@ final class FeatureFlags {
     analysisTutorIntegrationEnabled: analysisTutorIntegrationEnabled,
     recognitionRecoveryEnabled: recognitionRecoveryEnabled,
     recognitionShadowModeEnabled: recognitionShadowModeEnabled,
-    // E14 (ADR 0537/0541/0542/0552): the recognition shadow/preprocessing
+    // E14 (ADR 0537/0590/0591/0601): the recognition shadow/preprocessing
     // bands and the beta-telemetry consent gate are rollout surfaces with
     // their own gates — neither overlay opens them, so they pass through
     // UNTOUCHED. Leaving them out made the copy fall back to the
@@ -699,7 +699,7 @@ final class FeatureFlags {
 
   /// Master switch for STRUM shadow recognition (SDD Ch14 Kör 23).
   ///
-  /// **Semantics (ADR 0542 D2), so the flag can never be read two ways:**
+  /// **Semantics (ADR 0591 D2), so the flag can never be read two ways:**
   /// a shadow strum inference may run for a frame only when BOTH
   /// - [strumModelRolloutStage] `.runsInference` is true, AND
   /// - this switch is true.
@@ -774,7 +774,7 @@ final class FeatureFlags {
   /// and its machine audit (`tool/check_feature_flags.dart`) are defined
   /// over `final bool` fields, and inventing a bool-shaped entry for an
   /// enum field would make the audit's completeness claim false in both
-  /// directions (ADR 0542 D4). The stage's own reviewed record is
+  /// directions (ADR 0591 D4). The stage's own reviewed record is
   /// `docs/release/ch14-recognition-rollout.md`.
   final RecognitionRolloutStage strumModelRolloutStage;
 

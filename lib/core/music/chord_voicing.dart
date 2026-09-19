@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'guitar_strings.dart';
 
-/// The pitches a fingering actually sounds (ADR 0535 D1).
+/// The pitches a fingering actually sounds (ADR 0585 D1).
 ///
 /// A chord diagram is six fret numbers, low-E → high-E (`-1` muted, `0`
 /// open, `>0` pressed). Sounding pitch = open-string MIDI + fret. Pure music

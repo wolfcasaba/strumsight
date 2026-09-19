@@ -12,7 +12,7 @@ import 'package:strumsight/l10n/app_localizations.dart';
 import '../../support/preference_store.dart';
 
 /// Records every strum the screen (or its preview transport) asked for —
-/// composing/auditioning by ear (ADR 0535) never touches a real speaker in
+/// composing/auditioning by ear (ADR 0585) never touches a real speaker in
 /// tests.
 final class _RecordingAudition implements ChordAudition {
   final List<String> strummed = [];

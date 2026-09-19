@@ -1,4 +1,4 @@
-// E14-R39 (ADR 0547) — reduced motion on the beat pulse and on the Live
+// E14-R39 (ADR 0596) — reduced motion on the beat pulse and on the Live
 // chord feedback.
 //
 // The design system's own `SsBeatPulse` has honoured reduced motion since
@@ -209,7 +209,7 @@ void main() {
     });
   });
 
-  // E14-R39 lelet B15, CLOSED by E14-R37 (ADR 0550 D5). The Live hero's
+  // E14-R39 lelet B15, CLOSED by E14-R37 (ADR 0599 D5). The Live hero's
   // per-beat `flutter_animate` scale pulse — and the shimmer/settle gesture
   // above it — now ask `SsMotionScope` like every other animated element on
   // the tree. The cells below are a falsification pair: the first proves the

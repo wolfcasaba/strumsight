@@ -104,7 +104,7 @@ class LiveLabController extends Notifier<LiveLabState> {
   /// Runs the E14-R23 strum shadow and the E14-R26 chord-CRNN shadow over
   /// the SAME captured buffer, off the UI isolate.
   ///
-  /// Gating (ADR 0548 D1): both bands come from
+  /// Gating (ADR 0597 D1): both bands come from
   /// [RecognitionShadowGate.fromFlags] and nothing else. With both gates
   /// closed no model asset is loaded, no isolate is spawned and no inference
   /// runs — the returned snapshot is the constant `disabled` shape. That is

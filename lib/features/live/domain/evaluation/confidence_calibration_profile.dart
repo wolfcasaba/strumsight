@@ -1,5 +1,5 @@
 /// Model-bound confidence-calibration artefact (E14-R21 strum, E14-R32
-/// chord; ADR 0536/0540).
+/// chord; ADR 0587/0589).
 ///
 /// This file defines the ONLY shape a calibrated confidence may come from:
 /// a versioned artefact that names the model it was fitted for
@@ -325,7 +325,7 @@ final class CalibrationMapping {
 
 /// A chord class key: root pitch class plus quality (`A` + `min`). The chord
 /// artefact may carry one mapping per class ON TOP OF the default mapping —
-/// per-class calibration is the ADR 0540 D3 seam, not a promise that such a
+/// per-class calibration is the ADR 0589 D3 seam, not a promise that such a
 /// fit exists.
 final class ChordClassKey {
   const ChordClassKey({required this.root, required this.quality});
@@ -668,7 +668,7 @@ enum CalibrationUnavailableReason {
   noArtefact,
 
   /// The artefact names a different model id or a different sha256 than the
-  /// weights actually loaded — fail-closed (ADR 0536 D4).
+  /// weights actually loaded — fail-closed (ADR 0587 D4).
   modelMismatch,
 
   /// The artefact calibrates the other band.
@@ -703,7 +703,7 @@ final class CalibrationOutcome {
 /// The shipped default is [ConfidenceCalibrationResolver.absent] — every
 /// call returns [CalibrationUnavailableReason.noArtefact], which is why
 /// `StrumPrediction.calibratedConfidence` and
-/// `ChordPrediction.calibratedConfidence` stay `null` (ADR 0505 D2, ADR 0536
+/// `ChordPrediction.calibratedConfidence` stay `null` (ADR 0505 D2, ADR 0587
 /// D1). Wiring the resolver into those predictions is PKG-A's wave-2 task;
 /// this class is the value it will read.
 final class ConfidenceCalibrationResolver {

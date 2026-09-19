@@ -14,7 +14,7 @@ import 'adapters/legacy_chord_label.dart';
 ///
 /// The Live frame's confidence is a STRUM confidence and is used only by the
 /// strum observation. A chord observation carries no confidence number at
-/// all (`null` = not measured, ADR 0551 D2): the live chord path has none to
+/// all (`null` = not measured, ADR 0600 D2): the live chord path has none to
 /// report. Until E14-R38 this adapter wrote `confidence: 1.0` here — an
 /// invented number whose own comment admitted it was invented, and which
 /// made every reading look certain, including readings the recognizer had
@@ -264,7 +264,7 @@ final class LivePracticeObservationGateway
   }
 
   /// Maps the frame's typed chord verdict onto the practice domain's
-  /// evidence rule (E14-R38, ADR 0551 D1). Exhaustive, no `default`.
+  /// evidence rule (E14-R38, ADR 0600 D1). Exhaustive, no `default`.
   ///
   /// A producer that supplies NO decision (`null` — mocks, the
   /// `LiveFrameAdapter` boundary, the onboarding first-win engine) is treated

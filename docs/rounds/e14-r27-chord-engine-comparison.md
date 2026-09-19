@@ -1,7 +1,7 @@
 # E14-R27 — NNLS vs CRNN vs hybrid: közös pontozó harness
 
 - **Státusz:** LESZÁLLÍTVA (harness) / **PARTIAL** (a döntés NEEDS-MEASUREMENT)
-- **ADR:** [`0539`](../adr/0539-chord-engine-comparison-harness.md)
+- **ADR:** [`0588`](../adr/0588-chord-engine-comparison-harness.md)
 - **Csomag:** PKG-B · **Készült:** 2026-09-09
 - **Doksi:** [`docs/eval/chord-engine-comparison.md`](../eval/chord-engine-comparison.md)
 

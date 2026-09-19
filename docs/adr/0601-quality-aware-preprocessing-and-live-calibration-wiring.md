@@ -1,9 +1,9 @@
-# ADR 0552 — Minőség-tudatos bemeneti előfeldolgozás, eszköz-adaptációs seam és a kalibrációs profil élő bekötése
+# ADR 0601 — Minőség-tudatos bemeneti előfeldolgozás, eszköz-adaptációs seam és a kalibrációs profil élő bekötése
 
 **Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R31 (PKG-A, 2. hullám) ·
-**Épít erre:** ADR 0507 (Live jelminőség), ADR 0536 (modell-kötött kalibrációs
-artefaktum + selective prediction), ADR 0540 (chord-kalibráció), ADR 0542
-(`recognitionPreprocessingEnabled` zászló), ADR 0545 (shadow-seam) ·
+**Épít erre:** ADR 0507 (Live jelminőség), ADR 0587 (modell-kötött kalibrációs
+artefaktum + selective prediction), ADR 0589 (chord-kalibráció), ADR 0591
+(`recognitionPreprocessingEnabled` zászló), ADR 0594 (shadow-seam) ·
 **Előkészíti:** E14-R14 (audio-setup varázsló), E14-R32 (chord-kalibráció
 artefaktum)
 
@@ -24,7 +24,7 @@ artefaktum)
   **nem volt fogyasztója** (`grep` bizonyíték: csak a zászló-regiszter és a
   release-doksik hivatkozták).
 - `lib/features/live/domain/evaluation/confidence_calibration_profile.dart`
-  (ADR 0536) kész: `ConfidenceCalibrationResolver.calibrate` VAGY értéket ad,
+  (ADR 0587) kész: `ConfidenceCalibrationResolver.calibrate` VAGY értéket ad,
   VAGY tipizált okot (`noArtefact`, `modelMismatch`, `bandMismatch`,
   `inSampleArtefact`). `selective_prediction.dart` `SelectivePredictionPolicy`
   + `applySelectivePolicy`. A fán **nincs held-out artefaktum**, ezért a
@@ -124,7 +124,7 @@ bekötés: matematikát nem tartalmaz, csak PKG-B rezolvereit hívja. A
 A szállított fában mindkettő `null` marad — de a `null` mostantól a rezolver
 **verdiktje** (`CalibrationUnavailableReason.noArtefact`), nem hardkódolt
 literál. Érték csak HELD-OUT, modellre kötött artefaktumból jöhet: az
-in-sample visszautasítás (ADR 0536 D2) a rezolveré, és ez a fájl soha nem
+in-sample visszautasítás (ADR 0587 D2) a rezolveré, és ez a fájl soha nem
 kerüli meg.
 
 A chord-sáv modell-kötése a `shippedChordEngineRevision` NEVESÍTETT konstans

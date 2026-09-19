@@ -1,4 +1,4 @@
-// E14-R27 (ADR 0539): the chord-engine comparison, pure half.
+// E14-R27 (ADR 0588): the chord-engine comparison, pure half.
 //
 // What these cells prove:
 //   * the comparison refuses an incomplete grid (a missing run) and a

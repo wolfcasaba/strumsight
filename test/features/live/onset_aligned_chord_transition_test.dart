@@ -1,4 +1,4 @@
-// E14-R28 (ADR 0545 D2/D3) — chord label transitions are ONSET-ALIGNED.
+// E14-R28 (ADR 0594 D2/D3) — chord label transitions are ONSET-ALIGNED.
 //
 // The ADR 0518 stabilizer answered "what is the new label" (N agreeing
 // frames). It had no answer for "when may a chord change at all", so a slow
@@ -19,7 +19,7 @@ import 'package:strumsight/features/live/model/live_frame.dart';
 
 /// A frame on the engine's sample clock. [onsetTimeSec] is the newest DETECTED
 /// onset — recorded before direction classification, so it exists even for a
-/// strum whose direction was rejected (ADR 0545 D2).
+/// strum whose direction was rejected (ADR 0594 D2).
 LiveFrame _at(
   String? label, {
   required double engineTimeSec,
@@ -51,7 +51,7 @@ LiveFrame _clockless(String? label) => LiveFrame(
 );
 
 void main() {
-  group('ADR 0545 D2 — the window is DERIVED from constants that existed', () {
+  group('ADR 0594 D2 — the window is DERIVED from constants that existed', () {
     test('free = onset boost + 3 emitted frames, guided = + 5', () {
       const boost = DspConfig.chordOnsetBoostSeconds;
       const emit = DspConfig.frameEmitSeconds;
@@ -72,7 +72,7 @@ void main() {
     });
   });
 
-  group('ADR 0545 D2 — a displacement waits for an onset', () {
+  group('ADR 0594 D2 — a displacement waits for an onset', () {
     // Baseline A is established at t=0 with a fresh onset; the challenger B
     // then agrees for 3 frames, but the newest onset is 1.0 s old — inside
     // neither the alignment window (0.384 s) nor the staleness horizon (2 s).
@@ -150,7 +150,7 @@ void main() {
     });
   });
 
-  group('ADR 0545 D2 — the window boundary is inclusive', () {
+  group('ADR 0594 D2 — the window boundary is inclusive', () {
     RecognitionStabilizer proven() {
       final s = RecognitionStabilizer();
       s.stabilize(_at('A', engineTimeSec: 0.0, onsetTimeSec: 0.0));
@@ -184,7 +184,7 @@ void main() {
     });
   });
 
-  group('ADR 0545 D2 — the gate can never freeze a label', () {
+  group('ADR 0594 D2 — the gate can never freeze a label', () {
     test('an onset older than LiveFrame.strumHoldSec has expired, so the '
         'gate re-opens', () {
       final s = RecognitionStabilizer();

@@ -1,4 +1,4 @@
-// E14-R38 (ADR 0551 D6) — the correction loop, at the level it actually
+// E14-R38 (ADR 0600 D6) — the correction loop, at the level it actually
 // lives: a PURE projection over the matcher + the chord scorer.
 //
 // No reducer state was added for it, so there is nothing to drive through a

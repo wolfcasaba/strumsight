@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../audio/chord_audition.dart';
 
-/// The editor-scoped "hear this chord" player (ADR 0535 D2).
+/// The editor-scoped "hear this chord" player (ADR 0585 D2).
 ///
 /// Autodisposed and meant to be **watched** from the editing screen's
 /// `build` so leaving the route drops the last listener and Riverpod tears

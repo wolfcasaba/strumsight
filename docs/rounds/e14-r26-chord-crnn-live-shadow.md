@@ -1,6 +1,6 @@
-# E14-R26 — A szállított Chord CRNN élő shadow bekötése (ADR 0549)
+# E14-R26 — A szállított Chord CRNN élő shadow bekötése (ADR 0598)
 
-- **Kör:** E14-R26 · **Csomag:** PKG-E · **ADR:** 0549
+- **Kör:** E14-R26 · **Csomag:** PKG-E · **ADR:** 0598
 - **Ág:** `claude/laptop-apk-debug-prompt-kys4oa`
 - **Környezet:** nincs Dart/Flutter SDK → lokális gate nem futtatható; a
   mérce a session végi `full-gate.yml` + `build-apk.yml`.
@@ -35,7 +35,7 @@ gyök/minőség mátrix; a `RecognitionRuntimeInfo` akkord-mezői
 (`chordModelId`/`chordModelVersion`/`chordModelSha256`/`chordFallbackReason`);
 a Lab panel akkord-sora.
 
-**Kívül:** `real_strum_engine.dart` (PKG-A — nem módosult, lásd ADR 0549 D5);
+**Kívül:** `real_strum_engine.dart` (PKG-A — nem módosult, lásd ADR 0598 D5);
 `pubspec.yaml`; `cqt_extractor.dart` (nem kapott streaming API-t);
 `evaluation/**` (PKG-B); DSP-küszöbök.
 
@@ -48,7 +48,7 @@ a Lab panel akkord-sora.
 `widgets/live_lab_panel.dart`
 **Új (test):** `test/features/live/ml/chord_crnn_shadow_runner_test.dart`
 **Változatlan:** `assets/ml/model_manifest.json` (a bejegyzés helyes volt)
-**Docs:** `docs/adr/0549-*.md`, ez a brief, `docs/rag/chunks/018-*.md`
+**Docs:** `docs/adr/0598-*.md`, ez a brief, `docs/rag/chunks/018-*.md`
 
 ## 5. Kapuk
 
@@ -67,7 +67,7 @@ Változatlan ADR 0052 zöld kapu.
 | 7 | N.C. kezelés és a gyök/minőség mátrix | **PINNED-BY-TEST** — `a constant candidate against silence lands in the N.C. row` |
 | 8 | Latency/memória riport eszközön | **NEEDS-MEASUREMENT** |
 | 9 | NNLS↔CRNN↔ground-truth időben illesztett egyezés valós korpuszon | **NEEDS-MEASUREMENT** (R27 bemenete) |
-| 10 | A streaming ablak és a folytonos CQT eltérése | **NEEDS-MEASUREMENT** — ADR 0549 D4 kimondja |
+| 10 | A streaming ablak és a folytonos CQT eltérése | **NEEDS-MEASUREMENT** — ADR 0598 D4 kimondja |
 
 ## 7. Verifikáció
 

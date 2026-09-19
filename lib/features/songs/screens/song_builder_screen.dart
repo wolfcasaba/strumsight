@@ -20,7 +20,7 @@ import '../widgets/strum_pattern_editor.dart';
 /// tempo. Saving persists it (Songs list) and it becomes a fully playable,
 /// scorable Learn lesson.
 ///
-/// Composing by ear (ADR 0535): every chord tap is HEARD as the strummed
+/// Composing by ear (ADR 0585): every chord tap is HEARD as the strummed
 /// fingering, and the Preview transport plays the whole progression with the
 /// authored pattern at tempo — so the song can be written before it is
 /// played on the guitar.
@@ -46,7 +46,7 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
   final TapTempo _tapTempo = TapTempo(minBpm: 50, maxBpm: 180);
 
   // Created lazily from the WATCHED audition (see `build`) so the player's
-  // lifetime is the route's — never a `read` in a tap callback (ADR 0535 D2).
+  // lifetime is the route's — never a `read` in a tap callback (ADR 0585 D2).
   SongPreviewController? _preview;
 
   // A gentle default so a brand-new song is instantly playable: downs on beats.
@@ -204,7 +204,7 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     // Watched (not read): keeps the route-scoped player alive exactly as
-    // long as this screen is mounted (ADR 0535 D2).
+    // long as this screen is mounted (ADR 0585 D2).
     final audition = ref.watch(chordAuditionProvider);
     final preview = _previewFor(audition);
     final canPreview = _chords.isNotEmpty && _pattern.any((d) => d != null);
@@ -246,7 +246,7 @@ class _SongBuilderScreenState extends ConsumerState<SongBuilderScreen> {
               Row(
                 children: [
                   Expanded(child: _Label(l10n.songProgression)),
-                  // Preview transport (ADR 0535 D3): icon-only so the header
+                  // Preview transport (ADR 0585 D3): icon-only so the header
                   // row keeps its height and never overflows at large text
                   // scales; the tooltip carries the play/stop label.
                   ListenableBuilder(

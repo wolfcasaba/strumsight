@@ -1,5 +1,5 @@
 /// The controlled rollout ladder of one recognition model band
-/// (SDD Ch14 §7.2/§7.4 gates, Kör 24 and Kör 33; ADR 0542).
+/// (SDD Ch14 §7.2/§7.4 gates, Kör 24 and Kör 33; ADR 0591).
 ///
 /// This is a CLOSED enum on purpose. A percentage `double` or a free
 /// `String` stage name would let a build claim a rollout level nobody

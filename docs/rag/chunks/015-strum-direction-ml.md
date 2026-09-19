@@ -154,7 +154,7 @@ lag ∈ (0, 0.5 s), clockless producers (−1, mocks) skip correction.
 
 ---
 
-## AS-BUILT — E14-R23: what the strum SHADOW band actually compares (ADR 0548)
+## AS-BUILT — E14-R23: what the strum SHADOW band actually compares (ADR 0597)
 
 Written 2026-09-09. This section exists because "shadow mode" is easy to read
 as more than it is, and the seam that carries it decides the answer.
@@ -201,7 +201,7 @@ cannot mistake the window for the session. Latency bins (20/50/100/200 ms)
 are REPORTING bins — no recognition threshold reads them.
 
 **Gate.** `recognitionShadowModeEnabled && strumModelRolloutStage
-.runsInference` (ADR 0542 D2), evaluated only in
+.runsInference` (ADR 0591 D2), evaluated only in
 `RecognitionShadowGate.fromFlags`. Closed → no pipeline is constructed, no
 weights are parsed, no CQT frame is computed. Both halves are `off`/`false`
 in every shipped environment.

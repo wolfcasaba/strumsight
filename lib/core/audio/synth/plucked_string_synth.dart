@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import '../codec/wav_encoder.dart';
 
-/// Pure-Dart plucked-string synthesis for chord audition (ADR 0535 D1).
+/// Pure-Dart plucked-string synthesis for chord audition (ADR 0585 D1).
 ///
 /// Karplus–Strong: a noise burst circulating in a delay line of
 /// `sampleRate / frequency` samples through a two-tap averaging filter. The

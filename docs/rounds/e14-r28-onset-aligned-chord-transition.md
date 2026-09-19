@@ -1,6 +1,6 @@
-# E14-R28 — Onset-igazított akkordváltás, chord-latch diagnosztika, shadow-seam (ADR 0545)
+# E14-R28 — Onset-igazított akkordváltás, chord-latch diagnosztika, shadow-seam (ADR 0594)
 
-- **Kör:** E14-R28 · **Csomag:** PKG-A · **ADR:** 0545
+- **Kör:** E14-R28 · **Csomag:** PKG-A · **ADR:** 0594
 - **Ág:** `claude/laptop-apk-debug-prompt-kys4oa`
 - **Környezet:** nincs Dart/Flutter SDK → **lokális gate nem futtatható**.
 
@@ -59,11 +59,11 @@ shadow-implementáció (PKG-E); UI (PKG-F); zászlók (PKG-D).
 | `test/features/live/onset_aligned_chord_transition_test.dart` | **ÚJ** |
 | `test/features/live/chord_latch_diagnostics_report_test.dart` | **ÚJ** (elvárás-mentes riport) |
 | `test/features/live/recognition_shadow_observer_test.dart` | **ÚJ** |
-| `docs/adr/0545-…md`, `docs/rag/chunks/012-…md` | doksi |
+| `docs/adr/0594-…md`, `docs/rag/chunks/012-…md` | doksi |
 
 ## 5. Kötött döntések
 
-ADR 0545 D1–D6. Kiemelten: **egy** stabilizátor-osztály marad (D1); az ablak
+ADR 0594 D1–D6. Kiemelten: **egy** stabilizátor-osztály marad (D1); az ablak
 **levezetett** (D3); **nincs küszöbhangolás** (D4); a riport **nem assertál
 küszöböt** (D5); a seam alapból **no-op** és bit-azonos (D6).
 

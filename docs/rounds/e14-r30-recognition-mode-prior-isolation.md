@@ -1,6 +1,6 @@
-# E14-R30 — Expected-chord prior szigorú izolációja: `RecognitionMode` + tie-break (ADR 0544)
+# E14-R30 — Expected-chord prior szigorú izolációja: `RecognitionMode` + tie-break (ADR 0593)
 
-- **Kör:** E14-R30 · **Csomag:** PKG-A · **ADR:** 0544
+- **Kör:** E14-R30 · **Csomag:** PKG-A · **ADR:** 0593
 - **Ág:** `claude/laptop-apk-debug-prompt-kys4oa`
 - **Környezet:** nincs Dart/Flutter SDK ezen a boxon → **lokális gate nem
   futtatható**; a mérce a session végi `full-gate.yml` + `build-apk.yml`.
@@ -49,11 +49,11 @@ zászlók (PKG-D); ARB (orchestrátor). Ez a kör **nem** hangol DSP-küszöböt
 | `lib/features/live/public.dart` | `recognition_mode.dart` export |
 | `test/features/live/recognition_mode_isolation_test.dart` | **ÚJ** |
 | `test/features/live/dsp/viterbi_decoder_test.dart` | API-frissítés + a régi viselkedést rögzítő cella cseréje |
-| `docs/adr/0544-…md`, `docs/rag/chunks/012-…md` | doksi |
+| `docs/adr/0593-…md`, `docs/rag/chunks/012-…md` | doksi |
 
 ## 5. Kötött döntések
 
-ADR 0544 D1–D5. Kiemelten: `RecognitionMode` **két** tagú (`lab` szándékosan
+ADR 0593 D1–D5. Kiemelten: `RecognitionMode` **két** tagú (`lab` szándékosan
 kimarad); az alapérték `free` (fail-closed); a tie-break sáv **0,05**, a
 törölt `expectedPrior`-ból átvéve, **nem újrahangolva**.
 
@@ -68,7 +68,7 @@ törölt `expectedPrior`-ból átvéve, **nem újrahangolva**.
 | 5 | A prior nem hagy nyomot a trellisben | **PINNED-BY-TEST** — hint törlése után képkockánként bit-azonos címke **és** confidence |
 | 6 | A mód **minden exportban** rögzül | **PARTIAL** — `LivePipeline.mode`, `ChordLatchDiagnostics.mode`, shadow-seam `mode` igen; `RecognitionRuntimeInfo` + evaluation manifest **más csomag tulajdona** (patch a jelentésben) |
 | 7 | Leakage-őr az evaluation úton | **NEM ITT** — `evaluation/**` = PKG-B; a jelentés kéri |
-| 8 | A prior gyengülésének hatása a tanórai pontosságra | **NEEDS-MEASUREMENT** — nincs adat, ADR 0544 D3 kimondja |
+| 8 | A prior gyengülésének hatása a tanórai pontosságra | **NEEDS-MEASUREMENT** — nincs adat, ADR 0593 D3 kimondja |
 
 ## 7. Verifikáció
 
@@ -78,7 +78,7 @@ Lokálisan **nem futtatható** (nincs SDK). CI-ben:
 
 ## 8. Kockázatok
 
-- **A guided viselkedés érdemben gyengül** (ADR 0544 D3): a maj↔maj7 tartós
+- **A guided viselkedés érdemben gyengül** (ADR 0593 D3): a maj↔maj7 tartós
   ambiguitást a prior már nem tartja meg. Ez szándékos, de **mérés nélkül nem
   tudjuk, hogy tanórán jobb-e**. Visszaút: a sávot mérés UTÁN lehet emelni —
   a mechanizmus (tie-break) akkor is helyes marad.

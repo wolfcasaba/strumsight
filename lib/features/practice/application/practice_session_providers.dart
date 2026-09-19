@@ -303,7 +303,7 @@ final practiceSessionControllerProvider = Provider.autoDispose
     });
 
 /// The concrete "next fix" for the ACTIVE session, or `null` when there is
-/// nothing to correct (E14-R38, ADR 0551 D6).
+/// nothing to correct (E14-R38, ADR 0600 D6).
 ///
 /// A stream over the controller's own state stream rather than a plain
 /// `Provider`: the correction is recomputed inside the scoring pass, which

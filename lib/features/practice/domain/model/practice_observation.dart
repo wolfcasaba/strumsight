@@ -56,7 +56,7 @@ final class StrumObservation extends PracticeObservation {
   int get hashCode => Object.hash(at, sequence, direction, confidence);
 }
 
-/// How much EVIDENCE a [ChordObservation] carries (E14-R38, ADR 0551 D1).
+/// How much EVIDENCE a [ChordObservation] carries (E14-R38, ADR 0600 D1).
 ///
 /// Before this round every chord observation coming off the Live frame
 /// stream was recorded with `confidence: 1.0` — the adapter's own comment
@@ -101,11 +101,11 @@ final class ChordObservation extends PracticeObservation {
   final String? label;
 
   /// The recognizer's confidence in [label], or `null` when the producer
-  /// does not measure one (E14-R38, ADR 0551 D2).
+  /// does not measure one (E14-R38, ADR 0600 D2).
   ///
   /// `null` means NOT MEASURED — it is never read as "zero confidence" and
   /// never as "certain". The Live adapter passes `null` because the live
-  /// chord path has no calibrated chord confidence to report (ADR 0544/0516:
+  /// chord path has no calibrated chord confidence to report (ADR 0593/0516:
   /// `ChordPrediction.calibratedConfidence` is `null` by design); consumers
   /// that need to know whether the reading counts read [evidence] instead.
   final double? confidence;
@@ -154,7 +154,7 @@ final class ChordObservation extends PracticeObservation {
 }
 
 /// Shared per-observation checks. [confidence] is nullable because a chord
-/// observation may honestly report "not measured" (ADR 0551 D2); a `null`
+/// observation may honestly report "not measured" (ADR 0600 D2); a `null`
 /// confidence is neither out of range nor non-finite, so it produces no
 /// failure. Strum observations always pass a real number, so their behaviour
 /// is unchanged.

@@ -27,7 +27,7 @@ import 'package:strumsight/features/song_trainer/presentation/screens/song_edito
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/core/design_system/public.dart';
 
-/// Adding a chord now HEARS it (E18-R01, ADR 0535); the real player is an
+/// Adding a chord now HEARS it (E18-R01, ADR 0585); the real player is an
 /// `audioplayers` platform channel a widget test must never reach — the same
 /// injection every audio-using test makes.
 final class _SilentAudition implements ChordAudition {

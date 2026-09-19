@@ -1,4 +1,4 @@
-// E14-R21/R32 (ADR 0536 D6): loading the calibration artefact.
+// E14-R21/R32 (ADR 0587 D6): loading the calibration artefact.
 //
 // What these cells prove:
 //   * absence is a first-class, named state — and it is today's state;

@@ -338,7 +338,7 @@ final class _EditorBody extends ConsumerWidget {
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final typography = Theme.of(context).extension<SsTypography>()!;
     // Watched, not read: the route-scoped audition lives exactly as long as
-    // the editor body is mounted (ADR 0535 D2).
+    // the editor body is mounted (ADR 0585 D2).
     final audition = ref.watch(chordAuditionProvider);
     return SafeArea(
       // The bottom Save bar owns the system-navigation inset; the extra
@@ -479,7 +479,7 @@ final class _EditorBody extends ConsumerWidget {
             onAddChord: (measureIndex, symbol) {
               controller.addChord(measureIndex: measureIndex, symbol: symbol);
               // Composing by ear: the chord just written is heard as its
-              // strummed fingering (ADR 0535 D1, D4). A separate "hear
+              // strummed fingering (ADR 0585 D1, D4). A separate "hear
               // again" control is deferred: it would move the E13-R24 pixel
               // golden of this screen, which only the user's box can
               // regenerate (brief §0.0).

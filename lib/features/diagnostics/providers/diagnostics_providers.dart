@@ -83,7 +83,7 @@ class DiagnosticsUploadNotifier extends Notifier<DiagnosticsUploadStatus> {
       surface: surface,
       events: DiagnosticsSession.eventsFrom(result),
       audioClips: clip == null ? const [] : [clip],
-      // SDD Ch14 Kör 40 (ADR 0542 D7): the tag is resolved in the settings
+      // SDD Ch14 Kör 40 (ADR 0591 D7): the tag is resolved in the settings
       // layer that owns the opt-in, and comes back null unless the build
       // flag, the enrolment and a live pseudonym ALL say yes. A null tag
       // means an untagged capture — never an invented one.

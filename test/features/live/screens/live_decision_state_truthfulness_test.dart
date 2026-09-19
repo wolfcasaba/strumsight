@@ -1,7 +1,7 @@
-// E14-R37 (ADR 0550) — the Live stage's honesty on the DECISION axis.
+// E14-R37 (ADR 0599) — the Live stage's honesty on the DECISION axis.
 //
 // `live_screen_truthfulness_test.dart` pins the REJECT-REASON axis (ADR 0520
-// / 0535): why nothing was recognised. This file pins the other axis of the
+// / 0586): why nothing was recognised. This file pins the other axis of the
 // same contract (ADR 0505 D3): WHICH decision state the recognizer is in.
 //
 //   1. All six states render, and all six render DISTINCTLY — no two of them
@@ -111,7 +111,7 @@ void main() {
         hasLength(RecognitionDecision.values.length),
         reason:
             'two decision states rendering the same words is the same '
-            'failure ADR 0535 removed from the reject-reason axis',
+            'failure ADR 0586 removed from the reject-reason axis',
       );
       for (final text in texts) {
         expect(text.trim(), isNotEmpty);

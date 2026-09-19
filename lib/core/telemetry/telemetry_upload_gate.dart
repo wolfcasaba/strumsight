@@ -1,5 +1,5 @@
 /// The single predicate that decides whether ANY beta telemetry may leave
-/// the device (SDD Ch14 Kör 41, ADR 0542 D6).
+/// the device (SDD Ch14 Kör 41, ADR 0591 D6).
 ///
 /// **Measured state of the tree at this round: there is no transport.**
 /// `telemetry_sink.dart` still ships `NoopTelemetrySink` and

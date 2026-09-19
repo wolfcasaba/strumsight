@@ -1,7 +1,7 @@
 # E14-R42 — Program-zárás és production gate: a kapu-tábla és a nyomonkövetés MÉRT állapotra igazítása
 
 - **Kör-azonosító:** `E14-R42` (Chapter 14, Kör 42 — a fejezet ZÁRÓ köre)
-- **ADR:** [0543](../adr/0543-ch14-production-gate-and-traceability-closure.md)
+- **ADR:** [0592](../adr/0592-ch14-production-gate-and-traceability-closure.md)
   (foglalva: `python3 tools/round-slots.py reserve-adr --round E14-R42`)
 - **Dátum:** 2026-09-09
 - **Implementer:** Claude (Opus 5), PKG-D
@@ -55,7 +55,7 @@ orchestrátor — a javasolt sorok a jelentésben).
 
 ## 4. Fájlok
 
-**Új:** `docs/release/ch14-production-gate.md`, `docs/adr/0543-*.md`.
+**Új:** `docs/release/ch14-production-gate.md`, `docs/adr/0592-*.md`.
 **Módosított:** `docs/sdd/00-index.md` (28. sor státusz-prózája),
 `docs/execution/06-requirements-traceability-matrix.md` (E14 sáv),
 `docs/execution/07-risk-register.md`, `README.md`.

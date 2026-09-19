@@ -1,7 +1,7 @@
 # Release-kapu fokozatok és kontrollált rollout (E14-R24 / E14-R33)
 
 - **ADR:** [0537](../adr/0537-gate-stages-and-clamped-rollout.md) (strum),
-  [0541](../adr/0541-chord-gate-rows-and-rollout.md) (chord)
+  [0590](../adr/0590-chord-gate-rows-and-rollout.md) (chord)
 - **Fájl:** [`evaluation/recognition/recognition_release_gate.json`](../../evaluation/recognition/recognition_release_gate.json)
   (`thresholdsVersion: ch14-alpha-v1`, `schemaVersion: "1"` — változatlan)
 - **Kód:** `…/domain/evaluation/recognition_release_gate.dart` (stage/band/enabled),
@@ -74,7 +74,7 @@ teendője.
 ## 5. Rollout-clamp
 
 A **létra PKG-D tulajdona**
-(`lib/app/config/recognition_rollout_stage.dart`, ADR 0542):
+(`lib/app/config/recognition_rollout_stage.dart`, ADR 0591):
 
 ```
 off → shadow → alpha → beta → ga
@@ -87,7 +87,7 @@ off → shadow → alpha → beta → ga
 - `shadow` ⇐ **pontosság nem engedélyezi és nem is tiltja** — sosem
   felhasználó-látható, ezért a shadow-főkapcsoló őrzi
   (`recognitionShadowModeEnabled` / `recognitionChordShadowModeEnabled`,
-  ADR 0542 D2), nem a metrika;
+  ADR 0591 D2), nem a metrika;
 - `alpha` ⇐ minden alpha sor (band + shared) engedélyezve ÉS átment;
 - `beta` és `ga` ⇐ ugyanez a beta sorokra is (ez a PKG-D-oldali
   `RecognitionRolloutStage.requiresBetaThresholds` gépi tükre);

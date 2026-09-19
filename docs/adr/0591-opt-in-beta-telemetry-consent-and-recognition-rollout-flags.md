@@ -1,4 +1,4 @@
-# ADR 0542 — Opt-in béta telemetria, egyetlen feltöltési kapu és a felismerési kiadási létra: a zászló SOHA nem önmagában enged, és ami nincs mérve, az `off` marad
+# ADR 0591 — Opt-in béta telemetria, egyetlen feltöltési kapu és a felismerési kiadási létra: a zászló SOHA nem önmagában enged, és ami nincs mérve, az `off` marad
 
 - **Státusz:** Elfogadva
 - **Kör:** `E14-R41` (Chapter 14 — Recognition Accuracy & Useful UI Recovery,

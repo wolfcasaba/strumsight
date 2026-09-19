@@ -41,7 +41,7 @@ enum RecognitionDecision {
 /// Closed, machine-checkable reasons a [RecognitionDecision] rejected or
 /// stayed uncertain (ADR 0505 D3) — never the raw exception text. The six
 /// `signal*` members mirror the six non-`good` `SignalQualityState`s
-/// one-to-one (ADR 0535 D1): a merged "signal quality" bucket carried a
+/// one-to-one (ADR 0586 D1): a merged "signal quality" bucket carried a
 /// single piece of advice that was wrong for half the states it covered, so
 /// a collector/"other" tag is forbidden here.
 enum RecognitionRejectReason {
@@ -51,27 +51,27 @@ enum RecognitionRejectReason {
   /// signal-level problem — see [signalUnstable] for a swinging input level.
   unstable,
 
-  /// Mirrors `SignalQualityState.tooQuiet` (ADR 0535 D1): the input level is
+  /// Mirrors `SignalQualityState.tooQuiet` (ADR 0586 D1): the input level is
   /// under the quiet threshold.
   signalTooQuiet,
 
-  /// Mirrors `SignalQualityState.tooLoud` (ADR 0535 D1): the input peak is
+  /// Mirrors `SignalQualityState.tooLoud` (ADR 0586 D1): the input peak is
   /// over the loud threshold (clipping already excluded).
   signalTooLoud,
 
-  /// Mirrors `SignalQualityState.clipping` (ADR 0535 D1): too many samples
+  /// Mirrors `SignalQualityState.clipping` (ADR 0586 D1): too many samples
   /// are pinned at full scale.
   signalClipping,
 
-  /// Mirrors `SignalQualityState.tooNoisy` (ADR 0535 D1): tonalness is under
+  /// Mirrors `SignalQualityState.tooNoisy` (ADR 0586 D1): tonalness is under
   /// the noisy ceiling — mostly noise, not a chord.
   signalTooNoisy,
 
-  /// Mirrors `SignalQualityState.speechLike` (ADR 0535 D1): tonalness sits in
+  /// Mirrors `SignalQualityState.speechLike` (ADR 0586 D1): tonalness sits in
   /// the speech-like band, never a speaker/source classification.
   signalSpeechLike,
 
-  /// Mirrors `SignalQualityState.unstable` (ADR 0535 D1): the input LEVEL is
+  /// Mirrors `SignalQualityState.unstable` (ADR 0586 D1): the input LEVEL is
   /// swinging. Deliberately distinct from [unstable], which is about the
   /// chord verdict — the two mean different things and must not be merged.
   signalUnstable,

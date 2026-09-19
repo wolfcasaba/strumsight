@@ -3,7 +3,7 @@ import 'package:meta/meta.dart';
 import 'recognition_mode.dart';
 
 /// A read-only, per-chord-frame snapshot of every value the musical-presence
-/// chord latch reads (H3 / L2 diagnostics, E14-R28, ADR 0545 D5).
+/// chord latch reads (H3 / L2 diagnostics, E14-R28, ADR 0594 D5).
 ///
 /// This type exists so the latch can be MEASURED without retuning it. It adds
 /// no decision, no threshold and no state: `LivePipeline` fills it from values
@@ -50,7 +50,7 @@ class ChordLatchDiagnostics {
   /// processed (seconds from session start).
   final double engineTimeSec;
 
-  /// Which regime the producing engine was constructed in (ADR 0544 D5): a
+  /// Which regime the producing engine was constructed in (ADR 0593 D5): a
   /// measurement taken in `guided` is not comparable to one taken in `free`.
   final RecognitionMode mode;
 
@@ -115,7 +115,7 @@ class ChordLatchDiagnostics {
   final bool chordLatched;
 
   /// Whether the guided-mode expected-chord TIE-BREAK changed the reported
-  /// label on this frame (ADR 0544 D3). Always false in
+  /// label on this frame (ADR 0593 D3). Always false in
   /// [RecognitionMode.free] — that is the fact the free-mode guard test
   /// pins.
   final bool expectedTieBreakApplied;

@@ -1,7 +1,7 @@
 # Konfidencia-kalibráció és selective prediction (E14-R21 / E14-R32)
 
-- **ADR:** [0536](../adr/0536-model-bound-calibration-artefact-and-selective-prediction.md) (strum),
-  [0540](../adr/0540-chord-calibration-open-set-and-selective-prediction.md) (chord)
+- **ADR:** [0587](../adr/0587-model-bound-calibration-artefact-and-selective-prediction.md) (strum),
+  [0589](../adr/0589-chord-calibration-open-set-and-selective-prediction.md) (chord)
 - **Állapot:** a **mechanizmus** kész és tesztelt; **egyetlen mért artefaktum
   sincs a fán**, ezért `StrumPrediction.calibratedConfidence` és
   `ChordPrediction.calibratedConfidence` továbbra is `null`.

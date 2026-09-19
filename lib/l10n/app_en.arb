@@ -2978,7 +2978,7 @@
   },
   "liveDecisionCandidate": "Picking up a chord…",
   "@liveDecisionCandidate": {
-    "description": "Live stage decision chip for RecognitionDecision.candidate (E14-R37, ADR 0550): a verdict is forming but has cleared no threshold, so no chord is claimed."
+    "description": "Live stage decision chip for RecognitionDecision.candidate (E14-R37, ADR 0599): a verdict is forming but has cleared no threshold, so no chord is claimed."
   },
   "liveDecisionConfirmed": "Chord confirmed",
   "@liveDecisionConfirmed": {
@@ -2994,7 +2994,7 @@
   },
   "liveDecisionProvisionalNamed": "Settling on {chord}…",
   "@liveDecisionProvisionalNamed": {
-    "description": "Live stage decision chip for RecognitionDecision.provisional when a chord label is known. The chord is named ONLY inside this hedged sentence — never as a confirmed verdict (ADR 0550 D1).",
+    "description": "Live stage decision chip for RecognitionDecision.provisional when a chord label is known. The chord is named ONLY inside this hedged sentence — never as a confirmed verdict (ADR 0599 D1).",
     "placeholders": {
       "chord": {
         "type": "String",
@@ -3120,11 +3120,11 @@
   "liveListening": "Listening",
   "liveModeFreePlay": "Free play",
   "@liveModeFreePlay": {
-    "description": "Live stage mode chip: nothing is being asked of the player, the stage mirrors what it hears (E14-R37, ADR 0550 D2)."
+    "description": "Live stage mode chip: nothing is being asked of the player, the stage mirrors what it hears (E14-R37, ADR 0599 D2)."
   },
   "liveModeGuided": "Guided",
   "@liveModeGuided": {
-    "description": "Live stage mode chip: a lesson/song target is on screen (E14-R37, ADR 0550 D2)."
+    "description": "Live stage mode chip: a lesson/song target is on screen (E14-R37, ADR 0599 D2)."
   },
   "liveNext": "Next",
   "livePause": "Pause",
@@ -3142,7 +3142,7 @@
   },
   "liveRejectSignalClipping": "Distorting (clipping) — back away from the mic and ease up on the strum",
   "@liveRejectSignalClipping": {
-    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalClipping (ADR 0535)."
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalClipping (ADR 0586)."
   },
   "liveRejectSignalQuality": "Signal too weak to tell — move closer to the mic",
   "@liveRejectSignalQuality": {
@@ -3150,23 +3150,23 @@
   },
   "liveRejectSignalSpeechLike": "Hearing speech or other sound — let only the guitar play",
   "@liveRejectSignalSpeechLike": {
-    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalSpeechLike (ADR 0535)."
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalSpeechLike (ADR 0586)."
   },
   "liveRejectSignalTooLoud": "Too loud — move back from the mic or play softer",
   "@liveRejectSignalTooLoud": {
-    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooLoud (ADR 0535)."
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooLoud (ADR 0586)."
   },
   "liveRejectSignalTooNoisy": "Too much background noise — find a quieter spot",
   "@liveRejectSignalTooNoisy": {
-    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooNoisy (ADR 0535)."
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooNoisy (ADR 0586)."
   },
   "liveRejectSignalTooQuiet": "Too quiet — move closer to the mic or play louder",
   "@liveRejectSignalTooQuiet": {
-    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooQuiet (ADR 0535)."
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooQuiet (ADR 0586)."
   },
   "liveRejectSignalUnstable": "Level keeps jumping — hold the phone steady and strum evenly",
   "@liveRejectSignalUnstable": {
-    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalUnstable (ADR 0535)."
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalUnstable (ADR 0586)."
   },
   "liveRejectTimeout": "Took too long to decide — try again",
   "@liveRejectTimeout": {
@@ -3585,11 +3585,11 @@
   },
   "practiceCorrectionTitle": "Next fix",
   "@practiceCorrectionTitle": {
-    "description": "Heading of the practice session's correction banner (E14-R38, ADR 0551 D6) — the one concrete thing to change on the next target."
+    "description": "Heading of the practice session's correction banner (E14-R38, ADR 0600 D6) — the one concrete thing to change on the next target."
   },
   "practiceCorrectionUnclear": "The app could not tell what it heard — play that part again.",
   "@practiceCorrectionUnclear": {
-    "description": "Correction shown when the recognizer abstained and gave no typed reason. Blames the app, never the player (ADR 0551 D6); when a reason IS available the localized liveReject* sentence is shown instead."
+    "description": "Correction shown when the recognizer abstained and gave no typed reason. Blames the app, never the player (ADR 0600 D6); when a reason IS available the localized liveReject* sentence is shown instead."
   },
   "practiceErrorConfigCountInBarsOutOfRange": "Count-in bars must be between 0 and 4.",
   "practiceErrorConfigLoopCountOutOfRange": "Loop count must be between 1 and 32.",
@@ -4944,7 +4944,7 @@
   "songCapabilityTrainerUnavailable": "Trainer unavailable",
   "songChordHear": "Hear {chord}",
   "@songChordHear": {
-    "description": "Tooltip/semantics of a chord chip in the song builder: tapping it plays that chord (ADR 0535).",
+    "description": "Tooltip/semantics of a chord chip in the song builder: tapping it plays that chord (ADR 0585).",
     "placeholders": {
       "chord": {
         "type": "String",

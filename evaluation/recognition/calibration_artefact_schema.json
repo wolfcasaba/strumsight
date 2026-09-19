@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://strumsight.internal/schemas/confidence-calibration-artefact-1.json",
   "title": "Confidence calibration artefact",
-  "description": "Model-bound confidence-calibration artefact for the strum and chord recognition bands (E14-R21/E14-R32, ADR 0536/0540). Fitted by ml/honest_eval.py::section_calib on a HELD-OUT fold and emitted by CI (ml-train.yml sections=calib / chord-train.yml); read in the app by lib/features/live/domain/evaluation/confidence_calibration_profile.dart, whose hand-written parser is the enforcing implementation (ADR 0354 D8 precedent: no schema-library dependency). NO artefact ships today — every prediction's calibratedConfidence stays null until a held-out fit exists (ADR 0536 D1). The in-sample knots in lib/features/live/engine/ml/live_crnn_classifier.dart::calibrate are deliberately NOT promoted into this format: they were fitted on the same fold their accuracy was reported on.",
+  "description": "Model-bound confidence-calibration artefact for the strum and chord recognition bands (E14-R21/E14-R32, ADR 0587/0589). Fitted by ml/honest_eval.py::section_calib on a HELD-OUT fold and emitted by CI (ml-train.yml sections=calib / chord-train.yml); read in the app by lib/features/live/domain/evaluation/confidence_calibration_profile.dart, whose hand-written parser is the enforcing implementation (ADR 0354 D8 precedent: no schema-library dependency). NO artefact ships today — every prediction's calibratedConfidence stays null until a held-out fit exists (ADR 0587 D1). The in-sample knots in lib/features/live/engine/ml/live_crnn_classifier.dart::calibrate are deliberately NOT promoted into this format: they were fitted on the same fold their accuracy was reported on.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -31,7 +31,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["modelId", "modelSha256"],
-      "description": "The weights this calibration belongs to. Both fields are compared verbatim at every call: a matching id with a different sha256 is a mismatch, and the calibrated confidence is withheld (fail-closed, ADR 0536 D4).",
+      "description": "The weights this calibration belongs to. Both fields are compared verbatim at every call: a matching id with a different sha256 is a mismatch, and the calibrated confidence is withheld (fail-closed, ADR 0587 D4).",
       "properties": {
         "modelId": {
           "type": "string",

@@ -17,7 +17,7 @@ engedélyez.
 - 10 Alpha küszöb a `recognition_release_gate.json`-ban; a §7.3/§7.5 Beta
   célok sehol.
 - PKG-D már leszállította a `RecognitionRolloutStage` létrát
-  (`off → shadow → alpha → beta → ga`, ADR 0542) és a két `FeatureFlags`
+  (`off → shadow → alpha → beta → ga`, ADR 0591) és a két `FeatureFlags`
   mezőt, de **semmi nem köti a fokozatot a kapu verdiktjéhez**.
 - A legacy baseline megbukik az Alpha kapun (chord 0,671 · onset F1 0,674).
 
@@ -85,4 +85,4 @@ felsorolva a §6-ban; sikeres futás nincs állítva.
 - **PKG-E/PKG-F:** a rollout-fokozatot mindig a `clampRolloutStage(...)`
   kimenetéből olvassa (a flag `.name`-jét átadva), sosem közvetlenül a
   zászlóból. A `shadow` fokozatot a pontossági kapu nem engedélyezi és nem
-  is tiltja — azt a shadow-főkapcsoló őrzi (ADR 0542 D2).
+  is tiltja — azt a shadow-főkapcsoló őrzi (ADR 0591 D2).

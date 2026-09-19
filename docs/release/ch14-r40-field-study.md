@@ -10,7 +10,7 @@
   (the closed cohort + task tag), `fieldStudyEnrolmentProvider` and
   `resolveFieldSessionTag` in `lib/features/settings/providers/telemetry_consent_provider.dart`,
   gated on `FeatureFlags.recognitionFieldSessionTaggingEnabled`
-  ([ADR 0542](../adr/0542-opt-in-beta-telemetry-consent-and-recognition-rollout-flags.md) D7)
+  ([ADR 0591](../adr/0591-opt-in-beta-telemetry-consent-and-recognition-rollout-flags.md) D7)
 
 ---
 
@@ -76,7 +76,7 @@ Three separate, explicit acts. None of them implies another:
    **Without that separate consent, only the local aggregated report exists**
    and no audio is written anywhere.
 3. **Aggregate telemetry** — the Kör 41 opt-in, default OFF, revocable
-   ([ADR 0542](../adr/0542-opt-in-beta-telemetry-consent-and-recognition-rollout-flags.md)).
+   ([ADR 0591](../adr/0591-opt-in-beta-telemetry-consent-and-recognition-rollout-flags.md)).
 
 The field-session tag carries a closed cohort value, a closed task value and
 the rotating pseudonymous id — nothing else. There is no participant name,

@@ -1,6 +1,6 @@
-# E14-R38 — Guided practice: bizonyíték-állapot a kitalált konfidencia helyett, és a javító-hurok (ADR 0551)
+# E14-R38 — Guided practice: bizonyíték-állapot a kitalált konfidencia helyett, és a javító-hurok (ADR 0600)
 
-- **Kör:** E14-R38 · **Csomag:** PKG-F · **ADR:** 0551
+- **Kör:** E14-R38 · **Csomag:** PKG-F · **ADR:** 0600
 - **Ág:** `claude/laptop-apk-debug-prompt-kys4oa`
 - **Környezet:** nincs Dart/Flutter SDK → **lokális gate nem futtatható**;
   egyetlen teszt sem futott le itt. Mérce: `full-gate.yml` + `build-apk.yml`.

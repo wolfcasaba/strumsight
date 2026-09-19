@@ -1,6 +1,6 @@
-# E14-R39 — Adaptív, akadálymentességi és kültéri audit (ADR 0547)
+# E14-R39 — Adaptív, akadálymentességi és kültéri audit (ADR 0596)
 
-- **Kör:** E14-R39 · **Csomag:** PKG-C · **ADR:** 0547
+- **Kör:** E14-R39 · **Csomag:** PKG-C · **ADR:** 0596
 - **Ág:** `claude/laptop-apk-debug-prompt-kys4oa`
 - **Környezet:** nincs Dart/Flutter SDK → **lokális gate nem futtatható**;
   egyetlen cella sem futott le itt. A kontraszt-számok statikusan, a repó
@@ -37,10 +37,10 @@ a nem-színes csatorna bizonyítása; a `BeatPulseDot` reduced-motion ága
 (PKG-C tulajdon) + cellái; a kontraszt-mérés és a High Contrast téma valódi
 hatásának kimondása; az audit-dokumentum.
 
-**Kívül:** golden PNG (ADR 0547 D1 — a 360 profil overflow-mátrix, nem
+**Kívül:** golden PNG (ADR 0596 D1 — a 360 profil overflow-mátrix, nem
 golden); `lib/core/theme/**` és `lib/core/design_system/**` paletta-javítás
 (nem PKG-C tulajdon); `lib/features/live/widgets/chord_timeline.dart`
-(PKG-F); a `known-exceptions.yaml` (ADR 0547 D5 — nincs új tűrés, tehát
+(PKG-F); a `known-exceptions.yaml` (ADR 0596 D5 — nincs új tűrés, tehát
 nincs mit bejegyezni és nincs mit tükrözni az A6 őrben).
 
 ## 4. Érintett fájlok
@@ -64,7 +64,7 @@ nincs mit bejegyezni és nincs mit tükrözni az A6 őrben).
 
 ## 5. Döntések
 
-Lásd [ADR 0547](../adr/0547-narrow-viewport-colour-vision-and-outdoor-contrast.md)
+Lásd [ADR 0596](../adr/0596-narrow-viewport-colour-vision-and-outdoor-contrast.md)
 D1–D5.
 
 ## 6. Acceptance
@@ -199,5 +199,5 @@ konkrét értéket **mérni kell**, nem szemre választani.
 ### 10.3 Sor a pipeline-queue-hoz (az orchestrátor írja)
 
 ```
-E14-R39	PKG-C	adaptive/a11y/outdoor audit	docs/accessibility/ch14-r39-audit.md	ADR 0547	PARTIAL (B15/B16/B17 más tulajdonos, B18 ember)
+E14-R39	PKG-C	adaptive/a11y/outdoor audit	docs/accessibility/ch14-r39-audit.md	ADR 0596	PARTIAL (B15/B16/B17 más tulajdonos, B18 ember)
 ```

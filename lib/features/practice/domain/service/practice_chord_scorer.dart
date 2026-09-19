@@ -54,7 +54,7 @@ final class PracticeChordScore {
 
   /// How much of what the recognizer said it could actually stand behind —
   /// evidence-bearing chord observations ÷ all chord observations, reported
-  /// ALONGSIDE the score and never folded into it (E14-R38, ADR 0551 D5).
+  /// ALONGSIDE the score and never folded into it (E14-R38, ADR 0600 D5).
   ///
   /// This is the honest home for abstention: a session where the app was
   /// unsure half the time gets the SAME score as one where it was sure, and
@@ -84,7 +84,7 @@ final class PracticeChordScorer {
     final orderedObservations = observations.toList()
       ..sort((left, right) => left.at.compareTo(right.at));
     // Coverage is measured over EVERY observation, evidence-bearing or not —
-    // that ratio is the whole point (ADR 0551 D5). The scoring below then
+    // that ratio is the whole point (ADR 0600 D5). The scoring below then
     // sees only the evidence-bearing ones.
     final measuredCount = orderedObservations
         .where((observation) => observation.evidence.isEvidence)
@@ -180,7 +180,7 @@ final class PracticeChordScorer {
         insufficientReasonCode: PracticeMetricReasonCode.insufficientSamples,
       );
     }
-    // E14-R38 (ADR 0551 D3): only evidence-bearing readings may decide this
+    // E14-R38 (ADR 0600 D3): only evidence-bearing readings may decide this
     // target. The recognizer having SAID something it does not stand behind
     // is not the player playing the wrong chord — it is the app abstaining,
     // and the outcome says exactly that. Note the consequence, which is

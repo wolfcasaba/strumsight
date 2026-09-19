@@ -80,7 +80,7 @@ keretben kell nyernie.
 | **Chord-CNN-LSTM / BTC-SL / BTC-PL** (ChordMini, 301 címke) | Python/Flask backend, nagy szótár | szerveroldal; TFLite/ONNX export nincs dokumentálva | Eszközön NEM; szerver sértené az offline határt (ADR 0536) |
 | **2E1D dual-encoder + pszeudo-címkézés / tudásdesztilláció** (arXiv 2602.19778) | BTC-nél gyorsabb, kompaktabb | elvben exportálható, de nincs kész mobil artefaktum | Kutatási irány a saját CRNN utódjához |
 | **Joint strumming-direction + chord transcription** (arXiv 2508.07973) | PONT a mi feladatunk: irány + akkord együtt, akusztikus gitár | a cikk a proxyn blokkolt; súly/kód ismeretlen | Elsőként ELOLVASANDÓ a boxon (adatkészlet! a mi CRNN-jeinkhez) |
-| **Szintetikus tanítóadat akkordfelismeréshez** (arXiv 2508.05878) | Generált audión tanított modellek | — | A mi `tool/` szintézis-útvonalunk (Karplus–Strong, ADR 0535) ugyanez az elv — tanítóadat-bővítés |
+| **Szintetikus tanítóadat akkordfelismeréshez** (arXiv 2508.05878) | Generált audión tanított modellek | — | A mi `tool/` szintézis-útvonalunk (Karplus–Strong, ADR 0585) ugyanez az elv — tanítóadat-bővítés |
 | **Chord ai** (kereskedelmi) | Eszközön futó saját DL-modell, „beyond human” pontosság; mikrofonból és fájlból | igen, zárt | Termék-referencia: a döntés eszközön marad, a felhasználó fájlja a második forrás (= ADR 0536) |
 | **Yousician** | FFT-alapú hangerő/hang-detektálás keretenként, késleltetés-kalibráció | zárt | UX-referencia: kalibráció és „tiszta hang” útmutató, nem motor |
 | **Moises chord finder** | szerveroldali stem-szétválasztás + akkord | szerver | Offline határ miatt nem |

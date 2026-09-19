@@ -1,6 +1,6 @@
 // Audit fixes H9/H10/H19 — what the Live screen is allowed to CLAIM:
 //   H9  — while the merged recognizer rejects the frame for a SIGNAL reason
-//         (the six `signal*` reasons, ADR 0535 D1) the screen may not present
+//         (the six `signal*` reasons, ADR 0586 D1) the screen may not present
 //         a strum direction or a tempo as a measurement. It has just said it
 //         cannot tell what it is hearing (AGENTS.md §5).
 //   H10 — a strum indicator EXPIRES: 2 s without a fresh detection and the

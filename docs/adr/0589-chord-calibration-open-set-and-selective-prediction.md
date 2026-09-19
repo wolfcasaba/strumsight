@@ -1,6 +1,6 @@
-# ADR 0540 — Chord-kalibráció, nyílt halmazú („ismeretlen akkord”) döntés és selective prediction
+# ADR 0589 — Chord-kalibráció, nyílt halmazú („ismeretlen akkord”) döntés és selective prediction
 
-**Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R32 · **Párja:** ADR 0536 (strum-sáv) · **Kapcsolódik:** ADR 0505 D2, ADR 0509 (`chordUnknownFalseAccept`), ADR 0516/0535 (chord-döntés és okok)
+**Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R32 · **Párja:** ADR 0587 (strum-sáv) · **Kapcsolódik:** ADR 0505 D2, ADR 0509 (`chordUnknownFalseAccept`), ADR 0516/0586 (chord-döntés és okok)
 
 ## Kontextus (mért)
 
@@ -50,7 +50,7 @@ ADR-rel (Ch14 §12/1).
 
 ### D4 — A kalibrációs artefaktum ugyanaz a formátum, `band: "chord"`
 
-Az ADR 0536 D1–D6 változatlanul érvényes; a chord-sáv annyival bővül, hogy az
+Az ADR 0587 D1–D6 változatlanul érvényes; a chord-sáv annyival bővül, hogy az
 artefaktum **root+quality tudatos**: `perClassMappings` kulcsa
 `"<root>:<quality>"` (pl. `A:min`), és per-osztály leképezés csak a default
 leképezés MELLETT, nem helyette. Egy strum-artefaktum, amely per-osztály

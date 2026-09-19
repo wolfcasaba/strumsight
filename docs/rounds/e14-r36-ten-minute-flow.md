@@ -1,6 +1,6 @@
-# E14-R36 — Today és a „10 hasznos perc" lánc (ADR 0546)
+# E14-R36 — Today és a „10 hasznos perc" lánc (ADR 0595)
 
-- **Kör:** E14-R36 · **Csomag:** PKG-C · **ADR:** 0546
+- **Kör:** E14-R36 · **Csomag:** PKG-C · **ADR:** 0595
 - **Ág:** `claude/laptop-apk-debug-prompt-kys4oa`
 - **Környezet:** nincs Dart/Flutter SDK → **lokális gate nem futtatható**;
   egyetlen teszt sem futott le itt. Mérce: `full-gate.yml` + a valós
@@ -66,7 +66,7 @@ csak ezen keresztül ér a láncba).
 
 ## 5. Döntések
 
-Lásd [ADR 0546](../adr/0546-ten-minute-practice-chain.md) D1–D7. Röviden:
+Lásd [ADR 0595](../adr/0595-ten-minute-practice-chain.md) D1–D7. Röviden:
 a kompozíció szabály (2 + maradék + 1, összeg-invariánssal); a lánc opt-in és
 soha nem rontja el az L1 CTA-t; a recap helyben renderelődik (nincs
 `/practice/result` zsákutca); a `play` lépést MÉRT idő zárja; a hangolást
@@ -159,7 +159,7 @@ Két lépés, mindkettő PKG-D / core tulajdon:
 
    ```dart
    // --- today ---------------------------------------------------------------
-   /// The in-progress "10 useful minutes" chain (E14-R36, ADR 0546 D7).
+   /// The in-progress "10 useful minutes" chain (E14-R36, ADR 0595 D7).
    /// Holds only the step, the start time and the active-seconds baseline —
    /// never a plan the user did not start.
    static const String tenMinuteFlow = 'ss.today.ten_minute_flow';

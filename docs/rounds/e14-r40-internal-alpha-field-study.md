@@ -2,7 +2,7 @@
 
 - **Kör-azonosító:** `E14-R40` (Chapter 14, Kör 40)
 - **ADR:** nincs saját szám — a kód-oldali döntés az
-  [ADR 0542 D7](../adr/0542-opt-in-beta-telemetry-consent-and-recognition-rollout-flags.md)
+  [ADR 0591 D7](../adr/0591-opt-in-beta-telemetry-consent-and-recognition-rollout-flags.md)
   (a field-session tag zárt kohorsz + forgó pszeudonim). A terv §4 PKG-D
   sora ehhez a körhöz csak briefet ír elő.
 - **Dátum:** 2026-09-09

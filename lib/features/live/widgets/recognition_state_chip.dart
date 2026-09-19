@@ -6,7 +6,7 @@ import '../../../l10n/app_localizations.dart';
 import '../domain/recognition/recognition_decision.dart';
 
 /// The Live stage's single, always-honest statement of WHICH decision state
-/// the chord recognizer is in (E14-R37, ADR 0550 D1).
+/// the chord recognizer is in (E14-R37, ADR 0599 D1).
 ///
 /// Every one of the six [RecognitionDecision] states of ADR 0505 D3 renders
 /// **distinctly** — its own icon, its own colour role and its own localized

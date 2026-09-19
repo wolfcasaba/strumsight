@@ -1,4 +1,4 @@
-// E14-R39 (ADR 0547) — the outdoor-readability half of the audit, as far as
+// E14-R39 (ADR 0596) — the outdoor-readability half of the audit, as far as
 // a test can take it.
 //
 // Real outdoor readability needs sunlight, three phones and a person

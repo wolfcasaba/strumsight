@@ -1,4 +1,4 @@
-# ADR 0541 — Chord release-kapu sorok, a chord-sáv rolloutja és a nem ábrázolható kapuk
+# ADR 0590 — Chord release-kapu sorok, a chord-sáv rolloutja és a nem ábrázolható kapuk
 
 **Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R33 · **Épít rá:** ADR 0537 (fokozatok és clamp), ADR 0511 (fail-closed kapu), ADR 0521 (sávos false-visible ráták)
 

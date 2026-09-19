@@ -86,7 +86,7 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
     unawaited(ref.read(micPermissionProvider.notifier).refresh());
   }
 
-  /// Step 1 → step 2 of the "10 useful minutes" chain (E14-R36, ADR 0546).
+  /// Step 1 → step 2 of the "10 useful minutes" chain (E14-R36, ADR 0595).
   ///
   /// Commits the advance and goes straight to the exercise the Today hub
   /// would have opened — the chain is ONE guided flow, so the player never

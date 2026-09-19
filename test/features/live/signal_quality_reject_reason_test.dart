@@ -1,4 +1,4 @@
-// ADR 0535 (E17-R15) — the merged `signalQuality` reject reason is SPLIT into
+// ADR 0586 (E17-R15) — the merged `signalQuality` reject reason is SPLIT into
 // six typed reasons, one per non-`good` `SignalQualityState`. These cells are
 // the machine-checkable spec of D1 (one reason per state, pairwise distinct,
 // no collector tag) and D2 (exhaustive mapping in the engine, signal quality
@@ -11,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/live/engine/dsp/live_pipeline.dart';
 import 'package:strumsight/features/live/public.dart';
 
-/// The ADR 0535 D1 table, spelled out here so a silent re-mapping in the
+/// The ADR 0586 D1 table, spelled out here so a silent re-mapping in the
 /// engine fails this file rather than passing by construction.
 const _mapping = <SignalQualityState, RecognitionRejectReason>{
   SignalQualityState.tooQuiet: RecognitionRejectReason.signalTooQuiet,
@@ -23,7 +23,7 @@ const _mapping = <SignalQualityState, RecognitionRejectReason>{
 };
 
 void main() {
-  group('ADR 0535 D1 — every non-good signal state gets its OWN reason', () {
+  group('ADR 0586 D1 — every non-good signal state gets its OWN reason', () {
     for (final MapEntry(key: state, value: expected) in _mapping.entries) {
       test('${state.name} rejects with ${expected.name}', () {
         final (decision, reason) = LivePipeline.debugDeriveChordDecision(
@@ -43,7 +43,7 @@ void main() {
     });
   });
 
-  group('ADR 0535 D2 — good/unknown never produce a signal reason', () {
+  group('ADR 0586 D2 — good/unknown never produce a signal reason', () {
     const neutral = <SignalQualityState>[
       SignalQualityState.good,
       SignalQualityState.unknown,
@@ -70,7 +70,7 @@ void main() {
   });
 
   group(
-    'ADR 0535 D2 — signal quality still precedes noChord (ADR 0516 D4)',
+    'ADR 0586 D2 — signal quality still precedes noChord (ADR 0516 D4)',
     () {
       test('no match AND tooLoud -> signalTooLoud, never noChord', () {
         final (decision, reason) = LivePipeline.debugDeriveChordDecision(

@@ -15,7 +15,7 @@ import '../domain/recognition/recognition_decision.dart';
 /// split into six typed ones (`signalTooQuiet`, `signalTooLoud`,
 /// `signalClipping`, `signalTooNoisy`, `signalSpeechLike`, `signalUnstable`)
 /// so the advice matches the diagnosis instead of always saying "move closer"
-/// — ADR 0535 D3, whose content guard forbids a harmful direction (no
+/// — ADR 0586 D3, whose content guard forbids a harmful direction (no
 /// "closer" for too-loud/clipping, no "back" for too-quiet).
 ///
 /// Shown only when `LiveFrame.chordRejectReason != null`; when it is `null`

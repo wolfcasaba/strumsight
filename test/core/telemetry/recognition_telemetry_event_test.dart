@@ -1,4 +1,4 @@
-// E14-R41 (ADR 0542 D5) — the recognition-aggregate event contract.
+// E14-R41 (ADR 0591 D5) — the recognition-aggregate event contract.
 //
 // The plan's R41 §2 asks for "model version, quality bucket,
 // accepted/rejected count, latency, user correction flag". These cells pin

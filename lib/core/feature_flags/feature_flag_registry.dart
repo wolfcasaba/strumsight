@@ -25,7 +25,7 @@ import 'feature_flag_definition.dart';
 /// booleans landed. The two `RecognitionRolloutStage` fields added by the
 /// same round are deliberately absent — the audit is defined over `final
 /// bool` declarations, so a bool-shaped entry for an enum field would make
-/// its completeness claim false in both directions (ADR 0542 D4).
+/// its completeness claim false in both directions (ADR 0591 D4).
 ///
 /// **`risk` heuristic (a judgement call, not a machine measurement):**
 /// `FeatureFlagRisk.high` is used only where `feature_flags.dart` itself
@@ -435,21 +435,21 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     owner: 'lib/features/live (chord CRNN shadow, not yet wired)',
     risk: FeatureFlagRisk.low,
     failClosedDefault: false,
-    adr: '0542',
+    adr: '0591',
     killSwitchPath:
         'hardcoded to `false` in every environment at '
         'feature_flags.dart:131; no dart-define or environment boundary '
         'can turn it on today — enabling it requires a source change. It '
         'is also only half of the gate: the chord shadow path additionally '
         'needs `chordModelRolloutStage.runsInference`, so this boolean '
-        'alone kills it (ADR 0542 D2).',
+        'alone kills it (ADR 0591 D2).',
   ),
   FeatureFlagDefinition(
     key: 'recognitionPreprocessingEnabled',
     owner: 'lib/features/live (quality-aware preprocessing, not yet wired)',
     risk: FeatureFlagRisk.low,
     failClosedDefault: false,
-    adr: '0542',
+    adr: '0591',
     killSwitchPath:
         'hardcoded to `false` in every environment at '
         'feature_flags.dart:132; this flag IS the one-switch rollback for '
@@ -461,7 +461,7 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     owner: 'lib/features/settings (Ch14 Kör 40 field study enrolment)',
     risk: FeatureFlagRisk.high,
     failClosedDefault: false,
-    adr: '0542',
+    adr: '0591',
     killSwitchPath:
         'hardcoded to `false` in every environment at '
         'feature_flags.dart:133; a field-study build is a deliberate source '
@@ -474,7 +474,7 @@ const List<FeatureFlagDefinition> featureFlagRegistry = [
     owner: 'lib/core/telemetry + lib/features/settings (Privacy Center)',
     risk: FeatureFlagRisk.high,
     failClosedDefault: false,
-    adr: '0542',
+    adr: '0591',
     killSwitchPath:
         'resolves to `nonProd` (`environment != AppEnvironment.production`) '
         'at feature_flags.dart:139 — ON outside production, OFF in '

@@ -1,4 +1,4 @@
-// E14-R38 (ADR 0551) — an unconfident chord reading is ABSENCE OF EVIDENCE,
+// E14-R38 (ADR 0600) — an unconfident chord reading is ABSENCE OF EVIDENCE,
 // never a wrong chord.
 //
 // The defect this replaces: `live_practice_observation_gateway.dart` stamped

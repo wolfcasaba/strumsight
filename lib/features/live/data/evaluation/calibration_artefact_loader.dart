@@ -1,5 +1,5 @@
 /// Loads a [ConfidenceCalibrationProfile] artefact (E14-R21/R32, ADR
-/// 0536/0540).
+/// 0587/0589).
 ///
 /// This file has NO `dart:io`, no `rootBundle` and no plugin import: the
 /// bytes arrive through an injected [CalibrationArtefactReader], so the
@@ -10,7 +10,7 @@
 /// **Nothing is swallowed.** A malformed artefact does not degrade to "no
 /// calibration": it returns [CalibrationLoadStatus.invalid] carrying the
 /// typed [CalibrationConfigException], and the caller MUST surface it (the
-/// runtime-info fallback reason is the intended sink, ADR 0536 D6). A
+/// runtime-info fallback reason is the intended sink, ADR 0587 D6). A
 /// silent `try/catch` here would reproduce exactly the class of bug
 /// `docs/LESSONS.md` L619 records.
 library;

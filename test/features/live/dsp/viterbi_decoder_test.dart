@@ -6,7 +6,7 @@ import 'package:strumsight/features/live/domain/recognition/recognition_mode.dar
 import 'package:strumsight/features/live/engine/dsp/chord_matcher.dart';
 import 'package:strumsight/features/live/engine/dsp/viterbi_chord_decoder.dart';
 
-/// E14-R30 (ADR 0544 D2): a hint can only be BUILT for a guided-mode engine,
+/// E14-R30 (ADR 0593 D2): a hint can only be BUILT for a guided-mode engine,
 /// so every cell below has to go through [ExpectedChordHint.forMode] — there
 /// is no `setExpected('C')` string overload to call any more.
 ExpectedChordHint? guidedHint(String? label) =>
@@ -208,7 +208,7 @@ void main() {
   });
 
   // Round 137 (chunk 016 rec #1) introduced the expected-target prior as an
-  // ADDITIVE per-frame trellis bonus. E14-R30 (ADR 0544 D3) replaced that
+  // ADDITIVE per-frame trellis bonus. E14-R30 (ADR 0593 D3) replaced that
   // mechanism with a pure READ-OUT TIE-BREAK: the hint never enters the
   // trellis, so it cannot accumulate, and it may only decide a frame that is
   // tied on BOTH the accumulated path score and the raw similarity.
@@ -229,7 +229,7 @@ void main() {
         held!.chord.label,
         'Cmaj7',
         reason:
-            'ADR 0544 D3: the audio evidence, once it has actually separated '
+            'ADR 0593 D3: the audio evidence, once it has actually separated '
             'the two states, is never overwritten by the expectation',
       );
       expect(
@@ -279,7 +279,7 @@ void main() {
     });
 
     test('the hint never enters the trellis: clearing it makes the decoder '
-        'bit-identical to one that never had it (ADR 0544 D3)', () {
+        'bit-identical to one that never had it (ADR 0593 D3)', () {
       final hinted = ViterbiChordDecoder()..setExpected(guidedHint('C'));
       final plain = ViterbiChordDecoder();
       feed(hinted, cMaj, 6);

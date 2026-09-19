@@ -1,6 +1,6 @@
 # E18-R01 — Review
 
-Brief: `docs/rounds/e18-r01-song-editor-chord-audition.md` · ADR: [`0535`](../adr/0535-song-editor-chord-audition-and-progression-preview.md)
+Brief: `docs/rounds/e18-r01-song-editor-chord-audition.md` · ADR: [`0585`](../adr/0585-song-editor-chord-audition-and-progression-preview.md)
 Branch: `claude/song-editor-chord-audio-tbkokz` · Base: `origin/main @ 1ae9e55`
 HEAD a review pillanatában: `e3283bbcf9aa5b6cf0a0bc383a8db423ba5a7ec2`
 (a produkciós + teszt diff utoljára `6a4a2be`-ben mozdult; a két legfelső commit már E18-R02/R03 tervdokumentum)
@@ -180,7 +180,7 @@ Tilos zóna (`lib/core/audio/{capture,dsp,lifecycle,pitch}/`, `lib/features/chor
 - **Javítás (a scope-on belül, `chord_audition.dart`-ban):** a `chordTones`-ágat
   csak ismert minőség-utótagra engedd (a `ChordAudio._quality` kulcsai),
   egyébként `AuditionSource.none`; plusz egy cella: `resolve('Cdim').source ==
-  none`. Ha ez késői döntés, akkor a follow-up az ADR 0535 D1 pontosításával
+  none`. Ha ez késői döntés, akkor a follow-up az ADR 0585 D1 pontosításával
   induljon.
 - **Státusz:** OPEN
 
@@ -308,7 +308,7 @@ plusz a CI-run linkje a brief §10-be.
 | F5 MINOR | **FIXED** — §10: full-gate [34386737962](https://github.com/wolfcasaba/strumsight/actions/runs/34386737962) `success` a `476b01d` HEAD-en |
 | F6 MINOR | **FIXED** — hat-üres-húr cella felvéve, brief A1 pontosítva |
 | F7 MINOR | **FIXED** — `debugCacheKeys` + recency-cella |
-| F8 MINOR | **FIXED** — `ChordAudio.hasKnownQuality` kapu, `Cdim/C5/Cm6/Cwhatever → none` cella; ADR 0535 D1 pontosítva |
+| F8 MINOR | **FIXED** — `ChordAudio.hasKnownQuality` kapu, `Cdim/C5/Cm6/Cwhatever → none` cella; ADR 0585 D1 pontosítva |
 | F9 MINOR | **FIXED** — `_previewFor` identity-ellenőrzés, újrakötés |
 | — | **ÚJ (CI-lelet)** | a V2 „Hear chord" gomb elhalasztva: az `e13_r24_song_editor_*` pixel-golden a hajtás felett tartalmazza a gombsort, a remote konténer goldent nem tud regenerálni (§0.0.1 R2); az `onAddChord` → hallás út marad |
 

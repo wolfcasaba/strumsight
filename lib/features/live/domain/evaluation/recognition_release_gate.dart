@@ -13,7 +13,7 @@
 /// socket — reading the threshold JSON off disk is the CLI's job
 /// (`tool/recognition_report.dart`).
 ///
-/// **Stages (E14-R24/R33, ADR 0537/0541).** A threshold entry may declare
+/// **Stages (E14-R24/R33, ADR 0537/0590).** A threshold entry may declare
 /// which release [RecognitionGateStage] it belongs to and which
 /// [RecognitionGateBand] it constrains, and may be shipped DISABLED. A
 /// disabled entry is INFORMATIONAL: it is still parsed, still evaluated and

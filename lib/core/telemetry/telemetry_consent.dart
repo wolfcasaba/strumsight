@@ -1,4 +1,4 @@
-/// The opt-in consent model for beta telemetry (SDD Ch14 Kör 41, ADR 0542).
+/// The opt-in consent model for beta telemetry (SDD Ch14 Kör 41, ADR 0591).
 ///
 /// Two shape decisions are deliberate and machine-checked by
 /// `test/core/telemetry/telemetry_redaction_test.dart` A1, which forbids a

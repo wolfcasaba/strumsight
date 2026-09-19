@@ -1,4 +1,4 @@
-// E14-R41 (ADR 0542) — allowlist-redaction property for the opt-in beta
+// E14-R41 (ADR 0591) — allowlist-redaction property for the opt-in beta
 // recognition telemetry, mirroring the E06-R27 pattern in
 // `analysis_export_redaction_property_test.dart` (ADR 0247).
 //

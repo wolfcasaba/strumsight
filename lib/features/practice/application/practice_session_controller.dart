@@ -158,7 +158,7 @@ final class PracticeSessionController {
   PracticeScoreAggregation? get liveScore => _liveScore;
 
   /// The concrete "next fix" derived from the LAST scoring pass (E14-R38,
-  /// ADR 0551 D6), or `null` when the latest resolved target was clean.
+  /// ADR 0600 D6), or `null` when the latest resolved target was clean.
   ///
   /// This is a projection, not state: nothing in the reducer knows about it,
   /// no command produces it, and it is recomputed from scratch on every

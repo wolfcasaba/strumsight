@@ -1,6 +1,6 @@
-# E14-R23 — Strum shadow mód az alkalmazásban (ADR 0548)
+# E14-R23 — Strum shadow mód az alkalmazásban (ADR 0597)
 
-- **Kör:** E14-R23 · **Csomag:** PKG-E · **ADR:** 0548
+- **Kör:** E14-R23 · **Csomag:** PKG-E · **ADR:** 0597
 - **Ág:** `claude/laptop-apk-debug-prompt-kys4oa`
 - **Környezet:** nincs Dart/Flutter SDK ezen a boxon → **lokális gate nem
   futtatható**; a mérce a session végi `full-gate.yml` + `build-apk.yml`, a
@@ -16,10 +16,10 @@ kimenetet, és amelynek a memóriaigénye nem nő a menet hosszával.
 ## 2. Mért állapot (a kör előtt)
 
 - `recognitionShadowModeEnabled` **fogyasztó nélkül** állt a `lib/**`-ben.
-- `recognition_shadow_observer.dart` (PKG-A, ADR 0545 D6): egy hívási pont
+- `recognition_shadow_observer.dart` (PKG-A, ADR 0594 D6): egy hívási pont
   `LivePipeline.addChunk`-ban, `void` visszatérés, no-op alapértelmezés.
   **Kimenetet ad át, jellemzőt nem.**
-- `RecognitionRolloutStage` + a két zászlópár (PKG-D, ADR 0542 D2):
+- `RecognitionRolloutStage` + a két zászlópár (PKG-D, ADR 0591 D2):
   aszimmetrikus ÉS, fail-closed, `shadow.isUserVisible == false`.
 - `RealStrumEngine` izolátum-protokollja csak `LiveFrame`-et hoz vissza; a
   megfigyelő-gyár 0 argumentumú top-level függvény → nincs visszaút a UI-ig.
@@ -48,7 +48,7 @@ recognition_shadow_gate,strum_shadow_observer,recognition_shadow_session,
 shadow_allocation_bound}_test.dart`,
 `test/features/live/lab/live_lab_shadow_panel_test.dart`
 **Módosított (test):** `test/features/live/recognition_runtime_info_test.dart`
-**Docs:** `docs/adr/0548-*.md`, ez a brief, `docs/rag/chunks/015-*.md`
+**Docs:** `docs/adr/0597-*.md`, ez a brief, `docs/rag/chunks/015-*.md`
 **l10n:** 14 új kulcs a scratch protokoll szerint (`liveLabShadow*`).
 
 ## 5. Kapuk
@@ -68,7 +68,7 @@ CLI belépési pontot (a terv §0/1 tiltja).
 | 6 | Üres ablakon NINCS egyezési arány (null, nem 0/1) | **PINNED-BY-TEST** |
 | 7 | A mód és a shadow-fokozat megjelenik a `RecognitionRuntimeInfo`-ban, JSON-körbefordulással | **PINNED-BY-TEST** |
 | 8 | 10 perces valós A/B memória-mérés eszközön | **NEEDS-MEASUREMENT** |
-| 9 | Egy MÁSIK jelölt-háló futtatása ugyanazokon a jellemzőkön | **NOT DELIVERED** — jellemző-csap kell `live_pipeline.dart`-ba (patch a jelentésben); ADR 0548 D3 kimondja |
+| 9 | Egy MÁSIK jelölt-háló futtatása ugyanazokon a jellemzőkön | **NOT DELIVERED** — jellemző-csap kell `live_pipeline.dart`-ba (patch a jelentésben); ADR 0597 D3 kimondja |
 
 ## 7. Verifikáció
 
@@ -78,7 +78,7 @@ bizonyítanak, a §6-ban van; sikeres verifikáció **nincs állítva** (Ch14 §
 ## 8. Kockázatok
 
 1. A kör a **kimeneti** csapot méri; aki „árnyékmodellt" olvas bele, többet
-   képzel, mint amennyi van. Ezt az ADR 0548 D3 és ez a §6/9. sor kimondja.
+   képzel, mint amennyi van. Ezt az ADR 0597 D3 és ez a §6/9. sor kimondja.
 2. A Lab-vezérelt futtatás egy második pipeline a felvett PCM felett: nem
    mutatja meg a két pipeline hosszú menet alatti elsodródását.
 3. Semmi nem fordult le ezen a boxon.

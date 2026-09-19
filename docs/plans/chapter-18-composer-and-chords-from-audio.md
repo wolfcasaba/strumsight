@@ -8,7 +8,7 @@
      zenéből kiolvasni az akkordokat — a Yousician így csinálja."*
 - **Mért alap:** `main @ 1ae9e55` (a Chapter 17 R01 merge-e utáni állapot).
 - **Terv szerzője:** Claude (Opus 5), orchesztrátor.
-- **ADR-sáv:** `0535`–`0538`.
+- **ADR-sáv:** `0536`–`0538`, plusz `0585` — az E18-R01 ADR-je a main-integrációban `0535` → `0585` lett (ütközés a Song Trainer vonal `0535-platform-audio-decoder`-ével).
 
 ## 1. A két kérés egy fejezet
 
@@ -35,7 +35,7 @@ A fejezet forrás-határát ezért külön ADR rögzíti:
 
 | Amit a felhasználó akar | Ami MA van | Fájl (olvasva) |
 |---|---|---|
-| hallja, amit ír | az `E18-R01` szállítja (pengetett fogás + menet-előnézet) | [ADR 0535](../adr/0535-song-editor-chord-audition-and-progression-preview.md) |
+| hallja, amit ír | az `E18-R01` szállítja (pengetett fogás + menet-előnézet) | [ADR 0585](../adr/0585-song-editor-chord-audition-and-progression-preview.md) |
 | akkordok hangból | **megvan a motor**: chroma + Viterbi dekóder → `TimelineChord` szakaszok | `lib/features/analyze/engine/clip_analyzer.dart:198-225` |
 | … importált hangból is | `AnalyzeController.analyzeImported(pcm, sampleRate)` létezik és tesztelt, de a `lib/` fában **NULLA hívója van** | `lib/features/analyze/providers/analyze_providers.dart:195-203`; `test/features/analyze/analyze_import_test.dart:28` |
 | a felismerésből DAL legyen | az idővonalból ma **lecke** lesz, dal nem | `lib/features/learn/model/lesson.dart:374-402` (`Lessons.fromAnalyze`) |
@@ -69,7 +69,7 @@ a szabályt viszi tovább — *az előnézet nem véglegesítés*.
 
 | Kör | Tárgy | ADR | Függ |
 |---|---|---|---|
-| `E18-R01` | **A dalszerkesztő akkord-meghallgatása és menet-előnézete** (komponálás füllel) — pengetett fogás a diagramból, transzport a teljes menetre | [`0535`](../adr/0535-song-editor-chord-audition-and-progression-preview.md) | — |
+| `E18-R01` | **A dalszerkesztő akkord-meghallgatása és menet-előnézete** (komponálás füllel) — pengetett fogás a diagramból, transzport a teljes menetre | [`0585`](../adr/0585-song-editor-chord-audition-and-progression-preview.md) | — |
 | `E18-R02` | **Felvételből dal-vázlat**: `AnalyzeResult` → ütemekre kvantált `Song`-vázlat, ütemenkénti lefedettséggel, a szerkesztőben megerősítésre | `0537` | R01 |
 | `E18-R03` | **Hallgatás-mód külső forrásból**: a mikrofon hallja a szóló dalt (YouTube a telefonon, másik eszköz, rádió), korlátos klip, eszközön futó elemzés → R02 vázlat-útja; a link CSAK metaadat | [`0536`](../adr/0536-chords-from-audio-source-boundary.md) | R02 |
 | `E18-R04` | **Helyi hangfájl dekódolása** (MP3/M4A/OGG) — kutató- és döntéskör a `FileAnalysisInput` dekóder-seamjéhez, spike-kal, production bekötés NÉLKÜL | `0538` | — (a döntése az R03 után köthető be) |

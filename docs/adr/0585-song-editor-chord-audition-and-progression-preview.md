@@ -1,4 +1,4 @@
-# ADR 0535 — A dalszerkesztő akkord-meghallgatása és a menet-előnézet (komponálás füllel)
+# ADR 0585 — A dalszerkesztő akkord-meghallgatása és a menet-előnézet (komponálás füllel)
 
 **Státusz:** elfogadva (2026-09-09, E18-R01 — Chapter 18 „Komponálás és akkordok hangból", Kör 1)
 

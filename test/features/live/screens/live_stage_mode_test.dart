@@ -1,4 +1,4 @@
-// E14-R37 (ADR 0550) — the Live stage's PRODUCT mode.
+// E14-R37 (ADR 0599) — the Live stage's PRODUCT mode.
 //
 // Three things are pinned here, and only these three:
 //   1. Free play is the default and it LOOKS like free play — no target
@@ -7,7 +7,7 @@
 //      spoken role-first, and never inside the detection hero.
 //   3. The Live screen never hands the engine an expected-chord LABEL. It
 //      makes exactly one `setExpectedChord` call, and that call is `null`
-//      (ADR 0544 D2 makes the label inert anyway; this pins that Live does
+//      (ADR 0593 D2 makes the label inert anyway; this pins that Live does
 //      not even try).
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

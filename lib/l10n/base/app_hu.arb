@@ -610,7 +610,7 @@
   "songKeyLabel": "Hangnem",
   "songChordHear": "{chord} meghallgatása",
   "@songChordHear": {
-    "description": "Tooltip/semantics of a chord chip in the song builder: tapping it plays that chord (ADR 0535).",
+    "description": "Tooltip/semantics of a chord chip in the song builder: tapping it plays that chord (ADR 0585).",
     "placeholders": {
       "chord": {
         "type": "String",
@@ -3403,27 +3403,27 @@
   "tutorPlanNotBuildable": "Ez a gyakorlási terv most nem készíthető elő.",
   "liveRejectSignalClipping": "Torzít a jel (túlvezérlés) — távolodj el a mikrofontól és pengess lágyabban",
   "@liveRejectSignalClipping": {
-    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalClipping (ADR 0535)."
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalClipping (ADR 0586)."
   },
   "liveRejectSignalSpeechLike": "Beszédet vagy más hangot hallunk — csak a gitár szóljon",
   "@liveRejectSignalSpeechLike": {
-    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalSpeechLike (ADR 0535)."
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalSpeechLike (ADR 0586)."
   },
   "liveRejectSignalTooLoud": "Túl hangos a jel — távolodj el a mikrofontól, vagy pengess halkabban",
   "@liveRejectSignalTooLoud": {
-    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooLoud (ADR 0535)."
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooLoud (ADR 0586)."
   },
   "liveRejectSignalTooNoisy": "Túl nagy a háttérzaj — keress csendesebb helyet",
   "@liveRejectSignalTooNoisy": {
-    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooNoisy (ADR 0535)."
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooNoisy (ADR 0586)."
   },
   "liveRejectSignalTooQuiet": "Túl halk a jel — menj közelebb a mikrofonhoz, vagy pengess hangosabban",
   "@liveRejectSignalTooQuiet": {
-    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooQuiet (ADR 0535)."
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalTooQuiet (ADR 0586)."
   },
   "liveRejectSignalUnstable": "Ugrál a hangerő — tartsd stabilan a telefont és pengess egyenletesen",
   "@liveRejectSignalUnstable": {
-    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalUnstable (ADR 0535)."
+    "description": "Uncertainty-reason banner text for RecognitionRejectReason.signalUnstable (ADR 0586)."
   },
   "audioOutputMetronomeFailed": "A metronóm kattanását nem sikerült lejátszani. Ellenőrizd a hangerőt, és próbáld újra.",
   "@audioOutputMetronomeFailed": {
@@ -3697,7 +3697,7 @@
   },
   "liveDecisionCandidate": "Akkord keresése…",
   "@liveDecisionCandidate": {
-    "description": "Live stage decision chip for RecognitionDecision.candidate (E14-R37, ADR 0550): a verdict is forming but has cleared no threshold, so no chord is claimed."
+    "description": "Live stage decision chip for RecognitionDecision.candidate (E14-R37, ADR 0599): a verdict is forming but has cleared no threshold, so no chord is claimed."
   },
   "liveDecisionProvisional": "Akkord kirajzolódik…",
   "@liveDecisionProvisional": {
@@ -3705,7 +3705,7 @@
   },
   "liveDecisionProvisionalNamed": "Valószínűleg {chord}…",
   "@liveDecisionProvisionalNamed": {
-    "description": "Live stage decision chip for RecognitionDecision.provisional when a chord label is known. The chord is named ONLY inside this hedged sentence — never as a confirmed verdict (ADR 0550 D1).",
+    "description": "Live stage decision chip for RecognitionDecision.provisional when a chord label is known. The chord is named ONLY inside this hedged sentence — never as a confirmed verdict (ADR 0599 D1).",
     "placeholders": {
       "chord": {
         "type": "String",
@@ -3731,11 +3731,11 @@
   },
   "liveModeFreePlay": "Szabad játék",
   "@liveModeFreePlay": {
-    "description": "Live stage mode chip: nothing is being asked of the player, the stage mirrors what it hears (E14-R37, ADR 0550 D2)."
+    "description": "Live stage mode chip: nothing is being asked of the player, the stage mirrors what it hears (E14-R37, ADR 0599 D2)."
   },
   "liveModeGuided": "Vezetett",
   "@liveModeGuided": {
-    "description": "Live stage mode chip: a lesson/song target is on screen (E14-R37, ADR 0550 D2)."
+    "description": "Live stage mode chip: a lesson/song target is on screen (E14-R37, ADR 0599 D2)."
   },
   "liveGuidedTarget": "Cél",
   "@liveGuidedTarget": {
@@ -3753,7 +3753,7 @@
   },
   "practiceCorrectionTitle": "Következő javítás",
   "@practiceCorrectionTitle": {
-    "description": "Heading of the practice session's correction banner (E14-R38, ADR 0551 D6) — the one concrete thing to change on the next target."
+    "description": "Heading of the practice session's correction banner (E14-R38, ADR 0600 D6) — the one concrete thing to change on the next target."
   },
   "practiceCorrectionPlayChord": "A következő célnál {chord} akkordot játssz.",
   "@practiceCorrectionPlayChord": {
@@ -3771,6 +3771,6 @@
   },
   "practiceCorrectionUnclear": "Az app nem tudta kivenni, mit hallott — játszd el újra ezt a részt.",
   "@practiceCorrectionUnclear": {
-    "description": "Correction shown when the recognizer abstained and gave no typed reason. Blames the app, never the player (ADR 0551 D6); when a reason IS available the localized liveReject* sentence is shown instead."
+    "description": "Correction shown when the recognizer abstained and gave no typed reason. Blames the app, never the player (ADR 0600 D6); when a reason IS available the localized liveReject* sentence is shown instead."
   }
 }

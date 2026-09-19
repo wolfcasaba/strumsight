@@ -1,5 +1,5 @@
 /// The recognition-aggregate telemetry event of the opt-in beta
-/// (SDD Ch14 Kör 41, ADR 0542 D5).
+/// (SDD Ch14 Kör 41, ADR 0591 D5).
 ///
 /// It follows `telemetry_event.dart`'s rule literally: the prohibition on
 /// carrying raw user content is STRUCTURAL. There is no audio field, no

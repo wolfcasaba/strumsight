@@ -83,7 +83,7 @@ validate on a real acoustic guitar via the CI APK (synthetic green ≠ done).
 
 ## AS BUILT round 137 (2026-07-12) — expected-target prior (rec #1)
 
-> **SUPERSEDED by E14-R30 / ADR 0544 (2026-09-09).** The additive trellis
+> **SUPERSEDED by E14-R30 / ADR 0593 (2026-09-09).** The additive trellis
 > mechanism described below is GONE: the prior no longer enters the trellis
 > at all, `setExpected` takes an `ExpectedChordHint` that only exists in
 > `RecognitionMode.guided`, and the 0.05 became a READ-OUT tie-break band

@@ -19,11 +19,11 @@ abstract class StrumEngine {
   /// or clear it with null.
   ///
   /// Whether the hint has ANY effect is decided by the regime the engine was
-  /// CONSTRUCTED in, never by the caller (E14-R30, ADR 0544 D1/D2): a
+  /// CONSTRUCTED in, never by the caller (E14-R30, ADR 0593 D1/D2): a
   /// `RecognitionMode.free` engine drops the label before it can reach a
   /// decoder, so calling this on one is guaranteed-inert rather than
   /// merely discouraged. In `RecognitionMode.guided` the hint reaches the
-  /// chord path as a pure TIE-BREAKER (ADR 0544 D3) — it can settle a frame
+  /// chord path as a pure TIE-BREAKER (ADR 0593 D3) — it can settle a frame
   /// whose audio evidence is genuinely tied, and can never overturn evidence
   /// that separates two chords. Callers therefore do NOT need to null the
   /// hint defensively when leaving a lesson; that convention is now a

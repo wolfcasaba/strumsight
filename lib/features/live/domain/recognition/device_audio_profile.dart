@@ -1,7 +1,7 @@
 import 'package:meta/meta.dart';
 
 /// What ONE device's audio input needs to reach the nominal recording level
-/// (E14-R31, ADR 0552 D4) — a purely technical audio-route description, in
+/// (E14-R31, ADR 0601 D4) — a purely technical audio-route description, in
 /// the same spirit as `SignalQualitySnapshot`: never a person, a room, a
 /// skill or a location classifier (ADR 0224 §4 boundary).
 ///
@@ -75,7 +75,7 @@ class DeviceAudioProfile {
 
   /// Hard bound on a stored per-device correction.
   ///
-  /// **UNMEASURED default** (ADR 0552 D6): no device A/B exists yet (plan
+  /// **UNMEASURED default** (ADR 0601 D6): no device A/B exists yet (plan
   /// §2 R31 needs 5+ phones). It is a SAFETY bound, not a tuning: ±12 dB is
   /// a factor of 4 in amplitude, past which a "correction" would be
   /// amplifying the device's own noise floor as hard as the guitar. A

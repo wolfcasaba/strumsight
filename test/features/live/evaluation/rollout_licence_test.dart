@@ -1,4 +1,4 @@
-// E14-R24/R33 (ADR 0537/0541): the rollout stage can never exceed the gate.
+// E14-R24/R33 (ADR 0537/0590): the rollout stage can never exceed the gate.
 //
 // What these cells prove:
 //   * a user-visible stage is licensed only by ENABLED, PASSING gate rows;

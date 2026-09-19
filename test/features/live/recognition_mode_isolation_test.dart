@@ -1,4 +1,4 @@
-// E14-R30 (ADR 0544) — the expected-chord prior's STRICT isolation.
+// E14-R30 (ADR 0593) — the expected-chord prior's STRICT isolation.
 //
 // Before this round the isolation was a calling convention: `live_screen.dart`
 // called `setExpectedChord(null)` on entry and a comment said the prior "must
@@ -66,7 +66,7 @@ List<Object?> _signature(LiveFrame f) => <Object?>[
 ];
 
 void main() {
-  group('ADR 0544 D2 — a free-mode hint cannot even be constructed', () {
+  group('ADR 0593 D2 — a free-mode hint cannot even be constructed', () {
     test('forMode(free, label) is null for every label', () {
       for (final label in ['C', 'Am', 'F#m7', 'G/B']) {
         expect(
@@ -97,7 +97,7 @@ void main() {
     });
   });
 
-  group('ADR 0544 D2 — free-mode bit-identity guard', () {
+  group('ADR 0593 D2 — free-mode bit-identity guard', () {
     // A C-major chord played as Karplus–Strong strings, while the "lesson"
     // insists the player is on G. Under the old additive prior this input is
     // exactly the one that could drift; in free mode it must be inert.
@@ -161,7 +161,7 @@ void main() {
     });
   });
 
-  group('ADR 0544 D1 — the mode is carried, not guessed', () {
+  group('ADR 0593 D1 — the mode is carried, not guessed', () {
     test('a guided pipeline reports guided, and its diagnostics say so', () {
       final pipe = LivePipeline(sampleRate: _sr, mode: RecognitionMode.guided)
         ..setExpectedChord('C');

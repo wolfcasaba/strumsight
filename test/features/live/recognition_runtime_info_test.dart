@@ -50,7 +50,7 @@ void main() {
       expect(decoded.fallbackReason, FallbackReason.shapeMismatch);
     });
 
-    // --- E14-R23 / E14-R26 additions (ADR 0548 D5, ADR 0549 D1) ------------
+    // --- E14-R23 / E14-R26 additions (ADR 0597 D5, ADR 0598 D1) ------------
     // RED before this round: the four chord fields, the recognition mode and
     // the shadow stage did not exist on this type.
 

@@ -19,7 +19,7 @@ enum StabilizerProfile {
   final int minAgreeFrames;
 
   /// How long after a detected strum onset a confirmed chord label may still
-  /// be displaced (E14-R28, ADR 0545 D2). **Derived, never tuned** — it is the
+  /// be displaced (E14-R28, ADR 0594 D2). **Derived, never tuned** — it is the
   /// sum of two constants that already existed in the tree:
   ///
   /// * [DspConfig.chordOnsetBoostSeconds] (`2 × 4096 / 44 100 ≈ 0.186 s`) —
@@ -54,7 +54,7 @@ enum StabilizerProfile {
 /// what turns A→B→A frame-level flicker into a single stable card instead
 /// of three.
 ///
-/// **E14-R28 (ADR 0545 D2) adds ONE further condition on displacement:** a
+/// **E14-R28 (ADR 0594 D2) adds ONE further condition on displacement:** a
 /// challenger that has met the agreement threshold is confirmed only on an
 /// **onset-aligned** frame — a chord may change at or after a strum onset,
 /// inside [StabilizerProfile.onsetAlignmentWindowSec]. This is a HYBRID of
@@ -125,7 +125,7 @@ class RecognitionStabilizer {
 
   /// How many frames had already met [StabilizerProfile.minAgreeFrames] but
   /// were still held back because they were not onset-aligned (E14-R28,
-  /// ADR 0545 D3). Diagnostics only — it is the number that says how much
+  /// ADR 0594 D3). Diagnostics only — it is the number that says how much
   /// latency the onset gate actually costs on a given input, so the
   /// transition-latency figure the Ch14 gate wants can be MEASURED instead of
   /// asserted.
@@ -181,7 +181,7 @@ class RecognitionStabilizer {
       return null;
     }
 
-    // E14-R28 (ADR 0545 D2): agreement is necessary but no longer sufficient —
+    // E14-R28 (ADR 0594 D2): agreement is necessary but no longer sufficient —
     // a chord may only CHANGE on a strum. The run keeps its accumulated
     // agreement while the gate is shut, so the moment an onset arrives the
     // already-proven challenger confirms on that frame instead of starting
@@ -208,7 +208,7 @@ class RecognitionStabilizer {
   }
 
   /// Whether [frame] sits inside a window in which a chord label change is
-  /// musically plausible (E14-R28, ADR 0545 D2). Three admitting cases, in
+  /// musically plausible (E14-R28, ADR 0594 D2). Three admitting cases, in
   /// order:
   ///
   /// 1. **No clock.** `engineTimeSec` or `latestOnsetTime` is negative — the

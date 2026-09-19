@@ -10,7 +10,7 @@ export 'providers/lab_mode_provider.dart';
 export 'providers/left_handed_provider.dart';
 export 'providers/strum_latency_provider.dart';
 
-// E14-R41/R40 (ADR 0542): the beta-telemetry consent, the upload gate
+// E14-R41/R40 (ADR 0591): the beta-telemetry consent, the upload gate
 // and the field-session tag resolver — the diagnostics/Lab capture path
 // reaches them through this barrel, never through a deep import.
 export 'providers/telemetry_consent_provider.dart';

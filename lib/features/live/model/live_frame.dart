@@ -106,7 +106,7 @@ class LiveFrame {
   static const double strumHoldSec = 2.0;
 
   /// True when this frame's chord verdict was rejected because the SIGNAL
-  /// itself is unusable — the six `signal*` reasons of ADR 0535 D1.
+  /// itself is unusable — the six `signal*` reasons of ADR 0586 D1.
   ///
   /// While this holds, the screen may not present tempo or strum direction as
   /// measured readings: the app has just stated it cannot tell what it is

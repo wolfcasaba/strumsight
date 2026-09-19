@@ -1,7 +1,7 @@
 # Chapter 14 — production gate checklist
 
 - **Round:** `E14-R42` (Chapter 14, Kör 42 — the chapter's closing round),
-  [ADR 0543](../adr/0543-ch14-production-gate-and-traceability-closure.md)
+  [ADR 0592](../adr/0592-ch14-production-gate-and-traceability-closure.md)
 - **Measured on:** 2026-09-09, branch `claude/laptop-apk-debug-prompt-kys4oa`
 - **Sources of every number below (this file is a VIEW, not a source):**
   - `evaluation/recognition/baseline_manifest.json` — the measured baseline
@@ -17,7 +17,7 @@
 > not measured at all. Under [ADR 0511](../adr/0511-recognition-release-gate-and-single-source-report.md)
 > a missing metric is a **FAIL**, never a neutral "no data" — so no
 > recognition band may leave `RecognitionRolloutStage.off`
-> ([ADR 0542](../adr/0542-opt-in-beta-telemetry-consent-and-recognition-rollout-flags.md) D1).
+> ([ADR 0591](../adr/0591-opt-in-beta-telemetry-consent-and-recognition-rollout-flags.md) D1).
 
 ---
 
@@ -80,7 +80,7 @@ is, and its state today.
 | Decision | Who decides | Input it needs | State today |
 |---|---|---|---|
 | `adaptiveShellEnabled` production GA flip | user (product owner) | Chapter 12 Kör 28 GA-scope record + the accessibility/variant matrix evidence | **OPEN** — the flag resolves to `nonProd`; production stays off (ADR 0467 D8) |
-| Strum band rollout step (`strumModelRolloutStage`) | user, on the §7.2 table | every §1 row PASS + a rollback rehearsal | **OPEN** — stays `off` (ADR 0542 D1) |
+| Strum band rollout step (`strumModelRolloutStage`) | user, on the §7.2 table | every §1 row PASS + a rollback rehearsal | **OPEN** — stays `off` (ADR 0591 D1) |
 | Chord band rollout step (`chordModelRolloutStage`) | user, on the §7.4 table | every §2 row PASS + the §7.1 corpus | **OPEN** — stays `off` |
 | Privacy review + threat model signature (Kör 41) | user | the shipped consent model, the event schema, the redaction property | **OPEN** — the mechanism is in place; the SIGNATURE is a human act |
 | Beta cohort launch (Kör 41) | user | the signature above + a transport, which this wave does NOT ship | **OPEN** |
@@ -94,7 +94,7 @@ is, and its state today.
 |---|---|
 | The release gate is fail-closed (missing metric = FAIL) | `test/features/live/evaluation/**` (E14-R09, ADR 0511) |
 | The recognition metric tree (onset P/R/F1 per tolerance, direction macro-F1, chord weighted/macro/N.C., coverage, ECE, Brier, per-group split) | `lib/features/live/domain/evaluation/recognition_metrics.dart` (E14-R08, ADR 0509) |
-| Every recognition rollout gate resolves to `off` in every environment | `test/app/config/feature_flags_test.dart` (E14-R41, ADR 0542 D1) |
+| Every recognition rollout gate resolves to `off` in every environment | `test/app/config/feature_flags_test.dart` (E14-R41, ADR 0591 D1) |
 | Beta telemetry cannot send without all three gates | `test/core/telemetry/telemetry_consent_test.dart`, `test/privacy/beta_telemetry_egress_test.dart` |
 | The telemetry payload never exceeds its allowlist | `test/property/telemetry_redaction_property_test.dart` (randomized, `PROPERTY_SEED`) |
 

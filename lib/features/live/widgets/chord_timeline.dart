@@ -76,7 +76,7 @@ class ChordTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // E14-R37 (ADR 0550 D5): every animated element on the Live stage asks
+    // E14-R37 (ADR 0599 D5): every animated element on the Live stage asks
     // the ONE resolver the design system owns (ADR 0274 §5.1). Reduced
     // motion zeroes the MOTION, never the information: the hero, its
     // history, the "next" ghost and the idle prompt all still render — they
@@ -269,7 +269,7 @@ class ChordTimeline extends StatelessWidget {
     // and replay the entrance ~2×/sec — a glitch the beat==0 tests never
     // surface.) Finite scale each time, so `pumpAndSettle` still terminates.
     //
-    // E14-R39 audit lelet B15 / E14-R37 (ADR 0550 D5): this pulse never asked
+    // E14-R39 audit lelet B15 / E14-R37 (ADR 0599 D5): this pulse never asked
     // `SsMotionScope`. Under reduced motion the SCALE is dropped — the beat is
     // still readable from the beat grid and the status bar, so no functional
     // feedback is lost by standing still (ADR 0274 §5.1).

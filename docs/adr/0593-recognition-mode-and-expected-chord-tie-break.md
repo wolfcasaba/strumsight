@@ -1,4 +1,4 @@
-# ADR 0544 — `RecognitionMode` és az expected-chord prior szigorú izolációja: additív bias helyett dokumentált tie-breaker
+# ADR 0593 — `RecognitionMode` és az expected-chord prior szigorú izolációja: additív bias helyett dokumentált tie-breaker
 
 **Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R30 · **Felülírja:** a round-137-es `ViterbiChordDecoder.expectedPrior` additív mechanizmusát (chunk 016 rec #1)
 

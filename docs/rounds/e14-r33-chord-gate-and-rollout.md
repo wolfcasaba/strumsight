@@ -1,7 +1,7 @@
 # E14-R33 — Chord release-kapu sorok és a chord-sáv rolloutja
 
 - **Státusz:** LESZÁLLÍTVA (sorok + clamp) / **PARTIAL** (a számok mérése hiányzik)
-- **ADR:** [`0541`](../adr/0541-chord-gate-rows-and-rollout.md)
+- **ADR:** [`0590`](../adr/0590-chord-gate-rows-and-rollout.md)
 - **Csomag:** PKG-B · **Készült:** 2026-09-09
 - **Doksi:** [`docs/eval/release-gate-stages.md`](../eval/release-gate-stages.md)
 
@@ -27,7 +27,7 @@ BENNE: öt letiltott §7.5 Beta sor; a `chordMacroF1.weakestSupportedRecall`
 származtatott extractor; a chord-sáv clampje (a `chord` + `shared` sorokra);
 a nem ábrázolható kapuk dokumentált kihagyása.
 
-KÍVÜL: a §7.4 két újonnan ábrázolható Alpha sora (ADR 0541 D3 — az élő Alpha
+KÍVÜL: a §7.4 két újonnan ábrázolható Alpha sora (ADR 0590 D3 — az élő Alpha
 kapu változatlan marad); a feature-flag registry (PKG-D).
 
 ## 4. Fájlok
@@ -65,4 +65,4 @@ Lokális gate nem futtatható; a cellák a §6-ban.
 - **PKG-E:** amíg a chord-sáv effektív fokozata `off`, a felhasználó a legacy
   NNLS eredményét látja; a CRNN a shadow-ágon mérhető.
 - **Következő chord-mérési kör:** a §7.4 két hiányzó Alpha sorának
-  bekapcsolása, amint a korpusz létezik (ADR 0541 D3).
+  bekapcsolása, amint a korpusz létezik (ADR 0590 D3).

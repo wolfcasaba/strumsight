@@ -191,7 +191,7 @@ clock or lag outside (0, 500 ms] → 0, logged); the user-calibrated input laten
 stays with the scorer/matcher — exactly the legacy `LearnScreen` (de-jitter) +
 `LessonScorer(inputLatencySec:)` division, so the frozen parity baseline holds.
 
-## Chord audition in the song editors (E18-R01, ADR 0535 — ✅ built)
+## Chord audition in the song editors (E18-R01, ADR 0585 — ✅ built)
 Tapping a chord in either song editor now plays the **fingering** the diagram
 shows, strummed: `ChordShapes.forLabel` frets → `ChordVoicing.frequencies`
 (open-string MIDI + fret, muted skipped) → `PluckedStringSynth.strumWav`

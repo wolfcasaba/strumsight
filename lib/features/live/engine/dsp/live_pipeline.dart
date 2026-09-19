@@ -227,18 +227,18 @@ class LivePipeline {
   final int sampleRate;
 
   /// Which recognition regime this pipeline was CONSTRUCTED in (E14-R30,
-  /// ADR 0544 D1). In [RecognitionMode.free] the expected-chord hint cannot
+  /// ADR 0593 D1). In [RecognitionMode.free] the expected-chord hint cannot
   /// exist, so [setExpectedChord] cannot reach the decoder with a value —
   /// see [ExpectedChordHint.forMode].
   final RecognitionMode mode;
 
   final ModelActivation<StrumDirectionClassifier> _crnnActivation;
 
-  /// The output tap (ADR 0545 D6). Defaults to the null object, so the
+  /// The output tap (ADR 0594 D6). Defaults to the null object, so the
   /// production path is bit-identical to the pre-seam pipeline.
   final RecognitionShadowObserver _shadowObserver;
 
-  /// Quality-aware input preprocessing (E14-R31, ADR 0552). Disabled in the
+  /// Quality-aware input preprocessing (E14-R31, ADR 0601). Disabled in the
   /// shipped build, where [QualityAwarePreprocessor.process] hands back the
   /// caller's own chunk instance — the DSP path below is then bit-identical
   /// to the pre-R31 pipeline, which
@@ -246,7 +246,7 @@ class LivePipeline {
   final QualityAwarePreprocessor _preprocessor;
 
   /// The calibration artefacts + abstention policy this pipeline was built
-  /// with (E14-R31, ADR 0552 D7). [RecognitionCalibration.none] — the
+  /// with (E14-R31, ADR 0601 D7). [RecognitionCalibration.none] — the
   /// shipped state — keeps both `calibratedConfidence` fields `null` and
   /// the policy at `acceptAll`.
   final RecognitionCalibration _calibration;
@@ -306,7 +306,7 @@ class LivePipeline {
   /// Hint the currently expected chord (or clear with null) — the Viterbi
   /// expected-target prior (chunk 016, round 137).
   ///
-  /// E14-R30 (ADR 0544 D2): the label reaches the DECODER only through
+  /// E14-R30 (ADR 0593 D2): the label reaches the DECODER only through
   /// [ExpectedChordHint.forMode], which yields `null` in
   /// [RecognitionMode.free]. A free-mode pipeline therefore CLEARS the
   /// decoder's hint no matter what a caller pushes in — the isolation is a
@@ -316,7 +316,7 @@ class LivePipeline {
   /// ([ViterbiChordDecoder.expectedTieBreakBand]).
   ///
   /// The shape-informed string-arrival cue (ADR 0581) keeps reading the RAW
-  /// label: ADR 0544 isolates the recognition PRIOR — the thing that can bias
+  /// label: ADR 0593 isolates the recognition PRIOR — the thing that can bias
   /// what the decoder reports — not the visual cue, which never feeds back
   /// into recognition and stays armed by what the caller asked for.
   void setExpectedChord(String? label) {
@@ -341,7 +341,7 @@ class LivePipeline {
 
   /// The outcome every band reports in the SHIPPED tree: there is no
   /// calibration artefact, so there is no calibrated confidence — and the
-  /// reason travels with the absence instead of being lost (ADR 0552 D7).
+  /// reason travels with the absence instead of being lost (ADR 0601 D7).
   static const CalibrationOutcome _noCalibrationArtefact =
       CalibrationOutcome.unavailable(CalibrationUnavailableReason.noArtefact);
 
@@ -381,7 +381,7 @@ class LivePipeline {
     // The quality analyzer always measures the RAW input: it is the sensor
     // the preprocessing stage reads, so feeding it the already-corrected
     // signal would close a loop and make the correction chase itself
-    // (ADR 0552 D5).
+    // (ADR 0601 D5).
     _signalQuality.addChunk(chunk);
     // E14-R31: identity (the SAME list instance) unless the round's flag is
     // on AND the snapshot asks for a level correction — the sample count is
@@ -398,7 +398,7 @@ class LivePipeline {
       // frames — the chord changes ON the strum, stays stable between.
       if (_strums.onsetJustFired) {
         _chordDecoder.noteOnset();
-        // E14-R28 (ADR 0545 D2): recorded BEFORE classification, so an onset
+        // E14-R28 (ADR 0594 D2): recorded BEFORE classification, so an onset
         // whose direction is later rejected still opens the chord-transition
         // gate. `_latestStrumTime` cannot serve this role — it only advances
         // for a CONFIRMED direction.
@@ -455,7 +455,7 @@ class LivePipeline {
       final chord = chordPrediction;
       final frame = _buildFrame(chord);
       out.add(frame);
-      // ADR 0545 D6 — the single shadow tap: production has already decided
+      // ADR 0594 D6 — the single shadow tap: production has already decided
       // everything this frame carries, and the observer's return type is
       // `void`, so nothing it does can reach [out].
       _shadowObserver.onRecognitionFrame(
@@ -478,12 +478,12 @@ class LivePipeline {
     final pDown = event.pDown;
     final pUp = event.pUp;
     if (pDown == null || pUp == null) return true;
-    // E14-R31 (ADR 0552 D7): the ONE strum-band calibration call site. The
+    // E14-R31 (ADR 0601 D7): the ONE strum-band calibration call site. The
     // raw score is the winning DIRECTION probability — `pNoStrum` belongs
     // to the abstain head, not to "how sure are we it was a downstroke".
     // With no artefact (the shipped state) the outcome is `unavailable` and
     // the field stays `null`; a mapped value can only come from a HELD-OUT,
-    // model-matched artefact (the resolver's rule, ADR 0536 D2).
+    // model-matched artefact (the resolver's rule, ADR 0587 D2).
     final outcome = _calibration.calibrateStrum(
       rawConfidence: math.max(pDown, pUp),
       info: _crnnActivation.info,
@@ -501,7 +501,7 @@ class LivePipeline {
       calibratedConfidence: outcome.calibratedConfidence,
       modelId: _crnnActivation.info.strumModelId,
     );
-    // Kept for the shadow tap only (ADR 0545 D6) — the decision below is
+    // Kept for the shadow tap only (ADR 0594 D6) — the decision below is
     // unchanged. Note it retains REJECTED verdicts too: a shadow consumer
     // measuring abstention needs the frames production threw away, and the
     // heuristic (probability-less) path leaves it `null`, because there is no
@@ -541,7 +541,7 @@ class LivePipeline {
   /// (`chordLatched && hasMatch`), so it can never diverge from it (§6 pt.2);
   /// among the remaining cases the jel-minőség reason takes priority over
   /// `noChord`/`lowConfidence` (D4: a bad mic reading is never blamed on the
-  /// player's fingers). ADR 0535 D2: the signal reason is derived by an
+  /// player's fingers). ADR 0586 D2: the signal reason is derived by an
   /// EXHAUSTIVE `switch` over [SignalQualityState] with NO `default` arm —
   /// each non-`good` state maps to its OWN `signal*` reason, so a future
   /// state cannot silently fall into a collector bucket; `good`/`unknown`
@@ -666,7 +666,7 @@ class LivePipeline {
   /// SAME latch/tonalness/signal-quality gates [_buildFrame] uses for
   /// [LiveFrame.current], never a second derivation (D3).
   /// [ChordPrediction.calibratedConfidence] is produced through PKG-B's
-  /// resolver (E14-R31, ADR 0552 D7) and stays `null` in the shipped tree,
+  /// resolver (E14-R31, ADR 0601 D7) and stays `null` in the shipped tree,
   /// where no chord artefact exists — the `null` is now a RESOLVER verdict
   /// carrying a reason ([chordCalibration]), not a hard-coded literal.
   /// `pNoChord`/`pUnknown` reflect this decoder's actual (hard,
@@ -697,7 +697,7 @@ class LivePipeline {
   }
 
   /// The chord band's calibration verdict for the CURRENT frame — the
-  /// mapped value, or the typed reason there is none (E14-R31, ADR 0552
+  /// mapped value, or the typed reason there is none (E14-R31, ADR 0601
   /// D7). Side-effect-free: it reads the same three scalars
   /// [chordPrediction] does, so the two can never disagree.
   ///
@@ -715,13 +715,13 @@ class LivePipeline {
   }
 
   /// The strum band's calibration verdict for the most recent
-  /// probability-bearing verdict (ADR 0552 D7). Stays at "no artefact"
+  /// probability-bearing verdict (ADR 0601 D7). Stays at "no artefact"
   /// while the heuristic ladder is in charge — that path has no
   /// probability, so there is nothing to calibrate.
   CalibrationOutcome get strumCalibration => _lastStrumCalibration;
 
   /// The selective-prediction verdict for the most recent strum
-  /// (E14-R31, ADR 0552 D8) — READ-ONLY. The shipped policy is
+  /// (E14-R31, ADR 0601 D8) — READ-ONLY. The shipped policy is
   /// `SelectivePredictionPolicy.acceptAll`, so this is
   /// `SelectiveDecision.accept` in every shipped build. **Nothing on the
   /// pipeline's decision path reads it**: [_isDirectionConfirmed] still
@@ -734,13 +734,13 @@ class LivePipeline {
   SelectiveOutcome get chordSelectiveOutcome =>
       _calibration.select(chordCalibration.calibratedConfidence);
 
-  /// The abstention policy this pipeline was constructed with (ADR 0552
+  /// The abstention policy this pipeline was constructed with (ADR 0601
   /// D8). `SelectivePredictionPolicy.acceptAll` in every shipped build.
   SelectivePredictionPolicy get selectivePredictionPolicy =>
       _calibration.policy;
 
   /// The input gain the quality-aware preprocessing stage is currently
-  /// applying, in dB (E14-R31, ADR 0552). Exactly `0` in every shipped
+  /// applying, in dB (E14-R31, ADR 0601). Exactly `0` in every shipped
   /// build, where the stage is disabled by flag.
   double get preprocessingGainDb => _preprocessor.appliedGainDb;
 
@@ -794,7 +794,7 @@ class LivePipeline {
   @visibleForTesting
   StrumDirectionClassifier get debugStrumClassifier => _shape.inner;
 
-  /// H3 / L2 (E14-R28, ADR 0545 D5) — every value the chord latch read on the
+  /// H3 / L2 (E14-R28, ADR 0594 D5) — every value the chord latch read on the
   /// LAST processed chord frame, or `null` before the first one.
   ///
   /// Read-only and side-effect-free: every field is a value the per-frame
@@ -804,7 +804,7 @@ class LivePipeline {
   /// (`chord_latch_diagnostics_report_test.dart`) before anyone proposes a
   /// change to `chordConfRise`, `chordNoChordScore` or the margin formula.
   /// The record is BUILT ON READ from scalars the frame path already keeps,
-  /// so the real-time loop allocates nothing for it (ADR 0545 D5).
+  /// so the real-time loop allocates nothing for it (ADR 0594 D5).
   ChordLatchDiagnostics? get chordLatchDiagnostics {
     if (_chordFrameIndex == 0) return null;
     return ChordLatchDiagnostics(

@@ -1,5 +1,5 @@
 // H3 / L2 (HANDOFF) — "the chord latch does not engage on a Karplus–Strong
-// signal". E14-R28 / ADR 0545 D5 does NOT fix that here: fixing it would mean
+// signal". E14-R28 / ADR 0594 D5 does NOT fix that here: fixing it would mean
 // moving `chordConfRise`, `chordNoChordScore` or the margin formula, and no
 // measurement exists that would justify a new number (Ch14 §12/1).
 //

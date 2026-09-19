@@ -1,5 +1,5 @@
 /// Persisted keys for the opt-in beta telemetry consent (SDD Ch14 Kör 41,
-/// ADR 0542 D3).
+/// ADR 0591 D3).
 ///
 /// These live here rather than in `lib/core/storage/storage_keys.dart` for
 /// the same reason `GamificationStorageKeys` does: the feature owns its own

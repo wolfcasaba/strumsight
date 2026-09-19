@@ -1,5 +1,5 @@
 // HORIZON randomized property gate for the E14-R21/R32 calibration and
-// selective-prediction mechanism (ADR 0536/0540).
+// selective-prediction mechanism (ADR 0587/0589).
 //
 // Reads PROPERTY_SEED (absent -> 42, the deterministic dev loop); CI runs an
 // extra HARD pass with the run id as the seed. Every assertion here is an

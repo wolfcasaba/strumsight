@@ -1,4 +1,4 @@
-# ADR 0543 — Chapter 14 production gate és a nyomonkövetési zárás: a kapu-tábla a MÉRT állapotot mondja ki, nem a kívánt állapotot
+# ADR 0592 — Chapter 14 production gate és a nyomonkövetési zárás: a kapu-tábla a MÉRT állapotot mondja ki, nem a kívánt állapotot
 
 - **Státusz:** Elfogadva
 - **Kör:** `E14-R42` (Chapter 14 — Recognition Accuracy & Useful UI Recovery,
@@ -12,7 +12,7 @@
   gépi szerződés: a körszámot a checker méri, a státusz-oszlop prózáját nem),
   [ADR 0354](0354-recognition-baseline-manifest-and-evidence-index.md)
   (a baseline manifest a mért számok egyetlen forrása),
-  [ADR 0542](0542-opt-in-beta-telemetry-consent-and-recognition-rollout-flags.md)
+  [ADR 0591](0591-opt-in-beta-telemetry-consent-and-recognition-rollout-flags.md)
   (a kiadási létra fokai, amikhez a kapu-sorok kötődnek),
   [ADR 0271](0271-recognition-recovery-program.md) §9 (UNKNOWN > CONFIDENTLY
   WRONG)

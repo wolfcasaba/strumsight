@@ -113,7 +113,7 @@ class LiveReasonSourceScope(unittest.TestCase):
     def test_the_contract_consumes_the_merged_six_element_enum(self) -> None:
         """A §5 a merge-elt szótárat fogyasztja, nem mint egy másodikat épít.
 
-        2026-09-19 (integráció): az E17-R15 (ADR 0535 D1) a merge-elt hatos
+        2026-09-19 (integráció): az E17-R15 (ADR 0586 D1) a merge-elt hatos
         szótár EGYETLEN `signalQuality` elemét hat TIPIZÁLT okra bontotta
         (`signalTooQuiet`, `signalTooLoud`, `signalClipping`, `signalTooNoisy`,
         `signalSpeechLike`, `signalUnstable`), tehát a szótár mérete 6 -> 11.
@@ -131,7 +131,7 @@ class LiveReasonSourceScope(unittest.TestCase):
         elements = re.findall(r"^  ([a-z][A-Za-z]*)[,;]$", merged.group(1), re.MULTILINE)
         self.assertGreaterEqual(len(elements), 6, elements)
         # A hatos mag: az ADR 0505 D3/D6 szótárának minden eleme, a
-        # `signalQuality` kivételével, amit az ADR 0535 D1 bontott szét.
+        # `signalQuality` kivételével, amit az ADR 0586 D1 bontott szét.
         for core in ("lowConfidence", "unstable", "noChord", "modelUnavailable", "timeout"):
             self.assertIn(core, elements)
         signal = [e for e in elements if e.startswith("signal")]

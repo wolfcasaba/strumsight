@@ -1,4 +1,4 @@
-# ADR 0539 — NNLS vs CRNN vs hybrid: közös pontozó harness, döntés NÉLKÜL
+# ADR 0588 — NNLS vs CRNN vs hybrid: közös pontozó harness, döntés NÉLKÜL
 
 **Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R27 · **Kapcsolódik:** ADR 0509 (metrika-szerződés), Ch14 §4.5, §12/1 („thresholdok vak átírása tilos”)
 

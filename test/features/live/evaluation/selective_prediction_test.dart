@@ -1,4 +1,4 @@
-// E14-R21 (ADR 0536): selective prediction — abstain instead of guessing.
+// E14-R21 (ADR 0587): selective prediction — abstain instead of guessing.
 //
 // What these cells prove:
 //   * the SHIPPED default (acceptAll) changes nothing: no calibration, no

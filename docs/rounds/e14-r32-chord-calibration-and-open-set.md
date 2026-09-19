@@ -1,7 +1,7 @@
 # E14-R32 — Chord kalibráció, unknown/open-set és selective prediction
 
 - **Státusz:** LESZÁLLÍTVA (mechanizmus) / **PARTIAL** (küszöbök és mérés hiányzik)
-- **ADR:** [`0540`](../adr/0540-chord-calibration-open-set-and-selective-prediction.md)
+- **ADR:** [`0589`](../adr/0589-chord-calibration-open-set-and-selective-prediction.md)
 - **Csomag:** PKG-B · **Készült:** 2026-09-09
 
 ## 1. Cél

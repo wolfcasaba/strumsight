@@ -166,7 +166,7 @@ final class ChordChangeAnalyzer {
 
   /// Whether an observation may be used as evidence of what was played.
   ///
-  /// E14-R38 (ADR 0551 D3): the DECISION decides, the number only refines.
+  /// E14-R38 (ADR 0600 D3): the DECISION decides, the number only refines.
   /// An `uncertain`/`rejected` reading is never usable, however confident a
   /// number happens to sit next to it; a `measured` reading with no
   /// confidence number (`null` — the live path, which measures none) IS

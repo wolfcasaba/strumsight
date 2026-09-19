@@ -1,4 +1,4 @@
-/// Where the chord-band candidate verdict comes from (E14-R26, ADR 0549 D2).
+/// Where the chord-band candidate verdict comes from (E14-R26, ADR 0598 D2).
 ///
 /// Kept in its own file, as an interface plus a tiny value type, so the
 /// observer does not depend on the CRNN and the CRNN runner does not depend

@@ -98,7 +98,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     _lifecycle = ref.read(appLifecycleEventsProvider);
     _lifecycle.addListener(_onAppLifecycle);
     // Free-play must never inherit a lesson's expected-chord bias. Since
-    // E14-R30 (ADR 0544) that is a MACHINE guarantee, not a convention: the
+    // E14-R30 (ADR 0593) that is a MACHINE guarantee, not a convention: the
     // shared engine is constructed in `RecognitionMode.free`
     // (`liveRecognitionModeProvider`), and `ExpectedChordHint.forMode`
     // returns `null` for that regime, so a label handed to
@@ -411,7 +411,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final timeline = ref.watch(chordTimelineProvider);
     // Capo: the detector hears concert pitch; show the fretted shape (−capo).
     final capo = ref.watch(capoProvider);
-    // The stage's PRODUCT mode (ADR 0550 D2) — derived from the on-screen
+    // The stage's PRODUCT mode (ADR 0599 D2) — derived from the on-screen
     // target, so "guided" and "there is a target" can never disagree.
     final stageMode = ref.watch(liveStageModeProvider);
     final guidedTarget = ref.watch(liveGuidedTargetProvider);
@@ -482,7 +482,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         frame.listening &&
         frame.chordRejectReason == null &&
         frame.inputLevel < SsSignalQualityIndicator.defaultWeakThreshold;
-    // ADR 0550 D1: a chord reaches the DETECTION hero only under a decision
+    // ADR 0599 D1: a chord reaches the DETECTION hero only under a decision
     // that actually claims one. `LivePipeline` already only fills `current`
     // on a `confirmed` verdict (`showChord == chordLatched && hasMatch`), so
     // on today's production path this changes nothing — it turns that
@@ -660,7 +660,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
             // The stage's mode and — in Guided only — the target. The target
             // lives HERE, in the feedback slot, never in `hero`: the hero is
             // the detection slot, and a target rendered there would read as a
-            // recognition result (ADR 0550 D3).
+            // recognition result (ADR 0599 D3).
             //
             // A `Column` of centred rows rather than a `Wrap`: `Wrap` hands
             // its children UNBOUNDED main-axis constraints, under which the
@@ -755,7 +755,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   }
 
   /// Whether [decision] lets the stage present a chord as RECOGNISED
-  /// (ADR 0550 D1). Exhaustive, no `default`: a seventh decision state is a
+  /// (ADR 0599 D1). Exhaustive, no `default`: a seventh decision state is a
   /// compile error here rather than a silent "yes".
   ///
   /// `null` — a producer that supplies no typed decision at all (mocks, the
@@ -783,7 +783,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   }
 }
 
-/// Names the stage's product mode in words (ADR 0550 D2). Free play and
+/// Names the stage's product mode in words (ADR 0599 D2). Free play and
 /// Guided are told apart by TEXT plus an icon, never by colour alone — the
 /// E14-R39 audit measured the confidence tokens as a single grey under full
 /// colour loss, so a hue-only mode cue would be no cue at all.

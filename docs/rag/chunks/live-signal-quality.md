@@ -205,7 +205,7 @@ band stays intentionally narrow, and any fixture that fails to separate
 cleanly under future real-audio calibration should widen the corridor toward
 `unknown`, never toward a source classification.
 
-## Reject-reason mapping (ADR 0535, E17-R15)
+## Reject-reason mapping (ADR 0586, E17-R15)
 
 `LivePipeline.debugDeriveChordDecision` maps the analyzer state to the Live
 reject reason with an EXHAUSTIVE `switch` (no `default` arm), so every future

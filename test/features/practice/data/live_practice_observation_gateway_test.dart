@@ -697,7 +697,7 @@ void main() {
         final chords = h.observations.whereType<ChordObservation>().toList();
         expect(chords, hasLength(1));
         expect(chords.single.label, 'C');
-        // E14-R38 (ADR 0551 D2): the fabricated `1.0` is gone. The live chord
+        // E14-R38 (ADR 0600 D2): the fabricated `1.0` is gone. The live chord
         // path measures no chord confidence, so the observation says so.
         expect(chords.single.confidence, isNull);
         expect(chords.single.evidence, ChordEvidence.measured);
@@ -1068,7 +1068,7 @@ void main() {
     });
   });
 
-  // ---- E14-R38 (ADR 0551): the typed verdict travels, the invented
+  // ---- E14-R38 (ADR 0600): the typed verdict travels, the invented
   // confidence does not. ----
   group('the chord verdict reaches the observation', () {
     const cases = <RecognitionDecision, ChordEvidence>{
@@ -1141,7 +1141,7 @@ void main() {
     });
   });
 
-  // ---- E14-R37 (ADR 0550): the guided half of "Live never passes a hint,
+  // ---- E14-R37 (ADR 0599): the guided half of "Live never passes a hint,
   // practice always does". The Live half lives in
   // test/features/live/screens/live_stage_mode_test.dart. ----
   group('the guided path always passes its target to the engine', () {

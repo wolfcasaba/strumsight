@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// The Live stage's PRODUCT mode (E14-R37, ADR 0550 D2).
+/// The Live stage's PRODUCT mode (E14-R37, ADR 0599 D2).
 ///
-/// Deliberately a different type from `RecognitionMode` (ADR 0544 D1), which
+/// Deliberately a different type from `RecognitionMode` (ADR 0593 D1), which
 /// is the ENGINE's construction-time regime. The two answer different
 /// questions and must not be conflated:
 ///
@@ -11,7 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 ///
 /// A guided stage on a free engine is a legitimate, honest configuration: the
 /// player sees what to play, and the verdict stays audio-only. That is the
-/// configuration this round ships (ADR 0550 D4) — the reverse (a guided
+/// configuration this round ships (ADR 0599 D4) — the reverse (a guided
 /// engine behind a free-looking screen) is the one that must never exist,
 /// and `ExpectedChordHint.forMode` makes it unrepresentable.
 enum LiveStageMode {

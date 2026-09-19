@@ -1,5 +1,5 @@
 /// Quality-aware input preprocessing for the Live DSP path (E14-R31,
-/// ADR 0552).
+/// ADR 0601).
 ///
 /// This file ships a MECHANISM, not a tuning. It consumes the snapshot the
 /// already-shipped `LiveSignalQualityAnalyzer` produces (E14-R05, ADR 0507)
@@ -18,7 +18,7 @@
 /// 2. **Never on `clipping`.** A clipped signal has already lost the
 ///    samples that were cut; boosting it amplifies the damage and cutting
 ///    it cannot restore it. The clipping state HOLDS the gain where it is
-///    instead of reacting to it (ADR 0552 D3).
+///    instead of reacting to it (ADR 0601 D3).
 /// 3. **Never fabricates a measurement.** A `null` `rmsDbfs`/`peakDbfs` —
 ///    the analyzer's honest "not measured yet" — yields no level adaptation
 ///    at all, rather than a plausible-looking default (ADR 0271 §1).
@@ -28,7 +28,7 @@
 ///    ([QualityAwarePreprocessor.clampedSampleCount]) so it can never be a
 ///    silent no-op.
 ///
-/// **Every number below is an UNMEASURED default** (ADR 0552 D6). The
+/// **Every number below is an UNMEASURED default** (ADR 0601 D6). The
 /// device A/B this round would need — 5+ phones, plan §2 R31 — is human +
 /// hardware work no test on this tree can stand in for. The constants are
 /// stated, sourced and bounded in
@@ -60,7 +60,7 @@ enum LivePreprocessingAdaptation {
   deviceOffsetOnly,
 
   /// Enabled, and the input is CLIPPING: the gain is held at its current
-  /// value and no new level adaptation is computed (ADR 0552 D3).
+  /// value and no new level adaptation is computed (ADR 0601 D3).
   clippingHold,
 }
 
@@ -68,7 +68,7 @@ enum LivePreprocessingAdaptation {
 ///
 /// [LivePreprocessingConfig.disabled] is the shipped value and the
 /// one-switch rollback: the `recognitionPreprocessingEnabled` feature flag
-/// (ADR 0542, owned by `lib/app/config/feature_flags.dart`) chooses between
+/// (ADR 0591, owned by `lib/app/config/feature_flags.dart`) chooses between
 /// the two const constructors, so turning the path off is a flag flip, not
 /// a release.
 final class LivePreprocessingConfig {
@@ -146,7 +146,7 @@ final class LivePreprocessingConfig {
 
   /// Target input RMS, in dBFS.
   ///
-  /// **UNMEASURED** (ADR 0552 D6). A derivation, not a fit: the shipped
+  /// **UNMEASURED** (ADR 0601 D6). A derivation, not a fit: the shipped
   /// quality gates call a block quiet at or below −40 dBFS RMS and loud at
   /// or above −2 dBFS PEAK (`LiveQualityThresholds.standard.quietRmsDbfs`
   /// and `.loudPeakDbfs`), so −21 dBFS is the midpoint of that usable
@@ -168,7 +168,7 @@ final class LivePreprocessingConfig {
 
   /// Largest change of the applied gain from one chunk to the next.
   ///
-  /// **UNMEASURED** (ADR 0552 D6). A gain that jumped between chunks would
+  /// **UNMEASURED** (ADR 0601 D6). A gain that jumped between chunks would
   /// put a step discontinuity at the chunk boundary, and a step is exactly
   /// what the spectral-flux onset detector is built to find — a phantom
   /// strum. 1.5 dB per chunk keeps that step an order of magnitude below a

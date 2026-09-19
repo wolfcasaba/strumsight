@@ -1,4 +1,4 @@
-// E14-R28 companion delivery for E14-R23 (ADR 0545 D6) — the shadow seam.
+// E14-R28 companion delivery for E14-R23 (ADR 0594 D6) — the shadow seam.
 //
 // PKG-E will hang a second (ML) recognition path off this seam in wave 2. The
 // contract it has to be able to rely on, and that these cells pin, is that the

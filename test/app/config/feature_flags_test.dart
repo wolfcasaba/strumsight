@@ -805,7 +805,7 @@ void _expectCommunityFlagsOff(FeatureFlags flags) {
 }
 
 // ---------------------------------------------------------------------------
-// E14-R23/R24/R33/R40/R41 (ADR 0542) — the recognition rollout flag surface.
+// E14-R23/R24/R33/R40/R41 (ADR 0591) — the recognition rollout flag surface.
 // ---------------------------------------------------------------------------
 
 void _expectCh14FlagsOff(FeatureFlags flags) {
@@ -995,7 +995,7 @@ void ch14Main() {
   });
 
   group('featureFlagRegistry — the Ch14 additions are catalogued, and the '
-      'enum fields deliberately are NOT (ADR 0542 D4)', () {
+      'enum fields deliberately are NOT (ADR 0591 D4)', () {
     Set<String> keysOf() => featureFlagRegistry.map((d) => d.key).toSet();
 
     test('every new BOOL flag has a catalog entry with an owner and a '

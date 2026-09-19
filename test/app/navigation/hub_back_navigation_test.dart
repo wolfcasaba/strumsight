@@ -270,7 +270,7 @@ const Map<String, Set<String>> _goExceptions = <String, Set<String>>{
   // `PopScope` confirmation owns the exit; it is not a "menu item".
   'lib/features/practice/presentation/screens/practice_setup_screen.dart':
       <String>{'AppRoutes.practiceSession'},
-  // E14-R36 (ADR 0546) — the ten-minute chain. A chain STEP is a primary
+  // E14-R36 (ADR 0595) — the ten-minute chain. A chain STEP is a primary
   // destination, not a menu item: the chain owns the whole session and its
   // own "Leave the chain" action is the exit, so each step REPLACES the
   // previous one. Pushing instead would stack tune→play→review under each

@@ -173,7 +173,7 @@ _ChordRun _runChord({RecognitionCalibration? calibration}) {
 }
 
 void main() {
-  group('E14-R31 strum band (ADR 0552 D7)', () {
+  group('E14-R31 strum band (ADR 0601 D7)', () {
     test('no artefact: the confidence stays null and says WHY', () {
       final run = _runStrum();
 
@@ -258,7 +258,7 @@ void main() {
     });
   });
 
-  group('E14-R31 chord band (ADR 0552 D7)', () {
+  group('E14-R31 chord band (ADR 0601 D7)', () {
     test('no artefact: calibratedConfidence stays null with a reason', () {
       final run = _runChord();
 
@@ -359,7 +359,7 @@ void main() {
         shipped.frames.map((f) => f.latestStrum?.direction.name).toList(),
         reason:
             'installing a stricter policy changes what is REPORTED, never '
-            'what the pipeline emits (ADR 0552 D8)',
+            'what the pipeline emits (ADR 0601 D8)',
       );
       expect(
         strict.frames.map((f) => f.strumSeq).toList(),

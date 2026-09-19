@@ -18,7 +18,7 @@ parancsot, és frissítse a §2-t.
 
 ## 0.0 MIÉRT `hold`
 
-Az `E18-R01` ([ADR 0535](../adr/0535-song-editor-chord-audition-and-progression-preview.md))
+Az `E18-R01` ([ADR 0585](../adr/0585-song-editor-chord-audition-and-progression-preview.md))
 ugyanazt a `SongBuilderScreen`-t írja, amelynek ez a kör a konstruktorát és a
 mentési ágát bővíti. **Mi oldja fel:** az `E18-R01` merge-e.
 

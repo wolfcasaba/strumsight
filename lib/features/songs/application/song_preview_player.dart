@@ -38,7 +38,7 @@ final class PreviewStrum {
 }
 
 /// The timed strokes of a progression under a one-bar strum pattern
-/// (ADR 0535 D3). Pure: eighth-note slots, `null` = rest, one chord per bar.
+/// (ADR 0585 D3). Pure: eighth-note slots, `null` = rest, one chord per bar.
 ///
 /// A pattern whose length does not match `beatsPerBar * 2` is fitted the way
 /// `Song.fromJson` fits it (truncate / rest-pad) rather than spilling into
@@ -71,7 +71,7 @@ List<PreviewStrum> previewSchedule({
 }
 
 /// Plays a progression preview through a [ChordAudition] on a timer chain
-/// (ADR 0535 D3): the composer hears the whole song — chords AND the ↓/↑
+/// (ADR 0585 D3): the composer hears the whole song — chords AND the ↓/↑
 /// pattern — before picking up the guitar.
 ///
 /// The schedule is computed once by [previewSchedule]; this class only owns

@@ -2,7 +2,7 @@
 
 - **Rounds:** `E14-R24` (strum release gate + controlled rollout) and
   `E14-R33` (chord release gate + rollout), documentation half; the flag
-  surface itself is [ADR 0542](../adr/0542-opt-in-beta-telemetry-consent-and-recognition-rollout-flags.md)
+  surface itself is [ADR 0591](../adr/0591-opt-in-beta-telemetry-consent-and-recognition-rollout-flags.md)
 - **Written:** 2026-09-09, PKG-D
 - **State: nothing is rolled out.** Both bands sit at
   `RecognitionRolloutStage.off` in every environment, and the measured

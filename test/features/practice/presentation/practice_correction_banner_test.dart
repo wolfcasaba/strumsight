@@ -1,11 +1,11 @@
-// E14-R38 (ADR 0551 D6) — the correction the player actually reads.
+// E14-R38 (ADR 0600 D6) — the correction the player actually reads.
 //
 // The parity cell is the important one: the practice banner and the Live
 // uncertainty banner must say the SAME sentence for the same reject reason.
 // They are two exhaustive switches over one enum (the practice domain may not
 // import the Live widget layer), so without this cell they could silently
 // drift into two different pieces of advice for one diagnosis — exactly the
-// failure ADR 0535 removed from the Live side.
+// failure ADR 0586 removed from the Live side.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/theme/app_theme.dart';

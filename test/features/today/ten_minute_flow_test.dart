@@ -1,4 +1,4 @@
-// E14-R36 (ADR 0546) — the "10 useful minutes" chain: the composition rule,
+// E14-R36 (ADR 0595) — the "10 useful minutes" chain: the composition rule,
 // the step machine, the interruption rule and the measured play-evidence
 // promotion. Pure domain: no widget, no provider container.
 import 'package:flutter_test/flutter_test.dart';

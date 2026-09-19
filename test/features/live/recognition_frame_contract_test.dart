@@ -60,11 +60,11 @@ void main() {
       });
     });
 
-    // ADR 0535 D1 widened this set from six to eleven: the merged
+    // ADR 0586 D1 widened this set from six to eleven: the merged
     // `signalQuality` tag is GONE and each non-`good` SignalQualityState now
     // has its own reason. This cell is the spec of the closed dictionary.
     test('RecognitionRejectReason has exactly the eleven ADR 0505 D3 / '
-        'ADR 0535 D1 reasons', () {
+        'ADR 0586 D1 reasons', () {
       expect(RecognitionRejectReason.values.map((r) => r.name).toSet(), {
         'lowConfidence',
         'unstable',
@@ -80,7 +80,7 @@ void main() {
       });
     });
 
-    // ADR 0535 D4 — the removed wire value fails closed like any other
+    // ADR 0586 D4 — the removed wire value fails closed like any other
     // unknown name; there is no compatibility fallback.
     test('the removed signalQuality wire value throws, not falls back', () {
       expect(

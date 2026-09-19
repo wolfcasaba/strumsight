@@ -49,7 +49,7 @@ class ChordAudio {
   };
 
   /// Whether [label] names a root AND a quality this table knows — the
-  /// audition's precondition for the chord-tone fallback (ADR 0535 D1, review
+  /// audition's precondition for the chord-tone fallback (ADR 0585 D1, review
   /// F8): `frequencies` itself substitutes a major triad for an unknown
   /// suffix, which is right for the jam pad but a false answer to "what does
   /// Cdim sound like".

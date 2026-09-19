@@ -393,7 +393,7 @@ def _resolve_production_default(key: str, raw_value: str, *, path: Path) -> bool
 # A capability flag is a `final bool` (or `final bool?`) field — the SAME
 # parse `tool/check_feature_flags.dart` and `test/app/config/
 # feature_flags_test.dart` perform over this file. E14-R24/R33 (ADR 0537,
-# ADR 0541) added two NON-bool fields to the same constructor
+# ADR 0590) added two NON-bool fields to the same constructor
 # (`strumModelRolloutStage`, `chordModelRolloutStage`: a
 # `RecognitionRolloutStage` enum, with its own rollout rows), and a rollout
 # STAGE has no "production default true/false" to classify. They are

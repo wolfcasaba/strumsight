@@ -1,4 +1,4 @@
-# ADR 0535 — A Live jel-minőségi elutasítási ok SZÉTVÁLASZTÁSA: hat tipizált ok a merge-elt `signalQuality` gyűjtő helyett
+# ADR 0586 — A Live jel-minőségi elutasítási ok SZÉTVÁLASZTÁSA: hat tipizált ok a merge-elt `signalQuality` gyűjtő helyett
 
 **Státusz:** elfogadva (2026-09-08) · **Kör:** E17-R15 · **Felülírja részben:** ADR 0516 D4 táblázat 2. sora, ADR 0520 D1 „hatelemű" megfogalmazása
 

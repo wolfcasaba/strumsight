@@ -1,4 +1,4 @@
-// E14-R40 capture wiring (ADR 0542 D7) — an opt-in Lab capture carries the
+// E14-R40 capture wiring (ADR 0591 D7) — an opt-in Lab capture carries the
 // field-study tag, and carries NOTHING when any gate is closed.
 //
 // RED before this change: `DiagnosticsSession` had no `fieldSessionTag`, so

@@ -1,7 +1,7 @@
 # E18-R01 — Kézi tesztterv Android-EMULÁTORON (VS Code + Claude Code a laptopon)
 
 > **Kinek:** a laptopon futó Claude Code sessionnek (és a felhasználónak).
-> **Mit:** a `claude/song-editor-chord-audio-tbkokz` ág (E18-R01, ADR 0535) —
+> **Mit:** a `claude/song-editor-chord-audio-tbkokz` ág (E18-R01, ADR 0585) —
 > akkord-meghallgatás a dalszerkesztőben + menet-előnézet.
 > **Hol:** Android-emulátor, NEM valódi telefon. A hang az emulátorból a
 > laptop hangszóróján szól (a `audioplayers` az emulátorban működik).
@@ -221,7 +221,7 @@ Navigáció: Practice fül → Live (vagy `/live`). Gitárral, a laptop mikrofon
 |---|---|---|
 | H1 | Today hub | új felhasználónak „Let's get started" + CTA; a CTA a Practice-be visz |
 | H2 | Practice area hub → Setup → Session → Result | a V2 practice-motor (nonProd-ban be van kapcsolva): egy 1 perces session lefut mikrofonnal, az eredmény-képernyő számai nem NaN/üresek |
-| H3 | Chord library | tap-to-hear: a PAD szól (változatlan, nem a pengetett hang — ADR 0535 D5); Settings → Left-handed → a diagramok tükröződnek |
+| H3 | Chord library | tap-to-hear: a PAD szól (változatlan, nem a pengetett hang — ADR 0585 D5); Settings → Left-handed → a diagramok tükröződnek |
 | H4 | Metronome | Start/Stop, Tap tempo, 3/4 és 4/4, hangsúly az 1-en; a kattanás egyenletes 1 percig |
 | H5 | Unified Library | a mentett Analyze-felvétel és a saját dal is látszik; törlés megerősítéssel |
 | H6 | Progress dashboard, Profile hub, Streak, Gamification hub/quests/inbox | megnyílnak, a számok a ma játszott leckét tükrözik |

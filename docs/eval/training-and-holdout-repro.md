@@ -1,6 +1,6 @@
 # Tanítás, grouped holdout és eszköz-mérés — repro-szerződés (E14-R20 / E14-R22)
 
-- **ADR:** [0536](../adr/0536-model-bound-calibration-artefact-and-selective-prediction.md) §D7
+- **ADR:** [0587](../adr/0587-model-bound-calibration-artefact-and-selective-prediction.md) §D7
 - **Állapot:** **BLOCKED (mérés)** — ez a dokumentum a *hogyan*, nem az
   *eredmény*. Ebben a konténerben nincs numpy/TF, nincs dataset, nincs
   Android eszköz; egyetlen szám sem született itt.

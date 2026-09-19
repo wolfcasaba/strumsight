@@ -1,4 +1,4 @@
-// E14-R21/R32 (ADR 0536/0540): the calibration artefact contract.
+// E14-R21/R32 (ADR 0587/0589): the calibration artefact contract.
 //
 // What these cells prove, in one line each:
 //   * a calibrated confidence exists ONLY when a held-out, model-bound
@@ -335,7 +335,7 @@ void main() {
     });
 
     test('the two reserved labels are different strings — N.C. and unknown '
-        'never collapse into one state (ADR 0540 D1)', () {
+        'never collapse into one state (ADR 0589 D1)', () {
       expect(recognitionNoChordLabel, isNot(recognitionUnknownChordLabel));
       expect(recognitionNoChordLabel, 'noChord');
       expect(recognitionUnknownChordLabel, 'unknown');

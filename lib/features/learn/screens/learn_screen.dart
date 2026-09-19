@@ -117,7 +117,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen>
   /// (the chunk-016 expected-target prior). Jam mode and a finished/idle
   /// screen hint nothing.
   ///
-  /// **What this actually does today (E14-R37, ADR 0550 D4 — stated so the
+  /// **What this actually does today (E14-R37, ADR 0599 D4 — stated so the
   /// code does not imply more than it delivers):** the shared engine is
   /// constructed in `RecognitionMode.free`
   /// (`liveRecognitionModeProvider`), and `ExpectedChordHint.forMode`

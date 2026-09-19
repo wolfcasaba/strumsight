@@ -4,7 +4,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../live/public.dart';
 import '../../domain/model/practice_correction.dart';
 
-/// The session feedback slot's "next fix" line (E14-R38, ADR 0551 D6).
+/// The session feedback slot's "next fix" line (E14-R38, ADR 0600 D6).
 ///
 /// It states ONE concrete correction and nothing else. Two kinds of sentence
 /// can appear, and which one appears is the whole point of the round:

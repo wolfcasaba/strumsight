@@ -4,7 +4,7 @@
   1. hullámos szállítmánya, és magában hordozza az `E14-R23` / `E14-R24` /
   `E14-R33` / `E14-R40` körök **zászló-felét** is (a terv §4 PKG-D
   kötelezettsége: a teljes E14 zászlókészlet EGYBEN landol).
-- **ADR:** [0542](../adr/0542-opt-in-beta-telemetry-consent-and-recognition-rollout-flags.md)
+- **ADR:** [0591](../adr/0591-opt-in-beta-telemetry-consent-and-recognition-rollout-flags.md)
   (foglalva: `python3 tools/round-slots.py reserve-adr --round E14-R41`)
 - **Dátum:** 2026-09-09
 - **Implementer:** Claude (Opus 5), PKG-D
@@ -56,7 +56,7 @@ privacy review aláírása; a `.arb` fájlok (l10n scratch protokoll).
 - `test/features/settings/telemetry_consent_center_test.dart`
 - `test/privacy/beta_telemetry_egress_test.dart`
 - `test/property/telemetry_redaction_property_test.dart`
-- `docs/adr/0542-*.md`, `docs/release/ch14-recognition-rollout.md`
+- `docs/adr/0591-*.md`, `docs/release/ch14-recognition-rollout.md`
 
 **Módosított**
 - `lib/app/config/feature_flags.dart` (6 új mező + `==`/`hashCode`/`toString`)
@@ -111,7 +111,7 @@ jelentése a megírt cellákat sorolja, sikeres verifikációt **nem állít**
 ## 10. Handoff
 
 - **PKG-E (2. hullám):** a shadow-futás feltétele a PÁR — `stage.runsInference`
-  ÉS a boolean mesterkapcsoló (ADR 0542 D2). A `RecognitionTelemetryQualityBucket`
+  ÉS a boolean mesterkapcsoló (ADR 0591 D2). A `RecognitionTelemetryQualityBucket`
   leképezése az élő jelminőség-állapotgépről a fogyasztó dolga.
 - **PKG-F (2. hullám):** a `newLiveStageEnabled` változatlan; fogyasztót ez a
   kör nem ad hozzá.

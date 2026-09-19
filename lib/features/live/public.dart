@@ -15,7 +15,7 @@ export 'engine/recognition_stabilizer.dart';
 export 'engine/strum_engine.dart';
 
 /// The single output tap a shadow/A-B consumer hooks into the live path
-/// (E14-R28 companion delivery for E14-R23, ADR 0545 D6) — interface plus its
+/// (E14-R28 companion delivery for E14-R23, ADR 0594 D6) — interface plus its
 /// no-op null object, so a consumer never has to reach into `engine/dsp/`.
 export 'engine/recognition_shadow_observer.dart';
 
@@ -42,13 +42,13 @@ export 'domain/recognition/recognition_decision.dart';
 export 'domain/recognition/recognition_frame.dart';
 
 /// The construction-time recognition regime and the only carrier an
-/// expected-chord hint can travel in (E14-R30, ADR 0544) — the Live screen's
+/// expected-chord hint can travel in (E14-R30, ADR 0593) — the Live screen's
 /// product modes map onto this, and `PKG-F` needs it to build the right
 /// engine per mode.
 export 'domain/recognition/recognition_mode.dart';
 
 /// What one device's audio input needs to reach the nominal level (E14-R31,
-/// ADR 0552 D4). The CONSUMER side of the audio-setup wizard's seam: the
+/// ADR 0601 D4). The CONSUMER side of the audio-setup wizard's seam: the
 /// wizard (`features/onboarding/audio_setup`) is the intended producer, the
 /// Live preprocessing stage the only consumer. Exported here because the
 /// producer lives in another feature and `engine/dsp/` is deliberately not

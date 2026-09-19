@@ -1,4 +1,4 @@
-// E14-R23 — the two-part shadow gate (ADR 0548 D1).
+// E14-R23 — the two-part shadow gate (ADR 0597 D1).
 //
 // RED before this round: `RecognitionShadowGate` did not exist and PKG-D's
 // flags had ZERO consumers in lib/**. These cells are the consumer contract

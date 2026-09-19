@@ -58,6 +58,9 @@ allowed_paths = [
   "test/features/audio_analysis/application/analysis_cancellation_test.dart",
   "test/features/audio_analysis/application/analysis_controller_test.dart",
   "test/features/audio_analysis/application/shadow_analysis_runner_test.dart",
+  "test/features/audio_analysis/capture_wiring_test.dart",
+  "test/features/audio_analysis/presentation/capture/analysis_exit_chain_test.dart",
+  "test/features/audio_analysis/presentation/capture/analysis_import_route_test.dart",
   "docs/rounds/e99-r13-gov-30c-5-runner-audio-path-and-wiring.md",
 ]
 gate_tests = [
@@ -66,6 +69,37 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.1 Hatókör-bővítés (2026-09-19, négy-vonalas main-integráció)
+
+**Mért ok — ugyanaz a hibaosztály, mint a H3 halté, új okkal:** a main
+négy párhuzamos fejlesztési vonalat olvasztott be, és ezzel HÁROM további,
+`implements AnalysisRunner` test-oldali fake került a fára, amit ez a brief
+nem ismert:
+
+```
+$ grep -rln "implements AnalysisRunner" lib/features/audio_analysis test/features/audio_analysis
+lib/features/audio_analysis/application/analysis_isolate_runner.dart
+test/features/audio_analysis/application/analysis_cancellation_test.dart
+test/features/audio_analysis/application/analysis_controller_test.dart
+test/features/audio_analysis/application/shadow_analysis_runner_test.dart
+test/features/audio_analysis/capture_wiring_test.dart                                  # ÚJ
+test/features/audio_analysis/presentation/capture/analysis_exit_chain_test.dart        # ÚJ
+test/features/audio_analysis/presentation/capture/analysis_import_route_test.dart      # ÚJ
+```
+
+Az ADR 0254 §5.1 `AnalysisRunner.start` szignatúra-váltása Dartban MINDEN
+implementort egyszerre kényszerít (nincs részleges migrációs állapot), tehát
+a `_ScriptedRunner` / `_PendingRunner` fake-ek `start` override-ja a kör
+során óhatatlanul mozdul. Ha ezek nincsenek az `allowed_paths`-ban, a kör
+pontosan a H3-at ismétli meg: az implementer egy compile-kényszerített,
+mechanikus sort ír egy listán kívüli fájlba, és a kör megáll.
+
+A bővítés ezért **kényszer-követés, nem scope-tágítás**: a három fájl
+kizárólag a `start` override szignatúrája miatt kerül be, a tilos zóna
+(`lib/core/flags/**`, `engine/**`, `domain/**`, `public.dart`, `docs/adr/**`,
+`tools/**`, `.github/**`) változatlan, és `gate_tests` sem bővül. A
+`tools/tests/test_e99_r13_runner_scope.py` őre ugyanezt méri gépileg.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -187,6 +221,9 @@ kör egyiket sem mozdítja** (A8).
 | `test/…/application/analysis_cancellation_test.dart` | a bővült izolátum-határ és cancellation (§0.0: a tényleges test erre a fájlra mutat, nem a nemlétező `analysis_isolate_runner_test.dart`-ra) |
 | `test/…/application/analysis_controller_test.dart` | a `_QueueRunner` fake harmadik `implements AnalysisRunner` helye — a §5.1 szignatúra-váltás compile-kényszerítette igazítása (§0.0, halt H3) |
 | `test/…/application/shadow_analysis_runner_test.dart` | a továbbadás bizonyítéka |
+| `test/…/audio_analysis/capture_wiring_test.dart` | a `_ScriptedRunner` fake `implements AnalysisRunner` — a §5.1 szignatúra-váltás compile-kényszerítette igazítása (§0.1) |
+| `test/…/presentation/capture/analysis_exit_chain_test.dart` | a `_PendingRunner` fake `implements AnalysisRunner` — ugyanaz a kényszer (§0.1) |
+| `test/…/presentation/capture/analysis_import_route_test.dart` | a `_PendingRunner` fake `implements AnalysisRunner` — ugyanaz a kényszer (§0.1) |
 | `docs/rounds/e99-r13-…md` | a §10 handoff |
 
 **Tilos zóna:** `lib/core/flags/**` · `lib/features/audio_analysis/engine/**` ·

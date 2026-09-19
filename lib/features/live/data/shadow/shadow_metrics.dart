@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:meta/meta.dart';
 
 /// Bounded, fixed-capacity, drop-oldest ring of shadow samples (E14-R23,
-/// ADR 0548 D4).
+/// ADR 0597 D4).
 ///
 /// The whole storage is allocated ONCE in the constructor and never grows:
 /// [add] overwrites the oldest slot instead of appending. That is the
@@ -138,7 +138,7 @@ enum ShadowChordQuality {
 }
 
 /// One cell of the chord agreement matrix: a root pitch class plus a
-/// majmin-reduced quality (E14-R26, ADR 0549 D3).
+/// majmin-reduced quality (E14-R26, ADR 0598 D3).
 ///
 /// The class set is CLOSED (26 values), which is what keeps the confusion
 /// matrix a fixed-size array rather than a map that grows with whatever

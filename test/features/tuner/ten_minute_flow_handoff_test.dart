@@ -1,4 +1,4 @@
-// E14-R36 (ADR 0546) — the tuner's link in the "10 useful minutes" chain.
+// E14-R36 (ADR 0595) — the tuner's link in the "10 useful minutes" chain.
 // The tuner is step 1; nothing here infers that the guitar is in tune, so
 // the ONLY thing that ends the step is the player pressing the hand-off
 // button — which then goes straight to the exercise, so the chain is one

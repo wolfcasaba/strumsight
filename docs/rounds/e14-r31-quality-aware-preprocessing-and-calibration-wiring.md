@@ -1,6 +1,6 @@
-# E14-R31 — Minőség-tudatos előfeldolgozás, eszköz-adaptációs seam, kalibrációs bekötés (ADR 0552)
+# E14-R31 — Minőség-tudatos előfeldolgozás, eszköz-adaptációs seam, kalibrációs bekötés (ADR 0601)
 
-- **Kör:** E14-R31 · **Csomag:** PKG-A (2. hullám) · **ADR:** 0552
+- **Kör:** E14-R31 · **Csomag:** PKG-A (2. hullám) · **ADR:** 0601
 - **Ág:** `claude/laptop-apk-debug-prompt-kys4oa`
 - **Környezet:** nincs Dart/Flutter SDK → **lokális gate nem futtatható**;
   egyetlen mérce a CI (`full-gate.yml`, `build-apk.yml`).
@@ -26,9 +26,9 @@ Három szállítmány, **egyetlen meglévő DSP-küszöb hangolása nélkül**:
   eddig **csak jelentette** az állapotot, egyetlen sor sem reagált rá.
 - `LiveQualityThresholds.standard`: `quietRmsDbfs = -40`, `loudPeakDbfs = -2`,
   `clippedRatioThreshold = 0,001`. **Nem mozdul.**
-- `recognitionPreprocessingEnabled` (ADR 0542) létezik, mindenhol `false`,
+- `recognitionPreprocessingEnabled` (ADR 0591) létezik, mindenhol `false`,
   és a `lib/**`-ben **nem volt fogyasztója**.
-- `ConfidenceCalibrationResolver` + `SelectivePredictionPolicy` (ADR 0536/0540)
+- `ConfidenceCalibrationResolver` + `SelectivePredictionPolicy` (ADR 0587/0589)
   kész; **held-out artefaktum a fán nincs**, tehát minden sáv válasza ma
   `CalibrationUnavailableReason.noArtefact`.
 - `live_pipeline.dart`: mindkét `calibratedConfidence` **hardkódolt `null`**
@@ -65,11 +65,11 @@ nem indokolható újabb transzformáció a jelúton).
 | `test/features/live/preprocessing/quality_aware_preprocessor_test.dart` | **ÚJ** — a fokozat egység-cellái |
 | `test/features/live/preprocessing/live_preprocessing_test.dart` | **ÚJ** — pipeline-szintű paritás és kadencia |
 | `test/features/live/dsp/live_calibration_wiring_test.dart` | **ÚJ** — kalibráció + selective prediction |
-| `docs/adr/0552-…md`, `docs/rag/chunks/023-input-preprocessing.md` | doksi |
+| `docs/adr/0601-…md`, `docs/rag/chunks/023-input-preprocessing.md` | doksi |
 
 ## 5. Kötött döntések
 
-ADR 0552 D1–D9. Kiemelten: kikapcsolva **azonos lista-instancia** (D1); a
+ADR 0601 D1–D9. Kiemelten: kikapcsolva **azonos lista-instancia** (D1); a
 szintkorrekció csak a két SZINT-állapotra (D2); `clipping`-en **tartás, nem
 reakció** (D3); a profil **fogyasztói seam**, identitás alapértékkel (D4); a
 minőség-elemző a **nyers** jelet méri (D5); minden szám **MÉRETLEN**

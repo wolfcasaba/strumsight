@@ -1,4 +1,4 @@
-// E14-R41 (ADR 0542) — the beta-telemetry consent as the user meets it:
+// E14-R41 (ADR 0591) — the beta-telemetry consent as the user meets it:
 // the persisted opt-in notifier, and the Privacy Center card that renders
 // it.
 //

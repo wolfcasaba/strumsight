@@ -4,7 +4,7 @@ import '../domain/recognition/strum_prediction.dart';
 import '../model/live_frame.dart';
 
 /// The ONE seam a shadow/A-B consumer may hook into the live recognition path
-/// (E14-R28 companion delivery for E14-R23, ADR 0545 D6).
+/// (E14-R28 companion delivery for E14-R23, ADR 0594 D6).
 ///
 /// `LivePipeline` calls [onRecognitionFrame] exactly once per EMITTED
 /// [LiveFrame], handing over the frame that production is about to publish

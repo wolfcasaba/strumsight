@@ -76,7 +76,7 @@ abstract final class StorageKeys {
   static const String practiceHistoryV2 = 'ss.practice.history_v2';
 
   // --- today ---------------------------------------------------------------
-  /// The in-progress "10 useful minutes" chain (E14-R36, ADR 0546 D7).
+  /// The in-progress "10 useful minutes" chain (E14-R36, ADR 0595 D7).
   /// Holds only the step, the start time and the active-seconds baseline —
   /// never a plan the user did not start.
   static const String tenMinuteFlow = 'ss.today.ten_minute_flow';

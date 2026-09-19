@@ -1,4 +1,4 @@
-# E17-R15 — Live jel-minőségi ok szétválasztása (ADR 0535)
+# E17-R15 — Live jel-minőségi ok szétválasztása (ADR 0586)
 
 **Motor:** 3 párhuzamos Claude Opus agent (A: domain+motor, B: l10n+banner, C: ellenőrzés+dokumentáció). **Kiindulás:** `main @ 1ae9e55`. **Branch:** `claude/laptop-apk-debug-prompt-kys4oa`.
 
@@ -34,11 +34,11 @@ schemas/**, .claude/**.
 - `lib/features/live/widgets/uncertainty_reason_banner.dart`
 - `lib/l10n/base/app_en.arb`, `lib/l10n/base/app_hu.arb`, `lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb`
 - `test/features/live/**` (csak a `signalQuality`-t érintő cellák + új cellák)
-- `docs/rag/chunks/live-signal-quality.md`, `docs/adr/0535-*.md`, ez a brief, `HANDOFF.md`, `docs/execution/pipeline-queue.tsv`, `docs/LESSONS.md`
+- `docs/rag/chunks/live-signal-quality.md`, `docs/adr/0586-*.md`, ez a brief, `HANDOFF.md`, `docs/execution/pipeline-queue.tsv`, `docs/LESSONS.md`
 
 ## 5. Kötött döntések
 
-Lásd ADR 0535 D1–D5. Tagnevek és l10n kulcsnevek KÖTÖTTEK (D1, D3).
+Lásd ADR 0586 D1–D5. Tagnevek és l10n kulcsnevek KÖTÖTTEK (D1, D3).
 
 ## 6. Acceptance criteria
 

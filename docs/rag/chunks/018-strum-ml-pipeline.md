@@ -2451,7 +2451,7 @@ data step +0.2823 +/- 0.0264, the net +0.3765 +/- 0.0713). It says what the inst
 RESOLVE - on Klangio@70, roughly effects above the 0.08 spread.
 ---
 
-## AS-BUILT — E14-R26: the shipped chord CRNN as a live shadow candidate (ADR 0549)
+## AS-BUILT — E14-R26: the shipped chord CRNN as a live shadow candidate (ADR 0598)
 
 Written 2026-09-09. Until this round `assets/ml/chord_crnn.bin` had exactly
 one loader in the app (`analyze_providers.dart`, the batch Analyze path) and

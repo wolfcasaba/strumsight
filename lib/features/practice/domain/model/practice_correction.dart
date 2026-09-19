@@ -1,6 +1,6 @@
 import 'package:meta/meta.dart';
 
-/// What the player (or the app) has to change next (E14-R38, ADR 0551 D6).
+/// What the player (or the app) has to change next (E14-R38, ADR 0600 D6).
 ///
 /// Closed set, exhaustively switched by the presentation layer — a new kind
 /// is a compile error at the one place that turns it into words, never a

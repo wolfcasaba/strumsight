@@ -265,7 +265,7 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
           liveOverallPerMille: host.liveOverallPerMille,
         ),
       );
-      // The correction loop (E14-R38, ADR 0551 D6): after a missed target —
+      // The correction loop (E14-R38, ADR 0600 D6): after a missed target —
       // or after the recognizer abstained on one — say the ONE concrete
       // thing to change next. A projection of the scoring pass, so no
       // reducer state was added for it; `null` (nothing to correct, or no

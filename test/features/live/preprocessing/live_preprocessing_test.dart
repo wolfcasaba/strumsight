@@ -72,7 +72,7 @@ void main() {
         reference.map(_digest).toList(),
         reason:
             'with the flag off not one sample may change — a measured '
-            'device profile included (ADR 0552 D1/D4)',
+            'device profile included (ADR 0601 D1/D4)',
       );
     });
 

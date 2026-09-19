@@ -433,7 +433,7 @@ in the FIFTH — the lightest, most-omitted tone. Design that made it safe:
 - Grow the vocabulary further (6, 9, add9, inversions/slash) once the base is
   validated on a real guitar. Power-5/sus2 stay OUT (round-26/28 stealing).
 
-## Expected-chord prior: additív bias → TIE-BREAK — AS BUILT (E14-R30, ADR 0544)
+## Expected-chord prior: additív bias → TIE-BREAK — AS BUILT (E14-R30, ADR 0593)
 
 Round 137 added an **additive** expected-target prior:
 `_delta[s] = sim[s] + (s == expected ? 0.05 : 0)`, applied EVERY frame inside
@@ -471,7 +471,7 @@ roots score IDENTICALLY (0.8228 each; next competitor 0.6692), and the hint
 picks among exactly those three. Whether the weaker prior helps or hurts real
 lesson accuracy is **UNKNOWN — not measured**.
 
-## Onset-aligned chord TRANSITION above the stabilizer — AS BUILT (E14-R28, ADR 0545)
+## Onset-aligned chord TRANSITION above the stabilizer — AS BUILT (E14-R28, ADR 0594)
 
 The decoder has been onset-aware since round 138 (`noteOnset()` scales the
 self-bonus by `chordOnsetBonusScale = 0.25` for `chordOnsetBoostFrames = 2`
@@ -507,7 +507,7 @@ clock (`engineTimeSec < 0` or `onsetTimeSec < 0`) falls back to plain ADR
 as expired evidence and re-opens the gate. `RecognitionStabilizer.onsetHeldFrames`
 counts what the gate actually cost, so transition latency is measurable.
 
-## Chord-latch diagnostics (H3 / L2) — MEASURABLE, NOT FIXED (E14-R28, ADR 0545 D5)
+## Chord-latch diagnostics (H3 / L2) — MEASURABLE, NOT FIXED (E14-R28, ADR 0594 D5)
 
 The HANDOFF's H3 ("the chord latch does not engage on a Karplus–Strong
 signal") names `confidence = winSim * (0.5 + 2 * margin)`: on two near-tied

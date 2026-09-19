@@ -1,5 +1,5 @@
 /// Open-set chord decision: "no chord", "a chord I do not support", or a
-/// supported class (E14-R32, ADR 0540).
+/// supported class (E14-R32, ADR 0589).
 ///
 /// The shipped chord vocabulary is CLOSED — 24 maj/min classes plus N.C.
 /// (`assets/ml/model_manifest.json`, `output_classes`). A sus4, add9 or 7th
@@ -19,7 +19,7 @@
 ///    The shipped default is [ChordOpenSetPolicy.disabled], which is the
 ///    IDENTITY on today's behaviour — it can return neither `noChord` nor
 ///    `unknown`, so wiring this function in changes nothing until a MEASURED
-///    policy is supplied (ADR 0540 D4).
+///    policy is supplied (ADR 0589 D4).
 /// 3. **The decision is a pure function of the evidence it names**
 ///    (`winSim`, `margin`, and the N.C. floor), so it is fully testable
 ///    without audio and cannot silently depend on engine state.

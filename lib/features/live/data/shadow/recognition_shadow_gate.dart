@@ -3,7 +3,7 @@ import 'package:meta/meta.dart';
 import '../../../../app/config/feature_flags.dart';
 import '../../../../app/config/recognition_rollout_stage.dart';
 
-/// The ONE place the two-part shadow gate is evaluated (E14-R23, ADR 0548
+/// The ONE place the two-part shadow gate is evaluated (E14-R23, ADR 0597
 /// D1) — the consumer PKG-D's `recognitionShadowModeEnabled` doc promises.
 ///
 /// The contract, restated so it cannot be read two ways: a band's shadow

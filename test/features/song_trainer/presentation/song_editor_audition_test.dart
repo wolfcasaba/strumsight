@@ -26,7 +26,7 @@ import 'package:strumsight/features/song_trainer/presentation/screens/song_edito
 import 'package:strumsight/l10n/app_localizations.dart';
 
 /// Records every chord it was asked to strum — the same "hear it" seam used
-/// by both the Add-chord flow and the dedicated hear-chord button (ADR 0535).
+/// by both the Add-chord flow and the dedicated hear-chord button (ADR 0585).
 final class _RecordingAudition implements ChordAudition {
   final List<String> strummed = [];
 

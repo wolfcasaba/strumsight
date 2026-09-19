@@ -17,7 +17,7 @@ void main() {
       'practice.metric.no_signal',
       'practice.metric.no_applicable_targets',
       'practice.metric.chord_unstable',
-      // E14-R38 (ADR 0551 D4): "the app was unsure" is its own code, split
+      // E14-R38 (ADR 0600 D4): "the app was unsure" is its own code, split
       // out of chord_unstable ("the player was unsteady"). The two are
       // different statements and must not share a bucket.
       'practice.metric.chord_uncertain',

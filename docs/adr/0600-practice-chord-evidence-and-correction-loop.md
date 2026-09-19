@@ -1,6 +1,6 @@
-# ADR 0551 — A gyakorlás akkord-„konfidenciájának" megszüntetése: bizonyíték-állapot a kitalált szám helyett, és a javító-hurok
+# ADR 0600 — A gyakorlás akkord-„konfidenciájának" megszüntetése: bizonyíték-állapot a kitalált szám helyett, és a javító-hurok
 
-**Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R38 · **Épít rá:** ADR 0505 (döntési állapotgép), ADR 0516 (`LiveFrame.chordDecision`), ADR 0535 (hat `signal*` ok), ADR 0271 §1 (UNKNOWN > CONFIDENTLY WRONG)
+**Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R38 · **Épít rá:** ADR 0505 (döntési állapotgép), ADR 0516 (`LiveFrame.chordDecision`), ADR 0586 (hat `signal*` ok), ADR 0271 §1 (UNKNOWN > CONFIDENTLY WRONG)
 
 ## Kontextus (mért)
 
@@ -82,7 +82,7 @@ Nem olvad bele a `chord_unstable`-be. A kettő két különböző mondat:
 | `practice.metric.chord_unstable` | a JÁTÉKOS nem tartotta stabilan |
 | `practice.metric.chord_uncertain` | az APP nem állt ki az olvasata mellett |
 
-Ugyanaz az érv, amiért az ADR 0535 hat `signal*` okra bontotta az egy
+Ugyanaz az érv, amiért az ADR 0586 hat `signal*` okra bontotta az egy
 „jelminőség" gyűjtőt: az egy vödörbe kevert diagnózishoz nem lehet helyes
 tanácsot adni. Attribútum-szinten a `chord_uncertain` MEGELŐZI a
 `chord_unstable`-t, mert az a hiba, amit a felhasználó közvetlenül orvosolhat

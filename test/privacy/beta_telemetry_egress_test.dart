@@ -1,4 +1,4 @@
-// E14-R41 (ADR 0542) — the beta telemetry path makes ZERO network calls,
+// E14-R41 (ADR 0591) — the beta telemetry path makes ZERO network calls,
 // on every consent state, measured on the real provider graph rather than
 // asserted in prose.
 //

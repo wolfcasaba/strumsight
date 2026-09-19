@@ -69,7 +69,7 @@ void main() {
     });
 
     test('a known root with an UNKNOWN quality is silence, not a major', () {
-      // ADR 0535 D1 / review F8: "Cdim" must not sound as C major.
+      // ADR 0585 D1 / review F8: "Cdim" must not sound as C major.
       for (final label in ['Cdim', 'C5', 'Cm6', 'Cwhatever']) {
         final voicing = SynthChordAudition.resolve(label);
         expect(voicing.source, AuditionSource.none, reason: label);

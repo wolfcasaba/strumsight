@@ -67,4 +67,4 @@ teljes 24-címkés sweep-pel.
   `docs/eval/training-and-holdout-repro.md` §4-ben; nyers audió a repóba
   **nem** kerül, csak a manifest + `corpusSha256`.
 - **PKG-B (következő chord-mérési kör):** GuitarSet-ből előálló manifest,
-  majd a §7.4 két hiányzó Alpha sorának bekapcsolása (ADR 0541 D3).
+  majd a §7.4 két hiányzó Alpha sorának bekapcsolása (ADR 0590 D3).

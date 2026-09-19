@@ -1,4 +1,4 @@
-// E14-R41 (ADR 0542) — the opt-in beta telemetry consent model and the
+// E14-R41 (ADR 0591) — the opt-in beta telemetry consent model and the
 // upload gate that reads it.
 //
 // Every cell here would be RED before this round for the plain reason that

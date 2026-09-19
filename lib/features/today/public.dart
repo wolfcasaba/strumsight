@@ -1,7 +1,7 @@
 /// Public Today-hub contract for other features (SDD Ch2 §10.4).
 library;
 
-/// The "10 useful minutes" chain (E14-R36, ADR 0546): the composition rule,
+/// The "10 useful minutes" chain (E14-R36, ADR 0595): the composition rule,
 /// its step state machine and the pure interruption/evidence resolution the
 /// Today hub renders from.
 export 'domain/ten_minute_flow.dart';

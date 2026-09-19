@@ -74,11 +74,42 @@ scoring → nincs az adott axis action), (3) lyrics/backing **redaction**. Nincs
 
 **Halasztva (prerekvizit kör kell — song_trainer-oldali additív export + ADR):**
 practice-result debrief, measure-range A–B loop, revision-stale-on-result,
-missing-asset alternate, exact-range setup-route (routing-változás), setlist-selection.
+missing-asset alternate, exact-range setup-route (routing-változás). (A
+setlist-selection 2026-09-19-én feloldva — §0.1.)
 Ezek addig **nem** épülnek, amíg egy külön kör a song_trainer public boundaryn
 additívan ki nem teszi a result/range/setlist felületet (saját ADR-rel a
 song_trainer oldalon). A jelen re-scope-ot a `tools/tests/test_r21_brief_public_boundary.py`
 mért regressziós teszt zárolja.
+
+## 0.1 Hatókör-visszabővítés: a setlist-felület megérkezett (2026-09-19)
+
+**Mért tény.** A §0.0 halasztása kimondta a feloldási feltételt: „amíg egy külön
+kör a song_trainer public boundaryn additívan ki nem teszi a result/range/setlist
+felületet". A setlist FELE ez megtörtént — az E17-R03
+(`25b518457`, „the setlist session is reachable from the setlist detail",
+a négy-vonalas integrációval `88ee95c2`-n a mainen) additívan exportálja:
+
+```
+$ grep -n song_setlist lib/features/song_trainer/public.dart
+22:export 'domain/models/song_setlist.dart' show SetlistSessionMode, SongSetlist;
+```
+
+`SongSetlistItem` a `SongSetlist.items` (`List<SongSetlistItem>`) mezőjén át
+szintén a publikus felület része — egy fogyasztó nem tudja olvasni a setlistet
+anélkül, hogy a tételei típusát látná.
+
+**Döntés (szándékos re-expanzió, NEM a teszt lazítása):** a
+`tools/tests/test_r21_brief_public_boundary.py` docstringje ezt a pirosat maga
+nevezi meg forcing functionnek („re-expand the R21 brief deliberately"). Ezért a
+**setlist-selection kikerül a halasztott listából**, a `SongSetlist` /
+`SongSetlistItem` pedig a teszt DEFERRED halmazából át a POZITÍV, publikusnak
+KÖVETELT halmazába — a kapu tehát nem gyengül, hanem ugyanazt a határt méri a
+mért állapot szerinti irányban.
+
+**Változatlanul halasztva** (nem publikus, `grep` mérve): `SongTrainerResult`,
+`SongPracticeRecord`, `TrainerRange`/`MeasureRange`, `SongPracticeResult`
+(sehol nem létezik) — a practice-result debrief, az A–B loop és az exact-range
+setup-route tehát továbbra is prerekvizit kört kíván.
 
 ## 1. Cél
 
@@ -101,12 +132,14 @@ struktúra + capability** felületéből, source-belső import és audio-feltöl
 **Benne:** capability-aware **struktúra**-adapter a publikus `SongDocument`-ből
 (`SongSection`/`SongMeasure` debrief), `getSongSections` read-only tool (R10),
 capability-gate (`SongCapabilityReport` pitch/chord scoring=false → nincs pitch/
-chord-action), lyrics/backing **redaction** a contextből, belépő-kártya.
+chord-action), lyrics/backing **redaction** a contextből, belépő-kártya; továbbá
+(§0.1, 2026-09-19) **setlist-selection** a publikussá vált `SongSetlist` /
+`SongSetlistItem` felületről — struktúra és sorrend, eredmény nélkül.
 
 **Kívül — TILOS:** audio/lyrics model-contextbe, capability-hazugság, source-belső
 import; **továbbá** (halt H3 miatt, prerekvizit körig halasztva): practice-result
 debrief, measure-range/A–B loop, revision-stale, missing-asset alternate,
-exact-range setup-route, setlist-selection.
+exact-range setup-route.
 
 ## 4. Engedélyezett fájlok
 
@@ -129,8 +162,9 @@ más kör briefje. Listán kívül → `stopped`.
    **NEM elfogadható:** lyrics/audio részleges átengedése „context céljából".
 2. A **capability őszinte** — pitch-scoring nélkül nincs pitch-action, chord-scoring
    nélkül nincs chord-action (`SongCapabilityReport`).
-3. **Csak a publikus struktúra + capability** felület fogyasztható; source-belső
-   import TILOS. A practice-result/range/route felület halt H3 miatt halasztva (§0.0).
+3. **Csak a publikus struktúra + capability + setlist** felület fogyasztható;
+   source-belső import TILOS. A practice-result/range/route felület halt H3 miatt
+   halasztva (§0.0); a setlist 2026-09-19 óta publikus, ezért fogyasztható (§0.1).
 
 ## 6. Acceptance criteria
 
@@ -142,8 +176,8 @@ más kör briefje. Listán kívül → `stopped`.
       backing-audiót/teljes lyricset; reviewer eldobható mutációval (lyrics átengedése)
       pirosra váltja.
 - [ ] **Halasztva (prerekvizit körig, §0.0):** measure-range/A–B loop, revision-stale,
-      missing-asset alternate, speed-action, setlist-selection, exact route-params —
-      ezek **nem** épülnek ebben a körben.
+      missing-asset alternate, speed-action, exact route-params — ezek **nem**
+      épülnek ebben a körben. (A setlist-selection §0.1 óta NEM halasztott.)
 
 ## 7. Kötelező ellenőrzések
 

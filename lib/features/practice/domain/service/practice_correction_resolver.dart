@@ -5,7 +5,7 @@ import '../model/practice_verdict.dart';
 import 'practice_chord_scorer.dart';
 import 'practice_event_matcher.dart';
 
-/// Derives the ONE concrete correction to show next (E14-R38, ADR 0551 D6).
+/// Derives the ONE concrete correction to show next (E14-R38, ADR 0600 D6).
 ///
 /// Pure and total: same inputs → same output, no clock, no state, no I/O.
 /// That is what lets the session's feedback slot state a correction WITHOUT

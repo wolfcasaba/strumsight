@@ -26,7 +26,7 @@ class RealStrumEngine implements StrumEngine {
   /// [mic] carries the exclusive-session lease (E01-R09): the engine no longer
   /// owns a microphone, it owns a *lease* on the one microphone.
   ///
-  /// [mode] is a CONSTRUCTION-time property (E14-R30, ADR 0544 D1), not a
+  /// [mode] is a CONSTRUCTION-time property (E14-R30, ADR 0593 D1), not a
   /// setter: an engine built for free play can never be talked into applying
   /// a lesson's expected-chord prior. It defaults to [RecognitionMode.free] —
   /// fail-closed, the regime with no outside influence on the verdict.
@@ -37,7 +37,7 @@ class RealStrumEngine implements StrumEngine {
   /// default) installs the no-op observer, i.e. no shadow work at all.
   ///
   /// [preprocessingEnabled] is the projection of the
-  /// `recognitionPreprocessingEnabled` feature flag (E14-R31, ADR 0552 D1):
+  /// `recognitionPreprocessingEnabled` feature flag (E14-R31, ADR 0601 D1):
   /// `false` — the shipped, fail-closed value — builds the pipeline with
   /// `LivePreprocessingConfig.disabled`, which hands every chunk through
   /// untouched. The engine takes a BOOL rather than the config object so
@@ -66,13 +66,13 @@ class RealStrumEngine implements StrumEngine {
        _shadowObserverFactory = shadowObserverFactory,
        _logger = logger ?? DebugAppLogger();
 
-  /// The regime this engine was constructed in (ADR 0544 D1).
+  /// The regime this engine was constructed in (ADR 0593 D1).
   final RecognitionMode mode;
 
-  /// Whether the quality-aware preprocessing stage may run (ADR 0552 D1).
+  /// Whether the quality-aware preprocessing stage may run (ADR 0601 D1).
   final bool preprocessingEnabled;
 
-  /// The per-device audio correction handed to that stage (ADR 0552 D4).
+  /// The per-device audio correction handed to that stage (ADR 0601 D4).
   final DeviceAudioProfile deviceProfile;
 
   StreamController<LiveFrame>? _controller;
@@ -114,7 +114,7 @@ class RealStrumEngine implements StrumEngine {
   // allocates and appends nothing.
   final PcmRingBuffer _capture = PcmRingBuffer();
 
-  /// E14-R30 (ADR 0544 D2): the label is normalised through
+  /// E14-R30 (ADR 0593 D2): the label is normalised through
   /// [ExpectedChordHint.forMode] BEFORE it is retained or sent across the
   /// isolate boundary, so in [RecognitionMode.free] a hint never leaves this
   /// method — the DSP isolate is not merely told to ignore it, it is never
@@ -406,14 +406,14 @@ class _DspInit {
   final SendPort sendPort;
   final int sampleRate;
 
-  /// The E14-R31 flag projection and the device profile (ADR 0552 D1/D4).
+  /// The E14-R31 flag projection and the device profile (ADR 0601 D1/D4).
   /// Both are plain immutable values (a bool and three scalars), so they
   /// copy across the isolate boundary the same way [mode] does.
   final bool preprocessingEnabled;
   final DeviceAudioProfile deviceProfile;
 
   /// The regime the pipeline inside the isolate is CONSTRUCTED with
-  /// (ADR 0544 D1) — an enum value, so it copies across the boundary.
+  /// (ADR 0593 D1) — an enum value, so it copies across the boundary.
   final RecognitionMode mode;
 
   /// A top-level/static function reference (sendable) that builds the shadow

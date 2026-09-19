@@ -1,4 +1,4 @@
-// E14-R39 (ADR 0547) — the grayscale / colour-vision cell the R39 audit was
+// E14-R39 (ADR 0596) — the grayscale / colour-vision cell the R39 audit was
 // missing.
 //
 // The existing suite already has a "no state is conveyed by colour ALONE"

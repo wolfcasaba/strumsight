@@ -1,6 +1,6 @@
-# ADR 0549 — A szállított Chord CRNN élő shadow bekötése: integritás-kapu, klip- és streaming-illesztő, gyök/minőség egyezési mátrix
+# ADR 0598 — A szállított Chord CRNN élő shadow bekötése: integritás-kapu, klip- és streaming-illesztő, gyök/minőség egyezési mátrix
 
-**Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R26 · **Kapcsolódó:** ADR 0548 (shadow-infrastruktúra), ADR 0355 (fail-visible aktiválás), ADR 0542 D2 (zászlópár)
+**Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R26 · **Kapcsolódó:** ADR 0597 (shadow-infrastruktúra), ADR 0355 (fail-visible aktiválás), ADR 0591 D2 (zászlópár)
 
 ## Kontextus (mért)
 

@@ -25,7 +25,7 @@ enum TelemetryEventName {
   settingsChanged,
   diagnosticsUploadAttempted,
 
-  /// E14-R41 (ADR 0542): one opt-in beta recognition-quality AGGREGATE —
+  /// E14-R41 (ADR 0591): one opt-in beta recognition-quality AGGREGATE —
   /// bucketed accepted/rejected counts, quality band and verdict latency
   /// for a window, never a per-verdict trace. Its payload contract is
   /// `RecognitionTelemetryEvent` in `recognition_telemetry_event.dart`.

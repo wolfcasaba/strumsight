@@ -1,4 +1,4 @@
-// E14-R36 (ADR 0546) — the Today hub side of the "10 useful minutes" chain:
+// E14-R36 (ADR 0595) — the Today hub side of the "10 useful minutes" chain:
 // two-tap start, one "what to do next" CTA per step, resume after an
 // interruption, and the measured recap. Mirrors the router/override pattern
 // of `hub_navigation_test.dart` so the assertions are on the LOCATION the

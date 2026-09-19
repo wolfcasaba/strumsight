@@ -1,7 +1,7 @@
 # E14-R21 — Strum konfidencia-kalibráció és selective prediction
 
 - **Státusz:** LESZÁLLÍTVA (mechanizmus) / **PARTIAL** (mérés hiányzik)
-- **ADR:** [`0536`](../adr/0536-model-bound-calibration-artefact-and-selective-prediction.md)
+- **ADR:** [`0587`](../adr/0587-model-bound-calibration-artefact-and-selective-prediction.md)
 - **Csomag:** PKG-B (mérés / kalibráció / open-set / release-kapuk)
 - **Készült:** 2026-09-09, Epic 14 befejező hullám, 1. hullám
 - **Doksi:** [`docs/eval/calibration-and-selective-prediction.md`](../eval/calibration-and-selective-prediction.md)
@@ -28,7 +28,7 @@ prediction (policy, risk–coverage görbe, coverage-maximalizáló szelektor);
 az `ml/honest_eval.py::section_calib` artefaktum-kiírása; doksi + ADR.
 
 KÍVÜL (szándékosan): a `live_crnn_classifier.dart` knotjai (PKG-A zóna, és
-ADR 0536 D2 szerint nem is léptethetők elő); a `StrumPrediction` bekötése
+ADR 0587 D2 szerint nem is léptethetők elő); a `StrumPrediction` bekötése
 (PKG-A, 2. hullám); bármely küszöb behangolása.
 
 ## 4. Fájlok

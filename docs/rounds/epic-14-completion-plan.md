@@ -48,10 +48,10 @@ Két következmény, amit végig komolyan kell venni:
 
 | Elem | Fájl | Állapot |
 |---|---|---|
-| Döntési állapotgép | `lib/features/live/domain/recognition/recognition_decision.dart` | 6 állapot + 8 tipizált reject-ok (ADR 0505/0535) ✅ |
+| Döntési állapotgép | `lib/features/live/domain/recognition/recognition_decision.dart` | 6 állapot + 8 tipizált reject-ok (ADR 0505/0586) ✅ |
 | Strum-predikció | `…/strum_prediction.dart` | `decision` SZÁRMAZTATOTT (margin ≤ 0.05 → uncertain); `calibratedConfidence` **null by design** |
 | Chord-predikció | `…/chord_prediction.dart` | `decision`/`rejectReason` konstruktor-kapott; `calibratedConfidence` **null** |
-| Jelminőség | `…/signal_quality_snapshot.dart`, `engine/quality/**` | 8 állapot, hat tipizált ok (ADR 0535) ✅ |
+| Jelminőség | `…/signal_quality_snapshot.dart`, `engine/quality/**` | 8 állapot, hat tipizált ok (ADR 0586) ✅ |
 | Stabilizer | `engine/recognition_stabilizer.dart` | `StabilizerProfile.free(3)/guided(5)` — CSAK label-flicker szűrő, nincs provisional/confirmed chord-profil |
 | Kiértékelő fa | `domain/evaluation/recognition_metrics.dart` | onset P/R/F1 tűrésenként, direction macro-F1, chord weighted/macro/N.C., coverage, **ECE**, **Brier**, reliability-bin, per-group bontás (ADR 0509) ✅ |
 | Release-kapu | `evaluation/recognition/recognition_release_gate.json` + `domain/evaluation/recognition_release_gate.dart` | 10 küszöb, `ch14-alpha-v1` ✅ |
@@ -378,7 +378,7 @@ mechanizmus itt, a szám nem) · **BLOCKED** (adat/x86/ember kell).
 ### R37 — Live Stage V2 teljes képernyő — **PARTIAL (CODE)**
 
 - **Kész:** `SsStageScaffold`, `confidence_pill`, `uncertainty_reason_banner`
-  (ADR 0520/0535 hat oka), `live_status_bar`, `chord_timeline`, Lab-panel
+  (ADR 0520/0586 hat oka), `live_status_bar`, `chord_timeline`, Lab-panel
   csak Lab módban, mikrofon-engedély banner (2. hullám).
 - **HIÁNYZIK (itt kódolható):** (1) a **három mód** — Free Play / Guided Pattern /
   Accuracy Check — mint valódi Live-mód (ma nincs mód-fogalom a képernyőn),

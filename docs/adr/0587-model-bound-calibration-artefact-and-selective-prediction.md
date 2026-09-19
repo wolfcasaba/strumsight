@@ -1,4 +1,4 @@
-# ADR 0536 — Modellhez kötött kalibrációs artefaktum és selective prediction (strum)
+# ADR 0587 — Modellhez kötött kalibrációs artefaktum és selective prediction (strum)
 
 **Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R21 · **Kapcsolódik:** ADR 0505 D2 (a `calibratedConfidence` null-by-design), ADR 0509 (metrika-szerződés), ADR 0511 (fail-closed kapu), ADR 0271 (UNKNOWN > CONFIDENTLY WRONG)
 

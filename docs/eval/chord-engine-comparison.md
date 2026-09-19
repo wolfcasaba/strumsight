@@ -1,6 +1,6 @@
 # NNLS vs CRNN vs hybrid — összehasonlító harness (E14-R27)
 
-- **ADR:** [0539](../adr/0539-chord-engine-comparison-harness.md)
+- **ADR:** [0588](../adr/0588-chord-engine-comparison-harness.md)
 - **Kód:** `lib/features/live/domain/evaluation/chord_engine_comparison.dart`
 - **Futtatható harness:**
   `test/features/live/evaluation/chord_engine_comparison_harness_test.dart`

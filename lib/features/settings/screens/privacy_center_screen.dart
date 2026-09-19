@@ -280,7 +280,7 @@ class _TaskRow extends StatelessWidget {
   }
 }
 
-/// The opt-in beta telemetry consent card (SDD Ch14 Kör 41, ADR 0542).
+/// The opt-in beta telemetry consent card (SDD Ch14 Kör 41, ADR 0591).
 ///
 /// Three honesty rules shape this widget, and each of them is a cell in
 /// `test/features/settings/telemetry_consent_center_test.dart`:

@@ -1,6 +1,6 @@
-# ADR 0548 — Strum shadow mód az alkalmazásban: korlátos, Lab-látható összehasonlítás a meglévő kimeneti seam-en
+# ADR 0597 — Strum shadow mód az alkalmazásban: korlátos, Lab-látható összehasonlítás a meglévő kimeneti seam-en
 
-**Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R23 · **Kapcsolódó:** ADR 0545 D6 (seam), ADR 0542 D2 (zászlópár), ADR 0271 (UNKNOWN > CONFIDENTLY WRONG)
+**Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R23 · **Kapcsolódó:** ADR 0594 D6 (seam), ADR 0591 D2 (zászlópár), ADR 0271 (UNKNOWN > CONFIDENTLY WRONG)
 
 ## Kontextus (mért)
 

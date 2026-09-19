@@ -1,5 +1,5 @@
 /// What the release gate LICENSES for a controlled rollout (E14-R24 strum,
-/// E14-R33 chord; ADR 0537/0541).
+/// E14-R33 chord; ADR 0537/0590).
 ///
 /// The rule this file enforces: **a rollout stage can never exceed what the
 /// gate licenses.** The configured stage is a REQUEST; the effective stage is
@@ -10,7 +10,7 @@
 /// evidence never reads as permission (ADR 0511 D1, extended to rollout).
 ///
 /// **Ownership and the mirror.** The rollout ladder itself is PKG-D's
-/// `lib/app/config/recognition_rollout_stage.dart` (ADR 0542): the enum, the
+/// `lib/app/config/recognition_rollout_stage.dart` (ADR 0591): the enum, the
 /// two `FeatureFlags` fields (`strumModelRolloutStage`,
 /// `chordModelRolloutStage`) and the reviewed record in
 /// `docs/release/ch14-recognition-rollout.md`. The evaluation layer must stay
@@ -34,7 +34,7 @@ enum LicensedRolloutStage {
   /// reach a `LiveFrame`, a score or a pixel. Because it is never
   /// user-visible, an ACCURACY gate does not license it — the shadow master
   /// switch does (`FeatureFlags.recognitionShadowModeEnabled` /
-  /// `recognitionChordShadowModeEnabled`, ADR 0542 D2).
+  /// `recognitionChordShadowModeEnabled`, ADR 0591 D2).
   shadow,
 
   /// User-visible in team-controlled builds. SDD Ch14 §7.2/§7.4 Alpha rows.

@@ -1,6 +1,6 @@
 # ADR 0537 — Kapu-fokozatok (Alpha/Beta), sáv-hozzárendelés és a kapuhoz vágott rollout
 
-**Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R24 · **Kiterjeszti:** ADR 0511 (fail-closed release gate) · **Párja:** ADR 0541 (chord-sorok)
+**Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R24 · **Kiterjeszti:** ADR 0511 (fail-closed release gate) · **Párja:** ADR 0590 (chord-sorok)
 
 ## Kontextus (mért)
 
@@ -12,7 +12,7 @@
   (D3).
 - **Rollout-létra van, kapu-kötés nincs**: PKG-D leszállította a
   `RecognitionRolloutStage` létrát (`lib/app/config/recognition_rollout_stage.dart`,
-  ADR 0542: `off → shadow → alpha → beta → ga`) és a két `FeatureFlags`
+  ADR 0591: `off → shadow → alpha → beta → ga`) és a két `FeatureFlags`
   mezőt (`strumModelRolloutStage`, `chordModelRolloutStage`, alapérték `off`),
   de **semmi nem köti a fokozatot a kapu verdiktjéhez** — egy forrásmódosítás
   ma `beta`-ra állíthatná a sávot piros kapu mellett is.
@@ -65,7 +65,7 @@ engedélyezett (`noGateRowForStage`) — az üres követelmény nem teljesített
 követelmény.
 
 A `shadow` fokozatot **a pontosság nem engedélyezi és nem is tiltja**: sosem
-felhasználó-látható (ADR 0542: `isUserVisible == false`), ezért a
+felhasználó-látható (ADR 0591: `isUserVisible == false`), ezért a
 shadow-főkapcsoló őrzi, nem a metrika. Ebből következik, hogy egy piros kapu
 egy `alpha` kérést `shadow`-ra vág — kitettség-csökkenés, nem növekedés.
 

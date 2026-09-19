@@ -7,7 +7,7 @@ import '../../domain/recognition/recognition_mode.dart';
 import '../../model/recognition_runtime_info.dart';
 import 'shadow_metrics.dart';
 
-/// The in-memory sink every shadow observer writes into (E14-R23, ADR 0548).
+/// The in-memory sink every shadow observer writes into (E14-R23, ADR 0597).
 ///
 /// One recorder per shadow session. It owns EVERY allocation the shadow path
 /// makes after construction:

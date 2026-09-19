@@ -1,4 +1,4 @@
-# ADR 0546 — A „10 hasznos perc" lánc: hangolás → gyakorlat → rövid eredmény
+# ADR 0595 — A „10 hasznos perc" lánc: hangolás → gyakorlat → rövid eredmény
 
 **Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R36 · **Csomag:** PKG-C ·
 **Épít rá:** ADR 0275 (adaptív shell), ADR 0277 (Today hub offline-szabály),

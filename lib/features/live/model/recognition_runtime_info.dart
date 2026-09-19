@@ -97,7 +97,7 @@ class RecognitionRuntimeInfo {
   /// Fail-closed decode of the regime: an absent or unknown value reads back
   /// as [RecognitionMode.free], the regime with no outside influence — never
   /// as `guided`, which would silently relabel a measurement as one taken
-  /// with a lesson prior available (E14-R30, ADR 0544 D5).
+  /// with a lesson prior available (E14-R30, ADR 0593 D5).
   static RecognitionMode _modeFrom(Object? value) {
     for (final mode in RecognitionMode.values) {
       if (mode.name == value) return mode;
@@ -161,7 +161,7 @@ class RecognitionRuntimeInfo {
   /// Version tag of the log-mel/window frontend feeding the model.
   final String frontendVersion;
 
-  /// Which regime produced this verdict (E14-R30, ADR 0544 D5). A
+  /// Which regime produced this verdict (E14-R30, ADR 0593 D5). A
   /// measurement taken in [RecognitionMode.guided] is NOT comparable to one
   /// taken in [RecognitionMode.free] — an expected-chord hint can exist in
   /// one and cannot exist in the other — so the regime travels WITH the
@@ -169,14 +169,14 @@ class RecognitionRuntimeInfo {
   final RecognitionMode recognitionMode;
 
   /// The rollout stage of the shadow band running alongside this verdict
-  /// (E14-R23, ADR 0548 D5). [RecognitionRolloutStage.off] means no shadow
+  /// (E14-R23, ADR 0597 D5). [RecognitionRolloutStage.off] means no shadow
   /// band ran. A stage here is never permission to show anything:
   /// `shadow.isUserVisible` is `false` by construction.
   final RecognitionRolloutStage shadowStage;
 
   /// Which chord model is loaded as the SHADOW candidate — the asset
   /// filename (never a path), or [chordModelNone] when none is (E14-R26,
-  /// ADR 0549 D1). The shipped live chord verdict itself is still produced
+  /// ADR 0598 D1). The shipped live chord verdict itself is still produced
   /// by [chordEngineId]; this field never means "the CRNN decided".
   final String chordModelId;
 

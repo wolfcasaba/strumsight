@@ -217,7 +217,7 @@ abstract final class PracticeMetricReasonCode {
       'practice.metric.insufficient_samples';
 
   /// The recognizer produced readings in the target window but stood behind
-  /// none of them (E14-R38, ADR 0551 D4).
+  /// none of them (E14-R38, ADR 0600 D4).
   ///
   /// Deliberately distinct from [chordUnstable] (the player held nothing
   /// steady) and from [insufficientSamples] (nothing was heard at all): this

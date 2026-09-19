@@ -7,7 +7,7 @@ import '../../../core/music/strum.dart';
 import '../../chords/public.dart';
 import 'chord_audio.dart';
 
-/// Where an audition's pitches came from (ADR 0535 D1).
+/// Where an audition's pitches came from (ADR 0585 D1).
 enum AuditionSource {
   /// The library fingering: every sounding string of the diagram.
   fingering,
@@ -32,7 +32,7 @@ final class AuditionVoicing {
   bool get isPlayable => freqs.isNotEmpty;
 }
 
-/// "Hear what I just tapped" for the song editors (ADR 0535).
+/// "Hear what I just tapped" for the song editors (ADR 0585).
 ///
 /// Distinct from [Backing]: that is the app-wide jam-mode pad (soft sines on
 /// every downbeat, shared so rapid taps cut each other off). Audition is

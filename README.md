@@ -185,7 +185,7 @@ on a physical device — synthetic green is never "done".
   the Privacy Center says in plain words rather than implying that data is
   flowing. The event schema carries counts, quality bands and latency buckets
   only: never audio, never free text, never a device or account identifier
-  (`lib/core/telemetry/`, [ADR 0542](docs/adr/0542-opt-in-beta-telemetry-consent-and-recognition-rollout-flags.md);
+  (`lib/core/telemetry/`, [ADR 0591](docs/adr/0591-opt-in-beta-telemetry-consent-and-recognition-rollout-flags.md);
   randomized redaction property: `test/property/telemetry_redaction_property_test.dart`).
 - Vision is optional and currently disabled in every environment. Camera frames stay on-device;
   raw frames and pixel buffers may not enter Vision persistence or provider state. Any future

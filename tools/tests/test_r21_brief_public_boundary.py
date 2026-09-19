@@ -20,6 +20,27 @@ If a future prerequisite round additively exposes these symbols on the public
 boundary, this test turns red on assertion (1) and forces the brief to be
 re-expanded deliberately — that is the intended forcing function, not a
 regression.
+
+Correction (forcing function fired, 2026-09-19, four-line main integration):
+E17-R03 (`25b518457`, on `main` with the E18 merge `88ee95c2`) additively put
+the setlist surface on the public boundary — measured:
+
+    $ grep -n song_setlist lib/features/song_trainer/public.dart
+    22:export 'domain/models/song_setlist.dart' show SetlistSessionMode, SongSetlist;
+
+`SongSetlistItem` comes with it: `SongSetlist.items` is a
+`List<SongSetlistItem>`, so no consumer can read a setlist without the item
+type. The prerequisite the R21 brief named for the setlist half therefore
+landed, and the brief was re-expanded deliberately (§0.1: setlist-selection
+moved out of the deferred list and into §3 "Benne:").
+
+`SongSetlist`/`SongSetlistItem` accordingly move OUT of DEFERRED_SYMBOLS and
+INTO the positive `PUBLIC_REQUIRED` set below. This is not a relaxation: the
+same boundary is still measured on both symbols, only in the direction the
+measurement now supports — hiding them again silently would turn this guard
+red just as surfacing them did. The result/range half (`SongTrainerResult`,
+`SongPracticeRecord`, `TrainerRange`, `MeasureRange`, `SongPracticeResult`)
+is unchanged and stays deferred.
 """
 
 import re
@@ -46,8 +67,10 @@ PUBLIC_BARRELS = (
 #   SongPracticeRecord  domain/models/song_practice_record.dart        (persisted)
 #   TrainerRange /      domain/models/trainer_range.dart
 #     MeasureRange
-#   SongSetlist         domain/models/song_setlist.dart
 #   SongPracticeResult  (does not exist anywhere — 0 refs)
+#
+# SongSetlist/SongSetlistItem were in this set until 2026-09-19; see the
+# module docstring's "Correction" — they are now in PUBLIC_REQUIRED.
 DEFERRED_SYMBOLS = frozenset(
     {
         "SongPracticeResult",
@@ -55,9 +78,19 @@ DEFERRED_SYMBOLS = frozenset(
         "SongPracticeRecord",
         "TrainerRange",
         "MeasureRange",
-        "SongSetlist",
-        "SongSetlistItem",
     }
+)
+
+# Symbols the R21 brief is ALLOWED to consume because they are measurably on
+# the public boundary. The structure+capability slice R21 was re-scoped onto,
+# plus the setlist surface E17-R03 exposed additively (docstring "Correction").
+PUBLIC_REQUIRED = (
+    "SongDocument",
+    "SongCapabilityReport",
+    "SongSection",
+    "SongMeasure",
+    "SongSetlist",
+    "SongSetlistItem",
 )
 
 _EXPORT_RE = re.compile(r"""export\s+['"]([^'"]+\.dart)['"]""")
@@ -85,8 +118,9 @@ class R21BriefPublicBoundaryTest(unittest.TestCase):
     def test_deferred_symbols_are_not_publicly_exported(self) -> None:
         """Measured contract: the result/range/setlist surface is not public."""
         public = _public_export_symbols()
-        # Sanity: the structure+capability slice R21 was re-scoped onto IS public.
-        for expected in ("SongDocument", "SongCapabilityReport", "SongSection", "SongMeasure"):
+        # Sanity: the surface R21 is scoped onto IS public (structure +
+        # capability, plus the setlist surface — see PUBLIC_REQUIRED).
+        for expected in PUBLIC_REQUIRED:
             self.assertIn(expected, public, f"{expected} must be publicly exported")
         leaked = DEFERRED_SYMBOLS & public
         self.assertEqual(

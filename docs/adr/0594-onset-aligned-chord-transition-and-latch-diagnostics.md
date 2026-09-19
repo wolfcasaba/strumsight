@@ -1,4 +1,4 @@
-# ADR 0545 — Onset-igazított akkordváltás a stabilizátor fölött, a chord-latch diagnosztikai kivezetése és a shadow-seam
+# ADR 0594 — Onset-igazított akkordváltás a stabilizátor fölött, a chord-latch diagnosztikai kivezetése és a shadow-seam
 
 **Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R28 · **Kiegészíti:** ADR 0518 (stabilizátor), ADR 0516 (akkord-verdikt) · **Előkészíti:** E14-R23 (PKG-E, shadow-mód)
 

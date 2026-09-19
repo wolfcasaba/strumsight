@@ -6,7 +6,7 @@
 // compile time (a new switch arm required) rather than silently.
 //
 // E17-R15 — the merged `signalQuality` reason became six typed ones, so the
-// advice must also point the RIGHT WAY: the last group is ADR 0535 D3's
+// advice must also point the RIGHT WAY: the last group is ADR 0586 D3's
 // content guard (never "move closer" for a too-loud or clipping signal, never
 // "back away" for a too-quiet one).
 import 'package:flutter/material.dart';
@@ -18,11 +18,11 @@ import 'package:strumsight/l10n/app_localizations.dart';
 const _locales = [Locale('en'), Locale('hu')];
 
 /// Advice that pulls the player TOWARDS the mic — harmful when the signal is
-/// already too loud or clipping (ADR 0535 D3).
+/// already too loud or clipping (ADR 0586 D3).
 const _towardsMic = ['closer', 'közelebb'];
 
 /// Advice that pushes the player AWAY from the mic — harmful when the signal
-/// is too quiet (ADR 0535 D3).
+/// is too quiet (ADR 0586 D3).
 const _awayFromMic = ['back', 'further', 'távolabb', 'távolodj'];
 
 void main() {
@@ -59,7 +59,7 @@ void main() {
     }
   });
 
-  group('ADR 0535 D3 — advice direction is never harmful', () {
+  group('ADR 0586 D3 — advice direction is never harmful', () {
     for (final locale in _locales) {
       final language = locale.languageCode;
 

@@ -5,15 +5,15 @@
 - **Kör-azonosító:** `E18-R01`
 - **Branch:** `claude/song-editor-chord-audio-tbkokz`
 - **Brief szerzője:** Claude (Fable 5.1) · **Implementáció:** ugyanez a session (tesztek: Sonnet-ágens, review: Opus-ágens — user-döntés 2026-09-09, token-takarékosság)
-- **Előre kiosztott ADR:** [`0535`](../adr/0535-song-editor-chord-audition-and-progression-preview.md) — megírva.
+- **Előre kiosztott ADR:** [`0585`](../adr/0585-song-editor-chord-audition-and-progression-preview.md) — megírva.
 - **Fejezet-terv:** [`docs/plans/chapter-18-composer-and-chords-from-audio.md`](../plans/chapter-18-composer-and-chords-from-audio.md)
 
-**Visszakeresett előzmény:** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "dalszerkesztő akkord meghallgatás hang lejátszás előnézet"` → a saját ADR 0535-ön túl az [ADR 0274](../adr/0274-motion-driven-by-the-audio-clock.md) (a ritmus-animációt az audio óra hajtja, nem független időzítő) releváns: az előnézet ütem-kiemelése NEM külön időzítőről fut, hanem ugyanabból az eseményláncból, amelyik a pengetést indítja — egyetlen óra, drift nélkül. Releváns lecke nincs.
+**Visszakeresett előzmény:** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "dalszerkesztő akkord meghallgatás hang lejátszás előnézet"` → a saját ADR 0585-ön túl az [ADR 0274](../adr/0274-motion-driven-by-the-audio-clock.md) (a ritmus-animációt az audio óra hajtja, nem független időzítő) releváns: az előnézet ütem-kiemelése NEM külön időzítőről fut, hanem ugyanabból az eseményláncból, amelyik a pengetést indítja — egyetlen óra, drift nélkül. Releváns lecke nincs.
 
 ## 0.0 Pre-flight mérés (S11 / S15)
 
 - **S11 — a kör NEM cserél le képernyőt.** A `SongBuilderScreen` és a `SongEditorScreen` típusa, route-ja és belépési pontja változatlan; a diff a képernyők BELSEJÉT bővíti (chip-callback, egy új sor, egy ikon-gomb). A briefen kívül élő pin-tesztek (`test/app/routing/app_router_test.dart`, `test/features/songs/import/editor_draft_test.dart`, `test/ui/goldens/e13_r24_screens_golden_test.dart`, `test/ui/goldens/e15_r13_full_variant_matrix_test.dart`, `test/core/screen_size_guard_test.dart`, `test/features/songs/song_tap_tempo_test.dart`) a `gate_tests`-en futnak, az `allowed_paths`-on NINCSENEK: ha bármelyik pirosra vált, az a kör lelete, nem a cella hibája.
-- **S15 — a §2 a `main @ 1ae9e55` ÁLLAPOTÁT méri, az implementáció ELŐTT.** A lint által jelzett 14 módosult / 3 új fájl e kör saját diffje (ugyanebben a sessionben), nem időközben merge-elt idegen szerződés; a kör egyetlen döntési helye az ADR 0535.
+- **S15 — a §2 a `main @ 1ae9e55` ÁLLAPOTÁT méri, az implementáció ELŐTT.** A lint által jelzett 14 módosult / 3 új fájl e kör saját diffje (ugyanebben a sessionben), nem időközben merge-elt idegen szerződés; a kör egyetlen döntési helye az ADR 0585.
 
 ### 0.0.1 Revíziók a review után (2026-09-09, `docs/reviews/e18-r01-review.md`)
 
@@ -54,7 +54,7 @@ allowed_paths = [
   "test/features/songs/song_builder_audition_test.dart",
   "test/features/song_trainer/presentation/song_editor_audition_test.dart",
   "test/features/songs/song_flow_test.dart",
-  "docs/adr/0535-song-editor-chord-audition-and-progression-preview.md",
+  "docs/adr/0585-song-editor-chord-audition-and-progression-preview.md",
   "docs/rounds/e18-r01-song-editor-chord-audition.md",
   "docs/rag/chunks/014-play-along-learn.md",
   "docs/reviews/e18-r01-review.md",
@@ -130,7 +130,7 @@ dal a gitár kézbevétele ELŐTT megkomponálható legyen.
   en/hu) a FORRÁS szegmensben + generált aggregátum.
 
 **Kívül (ebben a körben TILOS):**
-- az akkordkönyvtár tap-to-hear átállítása (ADR 0535 D5);
+- az akkordkönyvtár tap-to-hear átállítása (ADR 0585 D5);
 - `ChordAudio`/`Backing`/Learn jam-mód módosítása;
 - detektor-DSP, mikrofon-lease, `lib/core/audio/{capture,dsp,lifecycle,pitch}`;
 - hangból akkord-beolvasás (E18-R02…R04, ADR 0536).
@@ -140,7 +140,7 @@ dal a gitár kézbevétele ELŐTT megkomponálható legyen.
 Lásd az `ai-router` blokkot. **Tilos zóna:** `lib/core/audio/{capture,dsp,lifecycle,pitch}/`,
 `lib/features/chords/`, `lib/features/live/`, `tools/round-gate.sh`, `.github/workflows/`.
 
-## 5. Kötött architekturális döntések (ADR 0535)
+## 5. Kötött architekturális döntések (ADR 0585)
 
 D1 fogás-hang pengetve, pad tartalék, ismeretlen címke = csend · D2 route-hoz
 kötött lejátszó, `watch` a `build`-ből, lusta `AudioPlayer`, mikrofon-lease

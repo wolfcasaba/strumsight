@@ -550,7 +550,7 @@ def _ece(conf, correct, n_bins=10):
 
 
 # ---------------------------------------------------------------------------
-# E14-R21 (ADR 0536): calibration ARTEFACT emission
+# E14-R21 (ADR 0587): calibration ARTEFACT emission
 # ---------------------------------------------------------------------------
 ARTEFACT_DIR = os.path.join(os.path.dirname(__file__), "artifacts")
 CALIBRATION_SCHEMA_VERSION = "1"
@@ -583,7 +583,7 @@ def emit_calibration_artefact(knots, *, model_id, model_path, corpus_id,
                               corpus_path, fold_id, observation_count,
                               artefact_version, produced_by,
                               sampling="heldOut", band="strum"):
-    """Write one `<model_id>.calibration.json` artefact (E14-R21, ADR 0536).
+    """Write one `<model_id>.calibration.json` artefact (E14-R21, ADR 0587).
 
     Produced by CI, not by hand:
 
@@ -704,7 +704,7 @@ def section_calib(results):
     print(f"[calib] VAL-fitted knots: {fitted}")
     print(f"[calib] ECE test raw={ece_raw:.4f} calibrated={ece_cal:.4f}")
 
-    # E14-R21 (ADR 0536): emit the artefact the app can actually bind to.
+    # E14-R21 (ADR 0587): emit the artefact the app can actually bind to.
     # The mapping is the VAL fit; the ECE above is measured on TEST, so the
     # fold that produced the knots is NOT the fold that scored them —
     # `sampling: heldOut`. The shipped Dart knots stay where they are: they

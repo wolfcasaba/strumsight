@@ -38,7 +38,7 @@ A `label` a 24 támogatott maj/min osztály valamelyike vagy a fenntartott
 `assets/ml/model_manifest.json` `output_classes` listája mínusz az `N.C.`, és
 egy teszt **gépi tükörként** ezt ellenőrzi — a szótár nem sodródhat el egyik
 oldalon sem. Egy `Csus4` elutasítás: a nyílt halmazú akkord az open-set
-korpuszba tartozik (ADR 0540), nem egy kiegyensúlyozott maj/min korpuszba.
+korpuszba tartozik (ADR 0589), nem egy kiegyensúlyozott maj/min korpuszba.
 
 ### D4 — Egy split-implementáció, nem kettő
 

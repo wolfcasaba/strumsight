@@ -72,7 +72,7 @@ LiveFrame _frame({
 void main() {
   group('producer cell — LivePipeline reasons reach the real LiveScreen', () {
     final cases = <String, RecognitionRejectReason>{
-      // ADR 0535 D1: the six signal states now carry SIX distinct reasons;
+      // ADR 0586 D1: the six signal states now carry SIX distinct reasons;
       // this producer cell drives one of them end-to-end.
       'signalTooQuiet (a poor, quiet mic reading)':
           LivePipeline.debugDeriveChordDecision(

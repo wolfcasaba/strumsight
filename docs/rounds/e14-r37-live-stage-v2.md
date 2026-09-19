@@ -1,6 +1,6 @@
-# E14-R37 — Live Stage V2: döntési állapotok, stage-mód, reduced motion (ADR 0550)
+# E14-R37 — Live Stage V2: döntési állapotok, stage-mód, reduced motion (ADR 0599)
 
-- **Kör:** E14-R37 · **Csomag:** PKG-F · **ADR:** 0550
+- **Kör:** E14-R37 · **Csomag:** PKG-F · **ADR:** 0599
 - **Ág:** `claude/laptop-apk-debug-prompt-kys4oa`
 - **Környezet:** nincs Dart/Flutter SDK → **lokális gate nem futtatható**;
   egyetlen teszt sem futott le itt. Mérce: `full-gate.yml` + `build-apk.yml`,
@@ -37,8 +37,8 @@ textScale elrendezések.
 `chord_timeline.dart` minden animált elemén; `StorageKeys.tenMinuteFlow`
 (PKG-C P2 patch — csak a kulcs).
 
-**Kívül:** a `newLiveStageEnabled` zászló bekötése (ADR 0550 „Nem vállalt");
-a history bottom sheet (nincs termékdöntés); a guided MOTOR bekötése (ADR 0550
+**Kívül:** a `newLiveStageEnabled` zászló bekötése (ADR 0599 „Nem vállalt");
+a history bottom sheet (nincs termékdöntés); a guided MOTOR bekötése (ADR 0599
 D4 — mikrofon-lízing kérdés + `test/support/**` tulajdon kell hozzá);
 `live_lab_panel.dart` (PKG-E); `live_pipeline.dart` / `public.dart` (PKG-A).
 
@@ -67,7 +67,7 @@ D4 — mikrofon-lízing kérdés + `test/support/**` tulajdon kell hozzá);
 | A5 | `signal*` reject alatt nincs magabiztos állítás | **PINNED-BY-TEST** (megtartva + új cella: nincs BPM, nincs hero, a chip „nincs olvasat") |
 | A6 | reduced motion minden animált elemen | **PINNED-BY-TEST** (`e14_r39_reduced_motion_test.dart` hamisító pár: teli mozgás ≥3 `Animate`, csökkentett < teli és ≥1) |
 | A7 | landscape + 360 px + textScale 2.0 overflow nélkül | **PINNED-BY-TEST** (3 viewport × 2 textScale mátrix, `FlutterError` elkapással) |
-| A8 | a mód minden exportban rögzül | **NEM ÉRINTI** ezt a kört (ADR 0544 PARTIAL, PKG-E/PKG-B patch) |
+| A8 | a mód minden exportban rögzül | **NEM ÉRINTI** ezt a kört (ADR 0593 PARTIAL, PKG-E/PKG-B patch) |
 | A9 | a `candidate`/`provisional`/`expired` állapot valóban előfordul-e élesben | **NEEDS-MEASUREMENT** — ma a `LivePipeline` bizonyíthatóan nem állítja elő őket; a chip a SZERZŐDÉST szolgálja ki |
 | A10 | 10 perces valós eszközös session (overflow/jank/mic-leak) | **NEEDS-MEASUREMENT** — ember + telefon |
 
@@ -82,5 +82,5 @@ D4 — mikrofon-lízing kérdés + `test/support/**` tulajdon kell hozzá);
    golden-összehasonlító, az `e13_r36`/`e15_r13` mátrixok overflow-mátrixok).
 2. **l10n beolvasztás:** `<scratch>/l10n/PKG-F.json`, `base` szegmens,
    11 R37-kulcs + 4 R38-kulcs, en+hu+`@`-metaadattal.
-3. **Nyitva marad:** a guided MOTOR bekötése (ADR 0550 D4) — a patch a
+3. **Nyitva marad:** a guided MOTOR bekötése (ADR 0599 D4) — a patch a
    PKG-F riport §5-ben.

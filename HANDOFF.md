@@ -1,5 +1,51 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔢 ADR-ÁTSZÁMOZÁS 2026-09-19: a négy vonal ütköző sorszámai feloldva
+
+A négy párhuzamos vonal egymástól függetlenül osztott ADR-sorszámot, ezért a
+mainen **16 sorszám 33 fájlt** jelölt (`tools/tests/test_adr_numbering.py::test_adr_numbers_are_unique`
+piros volt). Szabály: **a KORÁBBAN a mainre került fájl tartja meg a számát**
+(first-parent merge-sorrend), a későbbi a legnagyobb kiosztott szám (`0584`)
+utáni szabad tartományt kapja, a régi sorszám-sorrendet megtartva.
+
+Megtartotta a számát: a Song Trainer vonal (`a3e0cd61`, 00:20) `0535`-e és az
+E18-vonal (`88ee95c2`, 02:30) többi ADR-je, valamint a `0549`, amely már
+2026-09-15 óta a mainen volt (`f1efb84b`).
+
+| Régi | Új | Slug | Vonal (merge) |
+|---|---|---|---|
+| 0535 | **0585** | `song-editor-chord-audition-and-progression-preview` | E18 (`88ee95c2`) |
+| 0535 | **0586** | `live-signal-quality-reject-reasons-split` | Epic 14 (`1858b66c`) |
+| 0536 | **0587** | `model-bound-calibration-artefact-and-selective-prediction` | Epic 14 |
+| 0539 | **0588** | `chord-engine-comparison-harness` | Epic 14 |
+| 0540 | **0589** | `chord-calibration-open-set-and-selective-prediction` | Epic 14 |
+| 0541 | **0590** | `chord-gate-rows-and-rollout` | Epic 14 |
+| 0542 | **0591** | `opt-in-beta-telemetry-consent-and-recognition-rollout-flags` | Epic 14 |
+| 0543 | **0592** | `ch14-production-gate-and-traceability-closure` | Epic 14 |
+| 0544 | **0593** | `recognition-mode-and-expected-chord-tie-break` | Epic 14 |
+| 0545 | **0594** | `onset-aligned-chord-transition-and-latch-diagnostics` | Epic 14 |
+| 0546 | **0595** | `ten-minute-practice-chain` | Epic 14 |
+| 0547 | **0596** | `narrow-viewport-colour-vision-and-outdoor-contrast` | Epic 14 |
+| 0548 | **0597** | `strum-shadow-mode-bounded-in-app-comparison` | Epic 14 |
+| 0549 | **0598** | `chord-crnn-live-shadow-wiring` | Epic 14 |
+| 0550 | **0599** | `live-stage-v2-decision-states-and-stage-mode` | Epic 14 |
+| 0551 | **0600** | `practice-chord-evidence-and-correction-loop` | Epic 14 |
+| 0552 | **0601** | `quality-aware-preprocessing-and-live-calibration-wiring` | Epic 14 |
+
+**A hivatkozások egyértelműsítése MÉRT, nem tippelt:** minden `0535`–`0552`
+előfordulás `git blame`-mel a KELETKEZTETŐ commitjához, az pedig a négy
+merge-ág (`e628fa52` / `7226adb2` / `9d59d3d4` / `9d924988`) kizárólagos
+commit-halmazához lett kötve; mivel MINDEGYIK ág tetején egy sorszám PONTOSAN
+egy fájlt jelölt (`git ls-tree <tip> docs/adr/`), a hivatkozás célja
+egyértelmű. 1016 vizsgált előfordulásból **588 hivatkozás 527 sorban, 203
+fájlban** íródott át; a `BASE`/`SONG` besorolásúak (`0549` = no-strum kapu,
+`0535` = platform-dekóder) és az ál-találatok (`0,0548`, `d0546f0`) érintetlenek.
+
+**Nyitva hagyott, NEM ebbe a hibaosztályba tartozó lelet:** a
+`docs/execution/pipeline-queue.tsv` `hold` sorai az E18-R02/R04-nek `0537`/`0538`-at
+foglalnak, amit az Epic 14 már kiosztott, és az `e18-r05` brief `0540`-et — ezek
+még meg nem írt ADR-ek, ezért a sorszám-kapu (fájlnév-alapú) ma nem látja őket.
+
 ## 🔀 INTEGRÁCIÓ 2026-09-19: az Epic 14 vonal (laptop-apk-debug-prompt-kys4oa) a mainbe
 
 A `claude/laptop-apk-debug-prompt-kys4oa` (Epic 14, R20–R42, 29 commit, merge-base
@@ -12,7 +58,7 @@ az Epic 14-ből minden olyan javítás átjön, amit a `main` NEM tartalmaz.
 |---|---|
 | `LiveFrame` onset-óra | a `main` `onsetSeq` + `latestOnsetTime` marad; az Epic 14 `onsetTimeSec` mezője UGYANAZ → elejtve, a fogyasztók (`RecognitionStabilizer._isOnsetAligned`, shadow-tesztek) átportolva |
 | `StrumAnalyzer` | `lastOnsetTimeSec` (main) marad, a settled-tier logikával együtt; `lastOnsetSec` (E14) elejtve |
-| `LivePipeline` | UNIÓ: main whitening-paraméterei + E14 `mode`/`shadowObserver`/`preprocessing`/`deviceProfile`/`calibration`; a preprocessed `input` bekötve; `setExpectedChord` a decoder felé `ExpectedChordHint.forMode` (ADR 0544), a shape-cue (ADR 0581) a NYERS címkén marad |
+| `LivePipeline` | UNIÓ: main whitening-paraméterei + E14 `mode`/`shadowObserver`/`preprocessing`/`deviceProfile`/`calibration`; a preprocessed `input` bekötve; `setExpectedChord` a decoder felé `ExpectedChordHint.forMode` (ADR 0593), a shape-cue (ADR 0581) a NYERS címkén marad |
 | `RealStrumEngine` | UNIÓ: main `AppLogger` + E14 mode/preprocessing/deviceProfile/shadow-factory |
 | `ChordTimeline` / Live stage | UNIÓ: main `hasCurrent` (visszahúzódó hero) + E14 `idlePromptEnabled` (mikrofon-őszinte üres állapot) + E14 reduced-motion; a Live hero a main onset-first `StrumBurstOverlay` + `SsStrumStrings` változata marad, az E14 U6 hero-padding elejtve (a feedback-padding átjött) |
 | Live hero forrás | main stabilizált címkéje (ADR 0539) + E14 `displayStrum` lejárati kapuja (L11): a konfidencia a MEGJELENÍTETT leütéshez tartozik |
@@ -2322,7 +2368,7 @@ fejlesszük át") a tervező REMOTE session maga implementálta az E18-R01-et; a
 tesztírás Sonnet-, a review Opus-ágensé (user-döntés: token-takarékosság, minőség
 nehézség szerint). A merge-kapu VÁLTOZATLAN (ADR 0052): CI zöld + review.
 
-### Mi készült (E18-R01, ADR [0535](docs/adr/0535-song-editor-chord-audition-and-progression-preview.md))
+### Mi készült (E18-R01, ADR [0585](docs/adr/0585-song-editor-chord-audition-and-progression-preview.md))
 
 | Réteg | Fájl | Mit ad |
 |---|---|---|
@@ -2813,26 +2859,26 @@ community media (R-SEC-01/R-PRIV-01). A **végső mérce a valós-gitár APK-tes
 A Chapter 14 nyitott 23 köre hat párhuzamos Opus-csomagban (PKG-A…F + A2)
 készült, **remote konténerben, Dart/Flutter SDK nélkül** — semmi nem fordult
 le lokálisan, a bizonyíték az egyetlen záró CI-futás. Terv és státusz körönként:
-`docs/rounds/epic-14-completion-plan.md`; ADR 0536–0552; briefek
+`docs/rounds/epic-14-completion-plan.md`; ADR 0587–0601; briefek
 `docs/rounds/e14-r20…r42-*.md`; a §7 kapuk mért állapota
 `docs/release/ch14-production-gate.md` (**NOT PASSING** — a kapuk nem mértek zöldre,
 csak a mechanizmusok készültek el).
 
 **Kódként megvalósult (mechanizmus, mérés nélkül, ahol jelezve):**
 - R30 mód-izoláció (`RecognitionMode`, az expected-chord prior additív torzításból
-  tie-break, free módban strukturálisan nem alkalmazható — ADR 0544) · R28
-  onset-igazított akkordváltás + H3 latch-diagnosztika (ADR 0545) · R31
-  jelminőség-tudatos előfeldolgozó seam + `DeviceAudioProfile`, zászlóval zárva (ADR 0552).
+  tie-break, free módban strukturálisan nem alkalmazható — ADR 0593) · R28
+  onset-igazított akkordváltás + H3 latch-diagnosztika (ADR 0594) · R31
+  jelminőség-tudatos előfeldolgozó seam + `DeviceAudioProfile`, zászlóval zárva (ADR 0601).
 - R21/R32 modell-kötött kalibrációs artefaktum + szelektív predikció + open-set döntés
-  (identitás alapértékkel, in-sample knot-ok tiltva — ADR 0536, 0540) · R25 korpusz-manifest
-  + szintetikus generátor (ADR 0538) · R27 NNLS vs CRNN harness (döntés: NEEDS-MEASUREMENT — ADR 0539)
-  · R24/R33 kapu-fokozatok + rollout-clamp (ADR 0537, 0541).
-- R23 strum shadow-mód (kimenet-tap, nem modell-A-vs-B — ADR 0548) · R26 Chord CRNN
-  élő shadow-runner Lab-ból (ADR 0549) · zászlók `off` minden környezetben.
-- R36 tízperces gyakorlás-lánc (ADR 0546) · R37 Live Stage V2 döntésállapotok + mód-chip
-  (ADR 0550) · R38 akkord-evidencia: a bizonytalan akkord SOHA nem büntet (ADR 0551) ·
-  R39 audit (ADR 0547: világos téma outdoor-kontraszt 2,40:1 — lelet, nem javítva) ·
-  R41 opt-in béta-telemetria + privacy-kapu (ADR 0542) · R42 production gate + traceability (ADR 0543).
+  (identitás alapértékkel, in-sample knot-ok tiltva — ADR 0587, 0589) · R25 korpusz-manifest
+  + szintetikus generátor (ADR 0538) · R27 NNLS vs CRNN harness (döntés: NEEDS-MEASUREMENT — ADR 0588)
+  · R24/R33 kapu-fokozatok + rollout-clamp (ADR 0537, 0590).
+- R23 strum shadow-mód (kimenet-tap, nem modell-A-vs-B — ADR 0597) · R26 Chord CRNN
+  élő shadow-runner Lab-ból (ADR 0598) · zászlók `off` minden környezetben.
+- R36 tízperces gyakorlás-lánc (ADR 0595) · R37 Live Stage V2 döntésállapotok + mód-chip
+  (ADR 0599) · R38 akkord-evidencia: a bizonytalan akkord SOHA nem büntet (ADR 0600) ·
+  R39 audit (ADR 0596: világos téma outdoor-kontraszt 2,40:1 — lelet, nem javítva) ·
+  R41 opt-in béta-telemetria + privacy-kapu (ADR 0591) · R42 production gate + traceability (ADR 0592).
 
 **Hold (itt nem hozható):** R20 tanítás grouped holdouttal (§7.1 korpusz nem létezik),
 R22 distillation (nincs R20-modell), R29 root+quality modell-spike (GPU/adat), R35
@@ -2843,7 +2889,7 @@ plusz `e13_r17` (today hub), `e13_r18` (live mód-chip), `e13_r35` (privacy cent
 `tools/golden-x86.sh record test/ui/goldens/e13_r{17,18,19,20,21,22,23,24,25,30,33,35}_*_test.dart`.
 
 
-## 🔧 AUDIT-JAVÍTÓ KÖRÖK — E17-R15 (H4, ADR 0535) + 2. és 3. hullám (H1–H23, L1/L3–L12, U1–U13) — branch `claude/laptop-apk-debug-prompt-kys4oa` (2026-09-08)
+## 🔧 AUDIT-JAVÍTÓ KÖRÖK — E17-R15 (H4, ADR 0586) + 2. és 3. hullám (H1–H23, L1/L3–L12, U1–U13) — branch `claude/laptop-apk-debug-prompt-kys4oa` (2026-09-08)
 
 A 2026-09-08-i emulátoros hibaaudit (24 hiba + 12 logikai + 15 UI javaslat, APK
 `1.0.0-1-3102673`, CI run 34244853752) javítása három hullámban, párhuzamos
@@ -2852,7 +2898,7 @@ sor sem fordult le lokálisan, két csak-olvasó reviewer (R, R2) fésülte át 
 diffet, a bizonyíték a CI. Kör-brief: `docs/rounds/e17-r15-live-signal-quality-reasons.md`,
 agent-jelentések a session scratchpadjában (nem a repóban).
 
-- **E17-R15 / H4 (`5ad7050`, ADR [0535](docs/adr/0535-live-signal-quality-reject-reasons-split.md)):**
+- **E17-R15 / H4 (`5ad7050`, ADR [0586](docs/adr/0586-live-signal-quality-reject-reasons-split.md)):**
   a `RecognitionRejectReason.signalQuality` gyűjtő helyett HAT tipizált ok
   (`signalTooQuiet … signalUnstable`), kimerítő `switch` a motorban, hat saját
   EN/HU tanács; gépi őr: túl hangos/clipping SOHA nem mond „közelebb"-et.

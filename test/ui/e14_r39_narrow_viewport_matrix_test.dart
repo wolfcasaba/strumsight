@@ -1,4 +1,4 @@
-// E14-R39 (ADR 0547) — the 360 px profile the adaptive matrix was missing.
+// E14-R39 (ADR 0596) — the 360 px profile the adaptive matrix was missing.
 //
 // The shipped variant matrix starts at compact 412 (`e13_r36`, `e15_r13`),
 // which is WIDER than the narrowest phones still in use (360 dp is the

@@ -1,4 +1,4 @@
-/// The internal-Alpha FIELD SESSION tag (SDD Ch14 Kör 40, ADR 0542 D7).
+/// The internal-Alpha FIELD SESSION tag (SDD Ch14 Kör 40, ADR 0591 D7).
 ///
 /// A field-study capture has to be attributable to a study run — otherwise
 /// eight testers' sessions are an undifferentiated pile — but "attributable

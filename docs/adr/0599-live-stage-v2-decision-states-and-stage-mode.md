@@ -1,6 +1,6 @@
-# ADR 0550 — Live Stage V2: a hat döntési állapot megkülönböztetett megjelenítése, és a stage-mód mint a felismerési rezsimtől FÜGGETLEN fogalom
+# ADR 0599 — Live Stage V2: a hat döntési állapot megkülönböztetett megjelenítése, és a stage-mód mint a felismerési rezsimtől FÜGGETLEN fogalom
 
-**Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R37 · **Épít rá:** ADR 0505 (döntési állapotgép), ADR 0516 (`LiveFrame.chordDecision`), ADR 0520/0535 (reject-ok bannerek), ADR 0544 (`RecognitionMode`), ADR 0274 (reduced motion)
+**Státusz:** elfogadva (2026-09-09) · **Kör:** E14-R37 · **Épít rá:** ADR 0505 (döntési állapotgép), ADR 0516 (`LiveFrame.chordDecision`), ADR 0520/0586 (reject-ok bannerek), ADR 0593 (`RecognitionMode`), ADR 0274 (reduced motion)
 
 ## Kontextus (mért)
 
@@ -20,7 +20,7 @@
   (`AnimatedOpacity`/`AnimatedScale`), **egyik sem** kérdezte meg az
   `SsMotionScope`-ot. Ez az E14-R39 audit B15-ös lelete, PKG-F tulajdonra
   hivatkozva nyitva hagyva (`docs/accessibility/ch14-r39-audit.md`).
-- „Mód" fogalom a képernyőn nem létezett. A `RecognitionMode` (ADR 0544) a
+- „Mód" fogalom a képernyőn nem létezett. A `RecognitionMode` (ADR 0593) a
   MOTOR konstrukciós rezsimje — más kérdésre válaszol, mint az, hogy a
   képernyő mutat-e célt.
 - Amit NEM tudunk: nincs mérés arról, hogy a `candidate` / `provisional` /
@@ -71,7 +71,7 @@ egyértelműen:
 
 | kérdés | típus |
 |---|---|
-| befolyásolhatja-e egy elvárt akkord a DEKÓDERT? | `RecognitionMode` (ADR 0544) |
+| befolyásolhatja-e egy elvárt akkord a DEKÓDERT? | `RecognitionMode` (ADR 0593) |
 | mutat-e a KÉPERNYŐ éppen célt a játékosnak? | `LiveStageMode` |
 
 A stage-mód **származtatott** (`liveStageModeProvider` a
@@ -88,7 +88,7 @@ hue-alapú módjelzés nem jelzés.
 `GuidedTargetCard`: szerep-címke (`Cél`), majd az akkord; a szemantikai
 címke **szerep-elöl** mond („Cél akkord: Am"). Három elválasztás — a slot, a
 címke és a szemantika — együtt zárja ki, hogy egy elvárás felismerésként
-olvasódjon. Ez ugyanaz a hiba a képernyőn, amit az ADR 0544 a DSP-útból
+olvasódjon. Ez ugyanaz a hiba a képernyőn, amit az ADR 0593 a DSP-útból
 kivett.
 
 ### D4 — Vezetett STAGE szabad MOTORON: ez a szállított konfiguráció
@@ -106,7 +106,7 @@ emeljük a rezsimet guided-ra:
    detektáló kliense — Live, Learn és a Practice gateway MIND ezt az egy
    példányt hajtja; egy második, guided motor második mikrofon-klienst nyitna,
    amit ezen a boxon nem lehet mérni;
-2. az ADR 0544 D3 maga mondja ki, hogy a tie-break valós órai értéke
+2. az ADR 0593 D3 maga mondja ki, hogy a tie-break valós órai értéke
    **UNKNOWN**. Egy nem mért nyereségért nem építünk be egy nem mérhető
    erőforrás-kockázatot (Ch14 §12/1).
 

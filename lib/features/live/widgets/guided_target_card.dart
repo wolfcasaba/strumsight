@@ -5,13 +5,13 @@ import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// The Guided-mode TARGET: the chord the player is being asked to play
-/// (E14-R37, ADR 0550 D3).
+/// (E14-R37, ADR 0599 D3).
 ///
 /// This is deliberately NOT the stage's hero. The hero slot is the
 /// **detection** slot — what the app claims to have heard — and a target is
 /// the opposite kind of statement: what the app is asking for. Rendering a
 /// target where a detection lives would let a lesson's expectation read as a
-/// recognition result, which is the exact confusion ADR 0544 removed from
+/// recognition result, which is the exact confusion ADR 0593 removed from
 /// the DSP path; this round removes it from the screen too.
 ///
 /// Three separations keep the two apart and are pinned by

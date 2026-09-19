@@ -26,7 +26,7 @@ class _SeededSongs extends SongsController {
   }
 }
 
-/// Tapping a chord chip in the builder now HEARS it (E18-R01, ADR 0535);
+/// Tapping a chord chip in the builder now HEARS it (E18-R01, ADR 0585);
 /// the real player is an `audioplayers` platform channel, which a widget
 /// test must never reach — the same injection every audio-using test makes.
 final class _SilentAudition implements ChordAudition {

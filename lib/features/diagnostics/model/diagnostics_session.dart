@@ -103,7 +103,7 @@ class DiagnosticsSession {
   final List<DiagnosticsAudioClip> audioClips;
 
   /// SDD Ch14 Kör 40 field-study tag, or `null` when the build flag is off,
-  /// the participant is not enrolled, or no pseudonym exists (ADR 0542 D7).
+  /// the participant is not enrolled, or no pseudonym exists (ADR 0591 D7).
   ///
   /// Resolved by `resolveFieldSessionTag` — a capture site must never build
   /// one itself, because a half-formed tag would be a fabricated study

@@ -38,7 +38,7 @@ Future<_LiveHarness> _pumpLive(WidgetTester tester) async {
       ...preferenceOverrides(),
       // E14: the transport is fail-closed on the microphone permission
       // (`micGranted` defaults to FALSE until the platform answers, ADR
-      // 0547 / the permission-truthfulness cells), so a Live harness has to
+      // 0596 / the permission-truthfulness cells), so a Live harness has to
       // say what the permission IS — the real gateway has no platform here.
       ...fakeAudioOverrides(),
       strumEngineProvider.overrideWithValue(engine),

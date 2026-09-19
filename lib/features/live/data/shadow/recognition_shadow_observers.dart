@@ -9,7 +9,7 @@ import 'chord_shadow_candidate.dart';
 import 'recognition_shadow_recorder.dart';
 import 'shadow_metrics.dart';
 
-/// Fans one seam call out to several observers (E14-R23, ADR 0548 D2).
+/// Fans one seam call out to several observers (E14-R23, ADR 0597 D2).
 ///
 /// `LivePipeline` accepts exactly ONE observer; the strum band and the chord
 /// band are separately gated, so they are separate observers and this joins
@@ -42,7 +42,7 @@ class CompositeRecognitionShadowObserver implements RecognitionShadowObserver {
   }
 }
 
-/// The STRUM-band shadow consumer (SDD Ch14 Kör 23, ADR 0548).
+/// The STRUM-band shadow consumer (SDD Ch14 Kör 23, ADR 0597).
 ///
 /// **What it compares, precisely** — this matters more than the round's
 /// headline, because the seam decides it:
@@ -163,14 +163,14 @@ class StrumShadowObserver implements RecognitionShadowObserver {
   }
 }
 
-/// The CHORD-band shadow consumer (SDD Ch14 Kör 26, ADR 0549).
+/// The CHORD-band shadow consumer (SDD Ch14 Kör 26, ADR 0598).
 ///
 /// Pairs the label production PUBLISHED on the frame (`frame.current`, i.e.
 /// the NNLS-chroma → dictionary → Viterbi path after its latch) with the
 /// chord CRNN's verdict at the same instant, and folds both into the
 /// root/quality agreement matrix.
 ///
-/// **N.C. handling (ADR 0549 D3):** a frame where production published no
+/// **N.C. handling (ADR 0598 D3):** a frame where production published no
 /// chord is recorded as [ShadowChordClass.noChord], not skipped. That
 /// deliberately conflates "silence" with "production is not confident enough
 /// to latch" — because those are the same thing to the user looking at the

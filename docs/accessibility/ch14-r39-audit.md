@@ -1,6 +1,6 @@
 # Ch14 Kör 39 — adaptív, akadálymentességi és kültéri audit
 
-- **Kör:** E14-R39 · **Csomag:** PKG-C · **ADR:** [0547](../adr/0547-narrow-viewport-colour-vision-and-outdoor-contrast.md)
+- **Kör:** E14-R39 · **Csomag:** PKG-C · **ADR:** [0596](../adr/0596-narrow-viewport-colour-vision-and-outdoor-contrast.md)
 - **Készült:** 2026-09-09, `claude/laptop-apk-debug-prompt-kys4oa`
 - **Környezet:** nincs Dart/Flutter SDK ezen a boxon → **egyetlen cella sem
   futott le itt**. A számok statikusan, a repó saját, kipinnelt WCAG
@@ -118,5 +118,5 @@ Vastag = a saját szintjének padlója alatt (szöveg 4,5:1; a 2,40 és az 1,93 
 `docs/accessibility/known-exceptions.yaml` **nem bővült** ebben a körben: a
 registry *tűréseket* tart nyilván, ez a kör pedig nem vezetett be tűrést — a
 fenti leletek pontos értékű, magától elavuló állításként vannak kipinnelve
-(ADR 0547 D5). Emiatt az A6 mirror-őr
+(ADR 0596 D5). Emiatt az A6 mirror-őr
 (`release_flow_semantics_test.dart`) sem változott.

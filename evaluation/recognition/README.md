@@ -23,7 +23,7 @@ convention — it does not introduce a new pattern.
   neither fail the verdict nor license a rollout stage). See
   [`docs/eval/release-gate-stages.md`](../../docs/eval/release-gate-stages.md).
 - `calibration_artefact_schema.json` — the model-bound confidence-calibration
-  artefact contract (E14-R21/R32, ADR 0536/0540). No artefact ships today:
+  artefact contract (E14-R21/R32, ADR 0587/0589). No artefact ships today:
   every prediction's `calibratedConfidence` stays `null`. See
   [`docs/eval/calibration-and-selective-prediction.md`](../../docs/eval/calibration-and-selective-prediction.md).
 - `chord_corpus_manifest_schema.json` — the balanced chord-corpus contract

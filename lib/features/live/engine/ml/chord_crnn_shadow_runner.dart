@@ -10,7 +10,7 @@ import '../dsp/cqt_extractor.dart';
 import 'chord_crnn.dart';
 
 /// The typed outcome of trying to bring the shipped chord CRNN up for a
-/// shadow run (E14-R26, ADR 0549 D1).
+/// shadow run (E14-R26, ADR 0598 D1).
 ///
 /// Fail-VISIBLE, like `ModelActivation` on the strum side: a missing,
 /// truncated or tampered asset produces a [FallbackReason], never a silent
@@ -80,7 +80,7 @@ class ChordShadowActivation {
 
 /// Runs the SHIPPED chord CRNN (`assets/ml/chord_crnn.bin`) as a SHADOW
 /// candidate next to the live NNLS-chroma → dictionary → Viterbi path
-/// (SDD Ch14 §4.5, Kör 26, ADR 0549).
+/// (SDD Ch14 §4.5, Kör 26, ADR 0598).
 ///
 /// Two drivers, one model:
 ///
@@ -93,7 +93,7 @@ class ChordShadowActivation {
 ///   every [emitEveryFrames] hops and the LAST frame's posterior is the
 ///   current verdict.
 ///
-/// **Honest limits of the streaming adapter (ADR 0549 D4, chunk 018).**
+/// **Honest limits of the streaming adapter (ADR 0598 D4, chunk 018).**
 /// `CqtExtractor` centre-pads whatever buffer it is given, so the newest
 /// frame of a trailing window sees padding where a continuous CQT would see
 /// future audio, and the GRU restarts from a zero state on every window. The

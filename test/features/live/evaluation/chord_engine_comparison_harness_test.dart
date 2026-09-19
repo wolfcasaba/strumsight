@@ -1,4 +1,4 @@
-// E14-R27 (ADR 0539): the REAL two-engine harness.
+// E14-R27 (ADR 0588): the REAL two-engine harness.
 //
 // Runs the shipped NNLS-chroma + Viterbi decoder (`ClipAnalyzer`, the Live
 // and Analyze chord path) and the shipped chord CRNN

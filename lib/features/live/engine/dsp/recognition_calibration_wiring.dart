@@ -1,9 +1,9 @@
 /// The ONE place the live path turns a raw score into a calibrated
-/// confidence and a selective accept/abstain verdict (E14-R31, ADR 0552).
+/// confidence and a selective accept/abstain verdict (E14-R31, ADR 0601).
 ///
 /// It owns no mathematics. The mapping, its model binding, the in-sample
 /// refusal and the abstention policy all live in PKG-B's
-/// `domain/evaluation/` types (ADR 0536/0540); this file is the WIRING that
+/// `domain/evaluation/` types (ADR 0587/0589); this file is the WIRING that
 /// lets `live_pipeline.dart` call them without reaching for a resolver
 /// itself, so there is exactly one call site per band.
 ///
@@ -13,7 +13,7 @@
 /// `SelectivePredictionPolicy.acceptAll` — the identity on today's
 /// behaviour. Nothing here can turn a raw score into a confidence by
 /// itself: [CalibrationOutcome.calibratedConfidence] is `null` unless a
-/// HELD-OUT, model-matched artefact was injected (ADR 0536 D2's
+/// HELD-OUT, model-matched artefact was injected (ADR 0587 D2's
 /// `inSampleArtefact` refusal is the resolver's, and this file never
 /// bypasses it).
 library;
@@ -58,9 +58,9 @@ final class RecognitionCalibration {
   final ConfidenceCalibrationResolver chordResolver;
 
   /// `SelectivePredictionPolicy.acceptAll` by default — the identity on
-  /// today's behaviour (ADR 0536 D1). A stricter policy only ever changes
+  /// today's behaviour (ADR 0587 D1). A stricter policy only ever changes
   /// the REPORTED [SelectiveOutcome]; the pipeline's shipped decision logic
-  /// does not read it (ADR 0552 D8).
+  /// does not read it (ADR 0601 D8).
   final SelectivePredictionPolicy policy;
 
   /// `true` when neither band can produce a calibrated confidence — the

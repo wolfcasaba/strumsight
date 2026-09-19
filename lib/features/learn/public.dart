@@ -21,7 +21,7 @@ export 'widgets/lesson_highway.dart';
 export 'providers/backing_provider.dart';
 export 'audio/chord_audio.dart';
 
-/// Editor-scoped "hear this chord" playback (ADR 0535): the real fingering,
+/// Editor-scoped "hear this chord" playback (ADR 0585): the real fingering,
 /// strummed. Watched by the song editors; distinct from the jam-mode pad.
 export 'audio/chord_audition.dart';
 export 'providers/chord_audition_provider.dart';
