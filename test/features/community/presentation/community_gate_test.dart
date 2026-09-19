@@ -116,6 +116,8 @@ ProviderScope _scope({
   required bool accountEnabled,
   required AuthUser? user,
   String? token,
+  Locale locale = const Locale('en'),
+  double textScale = 1.0,
 }) {
   return ProviderScope(
     overrides: [
@@ -140,11 +142,17 @@ ProviderScope _scope({
       ),
       communityProfileRepositoryProvider.overrideWithValue(repo),
     ],
-    child: const MaterialApp(
+    child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      locale: Locale('en'),
-      home: CommunityGateScreen(),
+      locale: locale,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
+      home: const CommunityGateScreen(),
     ),
   );
 }
@@ -212,6 +220,37 @@ void main() {
       expect(find.text('wolfcasaba'), findsOneWidget);
       expect(find.text('Wolf Casaba'), findsOneWidget);
     });
+  });
+
+  group('A2 — large text scale', () {
+    testWidgets(
+      'the profile-missing gate scrolls instead of overflowing in landscape '
+      'at 2.0 text scale (hu)',
+      (tester) async {
+        // The measured E15-R13 cell: landscape 915×412, hu, 2.0 — the
+        // title + body + CTA no longer fit and the old fixed Column
+        // overflowed by 48 px (8 px in en).
+        tester.view.physicalSize = const Size(915, 412);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        final repo = _FakeCommunityProfileRepository(profile: null);
+        await tester.pumpWidget(
+          _scope(
+            repo: repo,
+            accountEnabled: true,
+            user: const AuthUser(id: 1, email: 'player@strumsight.app'),
+            token: 'test-token',
+            locale: const Locale('hu'),
+            textScale: 2.0,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('Profil létrehozása'), findsOneWidget);
+      },
+    );
   });
 
   group('A1 — profile is created only on explicit user action', () {

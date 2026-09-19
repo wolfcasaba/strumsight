@@ -110,19 +110,21 @@ def test_a1_community_disabled_returns_404_route_not_registered():
 
 
 # ---------------------------------------------------------------------------
-# A2 — community_enabled=True (+ every sub-flag) mounts the 11 authenticated
-# router modules (ADR 0497 D6 excludes handles/privacy, see A2b below); the
+# A2 — community_enabled=True (+ every sub-flag) mounts the 12 authenticated
+# router modules (ADR 0497 D6 excludes handles/privacy, see A2b below; the
+# notifications router joined the aggregate 2026-09-15); the
 # EXHAUSTIVE set of mounted community route-methods -- read from app.routes,
 # not a hand-picked sample -- rejects an anonymous caller, except a short,
 # individually-justified exception list.
 # ---------------------------------------------------------------------------
 
-_ELEVEN_MOUNTED_ROUTERS = {
+_MOUNTED_ROUTERS = {
     "bookmarks": ("get", "/community/bookmarks"),
     "challenges": ("post", "/community/challenges/{challenge_public_id}/invites"),
     "feed": ("get", "/community/feed"),
     "leaderboards": ("get", "/community/leaderboards/{challenge_public_id}"),
     "moderation": ("get", "/community/moderation/cases"),
+    "notifications": ("get", "/community/notifications"),
     "posts": ("post", "/community/posts"),
     "profile": ("get", "/community/profiles/me"),
     "reports": ("post", "/community/reports"),
@@ -193,7 +195,7 @@ def test_a2_all_eleven_routers_are_mounted_and_every_route_requires_auth_except_
 
     missing = [
         (name, method, path)
-        for name, (method, path) in _ELEVEN_MOUNTED_ROUTERS.items()
+        for name, (method, path) in _MOUNTED_ROUTERS.items()
         if method not in paths.get(path, {})
     ]
     assert not missing, f"router(s) not mounted: {missing}"
@@ -275,6 +277,14 @@ def test_a3_writes_subflag_off_disables_write_routes_but_keeps_reads():
     # route (GET /community/posts/{public_id}) stays.
     assert "post" not in paths.get("/community/posts", {})
     assert "get" in paths.get("/community/posts/{public_id}", {})
+
+    # notifications: the inbox list + preferences reads stay; mark-read /
+    # read-all / preference PUT are gone.
+    assert "get" in paths.get("/community/notifications", {})
+    assert "get" in paths.get("/community/notifications/preferences", {})
+    assert "post" not in paths.get("/community/notifications/read-all", {})
+    assert "post" not in paths.get("/community/notifications/{public_id}/read", {})
+    assert "put" not in paths.get("/community/notifications/preferences/{category}", {})
 
     # social_graph: follow/unfollow (POST/DELETE) are gone; the follower /
     # following list reads stay.

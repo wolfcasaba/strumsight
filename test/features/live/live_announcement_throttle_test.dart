@@ -1,6 +1,7 @@
 // E13-R18 A5 — the accessible chord announcement is throttled to the ADR
 // 0280 §2 budget (1000 ms, boundary inclusive), while the VISUAL chord label
-// tracks every frame unthrottled. Three mandatory cells (brief §6.1):
+// tracks every CONFIRMED change unthrottled (ADR 0539 D1 — see
+// `_emitConfirmed`). Three mandatory cells (brief §6.1):
 //   below the threshold (200 ms apart)  -> one announcement, every visual
 //                                           change still shown
 //   exactly at the threshold (1000 ms)  -> announced (inclusive boundary)
@@ -60,6 +61,16 @@ Future<FakeStrumEngine> _pumpLive(WidgetTester tester) async {
   return engine;
 }
 
+/// Emit [chord] as a CONFIRMED reading: three agreeing frames at the same
+/// engine time. Since ADR 0539 the hero and the announcement follow the
+/// stabilized label (ADR 0518 D3: a displacing label needs three agreeing
+/// frames), so a change lands on the third frame, not the first.
+void _emitConfirmed(FakeStrumEngine engine, String chord, double t) {
+  for (var i = 0; i < 3; i++) {
+    engine.emit(_frameAt(chord, t));
+  }
+}
+
 List<String> _announcements(WidgetTester tester) => tester
     .widget<SsLiveRegionAnnouncer>(find.byType(SsLiveRegionAnnouncer))
     .controller
@@ -70,19 +81,19 @@ void main() {
       'visual change is still shown', (tester) async {
     final engine = await _pumpLive(tester);
 
-    engine.emit(_frameAt('C', 0.0));
+    _emitConfirmed(engine, 'C', 0.0);
     await tester.pumpAndSettle();
     expect(_announcements(tester), ['C']);
     expect(find.text('C'), findsWidgets);
 
-    engine.emit(_frameAt('G', 0.2));
+    _emitConfirmed(engine, 'G', 0.2);
     await tester.pumpAndSettle();
-    // The VISUAL label followed the new chord immediately…
+    // The VISUAL label followed the confirmed new chord immediately…
     expect(find.text('G'), findsWidgets);
     // …but the announcement budget suppressed it (still just "C").
     expect(_announcements(tester), ['C']);
 
-    engine.emit(_frameAt('D', 0.4));
+    _emitConfirmed(engine, 'D', 0.4);
     await tester.pumpAndSettle();
     expect(find.text('D'), findsWidgets);
     expect(_announcements(tester), ['C']);
@@ -94,11 +105,11 @@ void main() {
       'announced', (tester) async {
     final engine = await _pumpLive(tester);
 
-    engine.emit(_frameAt('C', 0.0));
+    _emitConfirmed(engine, 'C', 0.0);
     await tester.pumpAndSettle();
     expect(_announcements(tester), ['C']);
 
-    engine.emit(_frameAt('G', 1.0));
+    _emitConfirmed(engine, 'G', 1.0);
     await tester.pumpAndSettle();
 
     expect(find.text('G'), findsWidgets);
@@ -112,16 +123,16 @@ void main() {
     (tester) async {
       final engine = await _pumpLive(tester);
 
-      engine.emit(_frameAt('C', 0.0));
+      _emitConfirmed(engine, 'C', 0.0);
       await tester.pumpAndSettle();
       expect(_announcements(tester), ['C']);
 
-      engine.emit(_frameAt('G', 3.0));
+      _emitConfirmed(engine, 'G', 3.0);
       await tester.pumpAndSettle();
       expect(find.text('G'), findsWidgets);
       expect(_announcements(tester), ['C', 'G']);
 
-      engine.emit(_frameAt('D', 6.0));
+      _emitConfirmed(engine, 'D', 6.0);
       await tester.pumpAndSettle();
       expect(find.text('D'), findsWidgets);
       expect(_announcements(tester), ['C', 'G', 'D']);

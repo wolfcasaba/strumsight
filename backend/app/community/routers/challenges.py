@@ -61,6 +61,15 @@ from ..policies.integrity_policy import (
     METRIC_VALUE_MAX,
     METRIC_VALUE_MIN,
 )
+from ..schemas.challenge import (
+    CHALLENGE_PAGE_SIZE_DEFAULT,
+    CHALLENGE_PAGE_SIZE_MAX,
+    ChallengeDefinitionOut,
+    ChallengePage,
+    ChallengeParticipantOut,
+    ChallengeParticipationOut,
+    ChallengeWindow,
+)
 from ..services.challenge_invite_service import (
     BlockedChallengeRelationship,
     ChallengeInviteNotFound,
@@ -71,6 +80,13 @@ from ..services.challenge_invite_service import (
     cancel_invite,
     create_invite,
     decline_invite,
+)
+from ..services.challenge_query_service import (
+    ChallengeNotVisible,
+    ChallengeView,
+    get_my_participation,
+    get_visible_challenge,
+    list_visible_challenges,
 )
 from ..services.challenge_verification_service import (
     ChallengeInviteNotFound as _ResultChallengeInviteNotFound,
@@ -879,6 +895,180 @@ async def post_submit_result(
         except HTTPException:
             raise
         return _result_to_out_from_session(db, result)
+    finally:
+        try:
+            next(db_gen, None)
+        except StopIteration:
+            pass
+
+
+# ---------------------------------------------------------------------------
+# READ side — the three GET endpoints the Flutter
+# ``HttpCommunityChallengeRepository`` was already coded against
+# (``listChallenges`` / ``fetchDefinition`` / ``fetchMyParticipation``;
+# ``docs/contracts/client-backend-endpoints.json`` listed them as
+# ``known_gap``). Read-only: no commit, no rate limiter (the same
+# stance as ``GET /community/leaderboards/{id}``). The visibility rule
+# lives in ``services/challenge_query_service.py``.
+# ---------------------------------------------------------------------------
+
+
+def _resolve_caller_profile_internal_id(db: Session, user_id: int) -> int:
+    """``users.id`` (JWT subject) → ``community_profiles.id``."""
+    from sqlalchemy import text as _sa_text
+
+    row = db.execute(
+        _sa_text("SELECT id FROM community_profiles WHERE user_id = :uid"),
+        {"uid": user_id},
+    ).first()
+    if row is None:
+        raise ValueError("caller has no community profile")
+    return int(row[0])
+
+
+def _challenge_view_to_out(view: ChallengeView) -> ChallengeDefinitionOut:
+    return ChallengeDefinitionOut(
+        public_id=view.public_id,
+        author_public_id=view.author_public_id,
+        type=view.type,
+        metric=view.metric,
+        difficulty=view.difficulty,
+        starts_at=view.starts_at,
+        ends_at=view.ends_at,
+        version=view.version,
+        club_id=view.club_id,
+        participant_count=view.participant_count,
+        created_at=view.created_at,
+        updated_at=view.updated_at,
+    )
+
+
+@router.get("", status_code=status.HTTP_200_OK)
+def get_challenges(
+    request: Request,
+    current_user: CurrentUser,
+    cursor: str | None = Query(default=None, max_length=512),
+    limit: int = Query(
+        default=CHALLENGE_PAGE_SIZE_DEFAULT, ge=1, le=CHALLENGE_PAGE_SIZE_MAX
+    ),
+    window: ChallengeWindow | None = Query(default=None),
+    club_id: str | None = Query(default=None, max_length=64),
+    type: str | None = Query(default=None, max_length=32),
+) -> ChallengePage:
+    """One cursor page of the challenges visible to the caller.
+
+    Visible = the public types (``dailyCommunity`` / ``periodicGlobal``)
+    + the caller's own + the ones they hold a participant row or an
+    invite on + ``club`` challenges of the clubs they belong to; minus
+    every author in a block relationship with the caller.
+
+    Query: ``cursor`` (opaque, from the previous page), ``limit``
+    (``[1, 100]``, default 20), ``window`` (``active`` / ``upcoming`` /
+    ``ended``), ``club_id``, ``type``. A malformed cursor restarts
+    from the top (never a 500).
+
+    Response: ``{"items": [ChallengeDefinitionOut...], "next_cursor":
+    "..."|null}``.
+    """
+    db_gen = _session_factory(request)
+    db = next(db_gen)
+    try:
+        try:
+            viewer_profile_id = _resolve_caller_profile_internal_id(db, current_user.id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        page = list_visible_challenges(
+            db,
+            viewer_profile_id=viewer_profile_id,
+            limit=limit,
+            cursor=cursor,
+            now=_now(),
+            window=window,
+            club_id=club_id,
+            challenge_type=type,
+        )
+        return ChallengePage(
+            items=[_challenge_view_to_out(view) for view in page.items],
+            next_cursor=page.next_cursor,
+        )
+    finally:
+        try:
+            next(db_gen, None)
+        except StopIteration:
+            pass
+
+
+@router.get("/{challenge_public_id}", status_code=status.HTTP_200_OK)
+def get_challenge(
+    challenge_public_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser,
+) -> ChallengeDefinitionOut:
+    """One challenge definition. A challenge the caller may not see
+    answers a uniform 404 (no existence oracle)."""
+    db_gen = _session_factory(request)
+    db = next(db_gen)
+    try:
+        try:
+            viewer_profile_id = _resolve_caller_profile_internal_id(db, current_user.id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        try:
+            view = get_visible_challenge(
+                db,
+                challenge_public_id=challenge_public_id,
+                viewer_profile_id=viewer_profile_id,
+            )
+        except ChallengeNotVisible as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return _challenge_view_to_out(view)
+    finally:
+        try:
+            next(db_gen, None)
+        except StopIteration:
+            pass
+
+
+@router.get("/{challenge_public_id}/me", status_code=status.HTTP_200_OK)
+def get_my_challenge_participation(
+    challenge_public_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser,
+) -> ChallengeParticipationOut:
+    """The caller's own participation summary.
+
+    ``{"participant": null}`` (200) when the caller can read the
+    challenge but has no participant row and no invite; 404 when the
+    challenge is not visible to them at all.
+    """
+    db_gen = _session_factory(request)
+    db = next(db_gen)
+    try:
+        try:
+            viewer_profile_id = _resolve_caller_profile_internal_id(db, current_user.id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        try:
+            view = get_my_participation(
+                db,
+                challenge_public_id=challenge_public_id,
+                viewer_profile_id=viewer_profile_id,
+                now=_now(),
+            )
+        except ChallengeNotVisible as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        if view is None:
+            return ChallengeParticipationOut(participant=None)
+        return ChallengeParticipationOut(
+            participant=ChallengeParticipantOut(
+                participant_public_id=view.participant_public_id,
+                challenge_public_id=view.challenge_public_id,
+                invite_state=view.invite_state,
+                best_metric_value=view.best_metric_value,
+                joined_at=view.joined_at,
+                invite_public_id=view.invite_public_id,
+            )
+        )
     finally:
         try:
             next(db_gen, None)

@@ -7,12 +7,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/foundation/app_result.dart';
 import '../../core/logging/logger_provider.dart';
 import '../../features/analyze/screens/analyze_screen.dart';
-import '../../features/audio_analysis/application/analysis_providers.dart';
-import '../../features/audio_analysis/application/capture_seed.dart';
+import '../../features/audio_analysis/application/analysis_capture_providers.dart';
 import '../../features/audio_analysis/domain/analysis_document.dart';
-import '../../features/audio_analysis/domain/analysis_input.dart';
-import '../../features/audio_analysis/domain/analysis_mode.dart';
-import '../../features/audio_analysis/domain/analysis_summary.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_home_screen.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_processing_screen.dart';
 import '../../features/audio_analysis/presentation/capture/analysis_recording_screen.dart';
@@ -24,6 +20,8 @@ import '../../features/audio_analysis/presentation/analysis_timeline_screen.dart
 import '../../features/audio_analysis/presentation/controllers/overview_view_model.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/chords/screens/chord_library_screen.dart';
+import '../../features/curriculum/presentation/screens/curriculum_ladder_screen.dart';
+import '../../features/curriculum/presentation/screens/rhythm_practice_screen.dart';
 import '../../features/gamification/public.dart';
 import '../../l10n/app_localizations.dart';
 import '../../features/learn/screens/latency_calibration_screen.dart';
@@ -63,6 +61,7 @@ import '../../features/today/screens/today_hub_screen.dart';
 import '../../features/songs/screens/setlist_list_screen.dart';
 import '../../features/songs/screens/song_list_screen.dart';
 import '../../features/streak/screens/streak_screen.dart';
+import '../../features/strum_challenge/presentation/screens/strum_challenge_screen.dart';
 import '../../features/song_trainer/public.dart';
 import '../../features/song_trainer/application/trainer/song_trainer_session_launcher.dart';
 import '../../features/song_trainer/domain/models/trainer_config.dart';
@@ -415,6 +414,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: AppRoutes.tuner, builder: (_, _) => const TunerScreen()),
       GoRoute(
+        path: AppRoutes.curriculumRhythm,
+        builder: (_, _) => const RhythmPracticeScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.curriculumLadder,
+        builder: (_, _) => const CurriculumLadderScreen(),
+      ),
+      GoRoute(
         path: AppRoutes.metronome,
         builder: (_, _) => const MetronomeScreen(),
       ),
@@ -553,9 +560,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
         GoRoute(
           path: AppRoutes.communityComments,
-          builder: (_, state) => CommentsScreen(
-            postId: ContentId(state.pathParameters['postId']!),
-          ),
+          // A hibás id a kapura megy vissza, nem a tanulóra dobódik:
+          // a `ContentId` az üres és a túl hosszú értéket elutasítja, egy
+          // rossz deep link miatti összeomlás pedig az appot hibáztatná a
+          // felhasználóért egy URL miatt, amit maga épített (E18-R19).
+          builder: (_, state) {
+            final raw = state.pathParameters['postId'];
+            if (raw == null || raw.isEmpty) return const CommunityGateScreen();
+            return CommentsScreen(postId: ContentId(raw));
+          },
         ),
         GoRoute(
           path: AppRoutes.communityBookmarks,
@@ -574,17 +587,25 @@ final routerProvider = Provider<GoRouter>((ref) {
         // másik listát mutatná.
         GoRoute(
           path: AppRoutes.communityFollowers,
-          builder: (_, state) => FollowersScreen(
-            profileId: PublicUserId(state.pathParameters['profileId']!),
-            mode: FollowersMode.followers,
-          ),
+          builder: (_, state) {
+            final raw = state.pathParameters['profileId'];
+            if (raw == null || raw.isEmpty) return const CommunityGateScreen();
+            return FollowersScreen(
+              profileId: PublicUserId(raw),
+              mode: FollowersMode.followers,
+            );
+          },
         ),
         GoRoute(
           path: AppRoutes.communityFollowing,
-          builder: (_, state) => FollowersScreen(
-            profileId: PublicUserId(state.pathParameters['profileId']!),
-            mode: FollowersMode.following,
-          ),
+          builder: (_, state) {
+            final raw = state.pathParameters['profileId'];
+            if (raw == null || raw.isEmpty) return const CommunityGateScreen();
+            return FollowersScreen(
+              profileId: PublicUserId(raw),
+              mode: FollowersMode.following,
+            );
+          },
         ),
         GoRoute(
           path: AppRoutes.communityChallenges,
@@ -593,9 +614,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         if (communityLeaderboardEnabled)
           GoRoute(
             path: AppRoutes.communityLeaderboard,
-            builder: (_, state) => LeaderboardScreen(
-              challengeId: ContentId(state.pathParameters['challengeId']!),
-            ),
+            builder: (_, state) {
+              final raw = state.pathParameters['challengeId'];
+              if (raw == null || raw.isEmpty) {
+                return const CommunityGateScreen();
+              }
+              return LeaderboardScreen(challengeId: ContentId(raw));
+            },
           ),
         GoRoute(
           path: AppRoutes.communitySafety,
@@ -608,9 +633,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.communityClubDetail,
-            builder: (_, state) => ClubDetailScreen(
-              clubId: ContentId(state.pathParameters['clubId']!),
-            ),
+            builder: (_, state) {
+              final raw = state.pathParameters['clubId'];
+              if (raw == null || raw.isEmpty) {
+                return const CommunityGateScreen();
+              }
+              return ClubDetailScreen(clubId: ContentId(raw));
+            },
           ),
         ],
       ],
@@ -656,6 +685,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           builder: (_, _) => Consumer(
             builder: (context, ref, _) => TodayPlanScreen(
               controller: ref.watch(todayPlanControllerProvider),
+              // The active plan is the screen's body (E17-R06): without it
+              // the route always rendered "no active plan".
+              plan: ref.watch(activePracticePlanProvider).value,
+              isTodayRouteEnabled: true,
             ),
           ),
         ),
@@ -826,6 +859,17 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: AppRoutes.practiceLive,
           builder: (_, _) => const Scaffold(body: LiveScreen()),
         ),
+      // The 60-second strum challenge (2026-09-15) — a top-level route for
+      // the same reason `/practice/live` is one: the screen reads the
+      // microphone stream, so it must dispose on navigation away, which a
+      // kept-alive shell branch would not let it do. Not flag-gated: it is
+      // reachable unconditionally (from the Today hub's card), and it is a
+      // Stage route (`isStageRoute`), so no primary navigation renders on
+      // top of it.
+      GoRoute(
+        path: AppRoutes.strumChallenge,
+        builder: (_, _) => const StrumChallengeScreen(),
+      ),
       // E13-R08 (ADR 0275) — the five-area adaptive shell, reachable only
       // when `adaptiveShellEnabled` is on. Every destination and target
       // sub-route renders an EXISTING screen as a legacy adapter (D6/D11);
@@ -1050,94 +1094,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ],
       if (audioAnalysisV2Enabled) ...[
-        // A felvételi folyamat (2026-09-05). A három képernyő azért volt
-        // elérhetetlen, mert HÁROM darab hiányzott alóla: a vezérlőnek nem
-        // volt providere, a felvevőnek sem, és az `AnalyzeAudioUseCase`
-        // ÜRES mintákat adott tovább — bekötve tehát csendet elemzett volna.
-        GoRoute(
-          path: AppRoutes.analysisCapture,
-          builder: (_, _) => Consumer(
-            builder: (context, ref, _) {
-              final recent = ref.watch(analysisRecentSummariesProvider);
-              final l10n = AppLocalizations.of(context);
-              return AnalysisHomeScreen(
-                // Betöltés / hiba alatt ÜRES lista megy be — a képernyő
-                // szerződése nem ismer köztes állapotot. A hiba NEM
-                // csendben nyelődik el: a provider hibaága megmarad, és a
-                // lista üres volta itt nem állítás, hanem a még be nem
-                // töltött állapot.
-                recentAnalyses: recent.value ?? const <AnalysisSummary>[],
-                onStartRecording: () => context.go(AppRoutes.analysisRecord),
-                onImportFile: () {
-                  // A hang-importálásnak NINCS folyamata a fában (se
-                  // képernyő, se útvonal). Egy néma no-op itt halott gombot
-                  // adna; a felhasználó azt hinné, elromlott. Ezért a
-                  // hiányt kimondjuk.
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(l10n.analysisHomeImportUnavailable)),
-                  );
-                },
-                onOpenAnalysis: (summary) =>
-                    context.go(AppRoutes.analysisTimeline, extra: summary),
-              );
-            },
-          ),
-        ),
-        GoRoute(
-          path: AppRoutes.analysisRecord,
-          builder: (_, _) => Consumer(
-            builder: (context, ref, _) {
-              // `watch`, nem `read`: az autoDispose felvevőt a widget
-              // életciklusa tartja életben, és a képernyő elhagyásakor
-              // eldobódik — a következő felvétel FRISS példányt kap. Egy
-              // `read` azonnal eldobná, egy nem-autoDispose provider pedig
-              // a képernyő által már lezárt felvevőt adná vissza másodszor.
-              final recorder = ref.watch(analysisCaptureRecorderProvider);
-              return AnalysisRecordingScreen(
-                recorder: recorder,
-                onCancel: () => context.go(AppRoutes.analysisCapture),
-                onFinished: (run, samples) {
-                  final pcm = PcmAnalysisInput(
-                    samples: samples,
-                    sampleRate: run.sampleRate,
-                    channelCount: 1,
-                    source: AnalysisInputSource.microphone,
-                  );
-                  unawaited(
-                    ref
-                        .read(analysisControllerProvider.notifier)
-                        .analyze(
-                          captureSeedDocument(
-                            runId: run.id,
-                            audio: pcm,
-                            createdAt: DateTime.now(),
-                          ),
-                          audio: ValidatedPcmAnalysisInput(input: pcm),
-                        ),
-                  );
-                  context.go(AppRoutes.analysisProcessing);
-                },
-              );
-            },
-          ),
-        ),
-        GoRoute(
-          path: AppRoutes.analysisProcessing,
-          builder: (_, _) => Consumer(
-            builder: (context, ref, _) {
-              final state = ref.watch(analysisControllerProvider);
-              return AnalysisProcessingScreen(
-                state: state,
-                onCancel: () => unawaited(
-                  ref.read(analysisControllerProvider.notifier).cancel(),
-                ),
-                onRestart: () => context.go(AppRoutes.analysisRecord),
-                onViewResult: (document) =>
-                    context.go(AppRoutes.analysisOverview, extra: document),
-              );
-            },
-          ),
-        ),
         GoRoute(
           path: AppRoutes.analysisOverview,
           redirect: (_, state) =>
@@ -1184,6 +1140,86 @@ final routerProvider = Provider<GoRouter>((ref) {
               state.extra is AnalysisDocument ? null : AppRoutes.live,
           builder: (_, state) => AnalysisTimelineScreen(
             document: state.extra! as AnalysisDocument,
+          ),
+        ),
+        // E17-R02 (ADR 0521) — the V2 capture flow: home → recording →
+        // processing → overview, under the SAME gate as the three result
+        // routes above. The screens are pure presentation; the recorder,
+        // the controller state and every callback are injected here from
+        // `analysis_capture_providers.dart`, so no `ref.watch` enters the
+        // widgets (§5.2) and the legacy Analyze path stays untouched (§5.3).
+        GoRoute(
+          path: AppRoutes.analysisHome,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) => AnalysisHomeScreen(
+              recentAnalyses:
+                  ref.watch(recentAnalysesProvider).value ?? const [],
+              onStartRecording: () => context.push(AppRoutes.analysisRecording),
+              // File import has no picker/decoder use case wired in this
+              // feature yet (only the WAV decoder gateway exists), so the
+              // tap says so instead of pretending.
+              onImportFile: () => ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    AppLocalizations.of(context).analysisHomeImportUnavailable,
+                  ),
+                ),
+              ),
+              onOpenAnalysis: (summary) async {
+                final document = await ref
+                    .read(analysisCaptureFlowProvider)
+                    .loadAnalysis(summary.documentId);
+                if (!context.mounted) return;
+                if (document == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        AppLocalizations.of(context).analysisHomeOpenFailed,
+                      ),
+                    ),
+                  );
+                  return;
+                }
+                await context.push(AppRoutes.analysisOverview, extra: document);
+              },
+            ),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.analysisRecording,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) => AnalysisRecordingScreen(
+              recorder: ref.watch(analysisRecorderProvider),
+              onFinished: (run, samples) {
+                // The flow copies the samples synchronously and moves the
+                // controller to `validating`/`analyzing` before its first
+                // await, so the Processing Stage never mounts on a stale
+                // state and the replaced Recording Stage may dispose its
+                // recorder at once.
+                unawaited(
+                  ref
+                      .read(analysisCaptureFlowProvider)
+                      .analyzeRecording(run, samples),
+                );
+                context.pushReplacement(AppRoutes.analysisProcessing);
+              },
+              onCancel: () => context.pop(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.analysisProcessing,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) => AnalysisProcessingScreen(
+              state: ref.watch(analysisControllerProvider),
+              onCancel: () => unawaited(
+                ref.read(analysisControllerProvider.notifier).cancel(),
+              ),
+              onRestart: () =>
+                  context.pushReplacement(AppRoutes.analysisRecording),
+              onViewResult: (document) =>
+                  context.push(AppRoutes.analysisOverview, extra: document),
+            ),
           ),
         ),
       ],

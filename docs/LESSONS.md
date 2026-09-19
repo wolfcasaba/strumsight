@@ -26601,3 +26601,2449 @@ walk bővítése valódi tapokkal megy, teszt-oldali híd nélkül.
 set and the documented exclusion table exactly partition the measured-reachable
 screen set` (a kör `gate_tests`-én, brief §0.0.2), falszifikálva: a
 `walked.add('FirstWinStageScreen')` kivételére MÉRTEN piros.
+
+## L654 — Egy „a MINTÁT másoljuk, a FÜGGÉST nem" kódkomment ADR-hivatkozással ELAVUL, amint a közös segédnek lesz `core` otthona: az ADR hatókörét kell újraolvasni, nem a kommentet követni (E18-R12, 2026-09-11)
+
+**Mit mértünk.** Az L269 előírja, hogy **minden** időablakos one-to-one metric
+UGYANAZT a maximum-cardinality segédet használja — „a közös matcher a szerződés
+része". A `core/music/onset_matching.dart` megépülése után mégis két kézzel
+másolt `_maxBipartiteMatching` maradt a fában, és az egyik doc-commentje azt
+állította, hogy ez így HELYES:
+
+> „same shape as `EvaluationRunner.matchEvents` … the pattern is copied, not
+> imported, **per ADR 0359 D6**"
+
+Az ADR 0359 D6 tényleges szövege viszont nem a másolást írja elő, hanem egy
+**kereszt-feature függést tilt**: „A `live` annotációs kód nem importálja az
+`audio_analysis` evaluation kódját… a kereszt-feature import csak `public.dart`
+barrelt célozhat (`tool/check_architecture.dart:774`)". A `core/music/` **egyik
+feature sem**. Vagyis a `core`-ba emelt közös segéd az az EGYETLEN elrendezés,
+ami a D6-ot és az L269-et egyszerre teljesíti — a komment nem az ADR-t idézte
+félre, hanem egy olyan világból maradt ott, amelyben még nem volt hova emelni.
+
+**A mérés, ami eldöntötte.** A `tool/check_architecture.dart` a `features →
+core/music` importra **új allowlist-bejegyzés nélkül** zöld maradt (12
+allowlistelt deviáció, változatlan) — ez a konkrét bizonyíték arra, hogy itt
+nincs kereszt-feature függés, tehát a D6 nem felülírva, hanem TELJESÍTVE van. A
+paritást a `recognition_annotation_test.dart` „a fixture report **bájtra
+azonos** két futás között" cellája adta: a riport a refaktor után bájtra
+ugyanaz.
+
+**Hogyan alkalmazd.** Ha egy kódkomment egy ADR-re hivatkozva tilt meg valamit,
+az ADR **hatókörét** olvasd újra, ne a kommentet kövesd: egy tilalom, ami két
+konkrét modul közti függésről szól, nem tilalom minden megosztásra. És ha a
+duplikációt mégis fel kell oldani, a komment törlése helyett ÍRD LE a feloldást
+(miért nem ütközik a két szabály) — különben a következő kör ugyanezt a vitát
+futja le újra. Lásd `lib/features/live/domain/evaluation/recognition_annotation.dart`
+`_matchEvents` doc-commentjét.
+
+**Őrteszt:** `test/core/music/onset_matching_test.dart::isEligible: a window AND
+a kind` (5 cella) — az `isEligible` predikátum az a hiányzó darab, ami miatt a
+`type`-szűrős annotációs út addig nem tudott a közös segédre állni; falszifikálva:
+a predikátum figyelmen kívül hagyására az „an ineligible pair is not matched even
+at gap zero" cella MÉRTEN piros.
+
+## L655 — Címke NÉLKÜLI anyagon a „több megnevezett keret" nem bizonyít jobb hallást: egy DSP-kör szállítási döntését a ground-truth próba fordította meg, amit egyik mérő agent sem futtatott (E18-R12, 2026-09-11)
+
+**Mit mértünk.** Az E18-R10 (Hamming-kernel) és az E18-R11 (lágy padló) körök
+ugyanazt a három kritériumot kapták, és mindkettő **kizárólag a tíz címkézetlen
+stock loopon** pontozta a valós-hang ágat: megnevezett keretek száma és a
+`sus4`/`aug` arány. Ezekből az R10 candidate-je „nem nyert" (a teljes
+DSP-suite két cellája billent), az R11 pedig nemleges lett.
+
+A döntést egy olyan mérés fordította meg, ami **már bent volt a repóban**:
+`test/tooling/live_chord_wav_probe_test.dart` — **hét címkézett valódi
+gitárfelvétel**, a projekt egyetlen valódi akkord-ground-truth-ja a repón
+belül elérhető adaton:
+
+```
+box,     k=0 (addig szállított)   7/7   278 megerősített keret
+hamming, k=0                      7/7   294
+hamming, k=0.20  (ez lett szállítva) 7/7   296
+```
+
+Ez mutatta meg, hogy (a) egyetlen címke sem romlik, tehát a kernel nem
+agresszívebb, csak jobb, és (b) a valódi gitáron a **kernel** hozza a hasznot, a
+`k` alig — tehát a `k`-t a nehéz anyagon kell igazolni, és ott `k = 0` **két
+fájlt veszít el csendbe**. Egyik következtetés sem jön ki a címkézetlen
+loopokból.
+
+**Miért nem futtatták.** Nem az ő hibájuk volt: a brief nem mutatott rá, és az
+`AGENTS.md` §9 is csak annyit írt, hogy „valós audio mérés" kötelező — azt nem,
+hogy MELYIK. A §9 ezért most nevén nevezi a próbát.
+
+**Hogyan alkalmazd.** Címke nélküli anyagon a „több megnevezett keret" ugyanúgy
+jelenthet **pontosabb hallást**, mint **kevesebb óvatosságot** — a kettő ugyanúgy
+néz ki kívülről, és ezen az appon a rossz irány konkrétan azt jelenti, hogy a
+helyesen játszó tanulónak hamis címkét mutatunk. Szállítási döntést tehát csak
+ground-truth-on lehet hozni; a címkézetlen anyag **viselkedési jelzés**, amivel
+hipotézist lehet szűkíteni, de nem lehet dönteni. Ha egy körnek nincs
+ground-truth-ja a kérdéséhez, az a helyes kimenet, hogy **ezt kimondja** — ahogy
+a `sus4`/`aug` hipotézis maradt nyitva —, nem az, hogy a rendelkezésre álló
+proxyra dönt.
+
+**Őrteszt:** nincs és nem is lehet (a felvételek nincsenek commitolva, a próba
+önmagát skippeli a változó nélkül). A mérce ezért **eljárási**: `AGENTS.md` §9
+nevesíti a próbát a kötelező valós-audio mérésként, és az
+[ADR 0542](adr/0542-hamming-whitening-kernel-and-reference-mean-subtraction.md)
+„Miért `k = 0.20`" szakasza a ground-truth táblát hordozza, nem a proxy-számokat.
+
+## L656 — Egy ÁLLAPOT-enum neve nem teljesítmény-szó: a `stable` a MEGBÍZHATÓSÁGOT írja le, és hat visszafelé pengetett kör után „Steady"-t tett volna a képernyőre (E18-R13, 2026-09-12)
+
+**Mi történt.** A tananyag-létra bekötésénél azt a sort írtam, ami kézenfekvő volt:
+a `SkillEstimate.state` sima nyelven, hat l10n-kulccsal — `initial` → „First sign",
+`emerging` → „Taking shape", `stable` → „Steady", `strong` → „Solid". A kód
+lefordult, az analyze zöld volt, a sor szépen nézett ki.
+
+Aztán lefutott a mérő cella, amit ugyanabban a körben írtam más okból (*hány tiszta
+kör nyit rungot*), és kiírta ezt:
+
+```
+6 wrong-direction attempts: state stable, level 0.000
+```
+
+**Hat kör, amelyben MINDEN stroke megerősítve a ROSSZ irányba haladt, `stable`.** Az
+én szövegezésemmel a képernyőn az állt volna: **„Steady · 6 attempts"** — dicséret
+egy tanulónak, aki mindent visszafelé pengetett.
+
+**A gyökér.** A `SkillEstimateState` két, egymástól független dolgot kever össze
+ANNAK, AKI CSAK A NEVÉT OLVASSA:
+
+- `initial` / `emerging` / `stable` / `strong` azt írja le, **mennyi és milyen
+  konzisztens az evidencia** — a `_stateFor` kizárólag `evidenceCount`-ból,
+  `uncertainty`-ból és `conflicted`-ből származtatja őket. A `level` csak egyetlen
+  helyen szól bele (`uncertainty <= 0.25 && level >= 0.8` → `strong`), tehát
+  `stable` bármilyen szinten elérhető, 0.000-on is.
+- a teljesítményt **kizárólag** a `level` hordozza.
+
+A nevek angol köznyelvi jelentése („stable", „strong") teljesítmény-szónak OLVASÓDIK,
+és ez a csapda: nem a típus hibás — a doksija helyesen írja, hogy „the amount and
+quality of evidence" —, hanem az, hogy egy UI-réteg a nevet szó szerint átemelte.
+
+**Miért nem kapta el semmi más.** Az analyze nem tud róla. A type-rendszer nem tud
+róla: a `switch` kimerítő volt, minden ág megvolt, fordult. A becslés-reducer saját
+tesztjei sem: ott `stable` 0.000-on HELYES eredmény. A hiba csak a **fordítás**
+pillanatában keletkezett — állapotból teljesítmény-szóba —, és csak az a mérés
+mutatta meg, ami a 0.000-hoz tartozó állapotot kiírta. Egy feltételezés („a
+`stable` jó jelentésű") sosem bukott volna meg, ha nem íratjuk ki a számot.
+
+**A javítás, nem a tünetre.** A hat kulcs közül négyet TÖRÖLTEM, nem átszövegeztem.
+A létra most a **kör-számot** jelenti (`Measured over 2 attempts`), és csak azt a
+két állapotot szövegezi, ami valóban az EVIDENCIÁRÓL szól, nem a játékosról:
+`stale` („érdemes újra eljátszani" — megöregedett) és `conflicted` („vegyes
+eredmények" — a körök nem egyeztek). A minőségi verdikt ott marad, ahol mérve van:
+a rung `available` / `lockedPendingSkill` állapotában és a gyakorló képernyő
+irány-pontosságában.
+
+Ugyanez zárta ki a százalékot és a sávot is: a `level` bizalom-csillapított szám
+(0.625 EGY tökéletes kör után), tehát az absztrakt értéke olyan precizitásra hívna,
+amivel nem rendelkezik.
+
+**Az általános szabály.** *Ha egy enum-értéknek olyan köznyelvi neve van, ami
+minősítésnek olvasódik, a felületre kerülés előtt ki kell íratni a hozzá tartozó
+SZÉLSŐ számot.* A kérdés nem „mit jelent ez az érték", hanem „milyen legrosszabb
+adat mellett állhat elő ez az érték" — és a fordítást erre kell megírni.
+
+**Őrteszt:** `test/features/curriculum/curriculum_ladder_screen_test.dart` →
+„a learner who strummed everything the WRONG way is never praised": hat
+megerősített rossz irányú kört tölt a tárba, és megtiltja a `Steady` / `Solid` /
+`Strong` / `Stable` szavakat a képernyőn. A mérés, ami kiderítette, a
+`test/features/curriculum/curriculum_progress_test.dart` „a rung never opens on the
+wrong evidence" cellája — az kiírja az állapotot és a szintet együtt, ami az egész
+lecke: **a kettő soha nem olvasható egymás nélkül.** Lásd még
+[ADR 0543](adr/0543-curriculum-attempts-become-skill-evidence.md) D7.
+
+
+## L657 — Egy pontszám, ami az APP saját latenciáját a tanuló késésével keveri, csak a saját felét MEGMÉRVE dönthető el: a mérés azt mondta, a funkció lehetetlen, nem azt, hogy pontatlan (E18-R16, 2026-09-12)
+
+**Mi történt.** Az akkord-pillér után a következő lépésnek a váltás IDŐZÍTÉSE
+látszott: „a váltásod N ms-mal késett". A rung tanítása épp ez („változz meg, a
+pengető kéz ne álljon meg"), tehát a funkció pedagógiailag indokolt volt, a
+felhasználói érték világos, és a kód oldala egyszerű: a taktusvonal és az első
+megerősítés közti idő.
+
+Egy dolgot nem tudtunk: **mennyi ebből a motor sajátja.** Egy akkord-döntésnek —
+ellentétben egy pengetéssel — nincs mért valódi onsetje, amihez vissza lehetne
+korrigálni. A pengetés-útnak épp ezért van kalibrációja.
+
+Ezért megmértem a motor felét, olyan audión, ahol a váltás pillanata konstrukcióból
+ismert (`test/features/live/chord_change_latency_test.dart`):
+
+```
+Em->Am 508 ms   Am->D 1344 ms   D->G 159 ms   G->C 438 ms
+median 508 ms, mean 612 ms, legnagyobb eltérés 731 ms
+```
+
+70 bpm-en egy ütés **857 ms**. A motor saját késése tehát átlagosan ~0,7 ütés, és
+**~0,85 ütésnyit szór** — tiszta modellezett audión, pillanatnyi, tökéletesen
+lefogott váltásokkal. Egy valódi kezdő keze ennél lassabban és egyenetlenebbül
+érkezik meg.
+
+**A következtetés nem „pontatlan", hanem „lehetetlen".** Egy SZISZTEMATIKUS késés
+kivonható — pontosan ezt teszi a pengetés-kalibráció a készülék latenciájával. Egy
+731 ms-ot szóró késés **nem**: amit a tanulónak mutatnánk, az túlnyomórészt
+dekóder-zaj lenne az ő nevén. Az app ezért nem pontozza a váltás időzítését, és ezt
+kimondja, nem pedig egy hihetőnek látszó számot mutat.
+
+**És a mérés igazolta azt is, amit már szállítottunk.** A taktus-szintű osztályozás
+korábban ÉRV volt („egy akkord tartott, a dekódernek több képkocka kell"). Most
+mérés: a legrosszabb eset a 3,43 s-os taktus **39 %-a**, és az előző alakzat a
+váltás után 90–368 ms-mal szűnik meg megerősített lenni. Tehát a taktus kényelmes
+egység, miközben a pengetés-szintű osztályozás a dekódert mérte volna. Ebből egy új,
+mért KORLÁT is lett (`minimumChordBarUs` = 2,0 s ≈ 1,5× a legrosszabb eset), amit a
+`RhythmAssignment` konstruktora kényszerít ki: egy jövőbeli gyorsabb rung
+**hangosan** bukik el a létrehozásnál, ahelyett hogy csendben az előző akkordot
+pontozná — ami a „idejében váltottál, mégis rosszat játszottál" hibát adná.
+
+**Az általános szabály.** *Ha egy tervezett pontszám a mi saját késésünket a tanuló
+teljesítményével összegezné, a kör első fele a MI felünk megmérése — és a
+megengedhető kimenetek közt ott van az, hogy a funkció nem épül meg.* A kérdés nem
+„mennyire pontos lesz", hanem „szisztematikus-e annyira, hogy kivonható legyen".
+Egy mediánt közölni egy 731 ms-ot szóró mennyiségről pontosságot állítana ott, ahol
+nincs.
+
+**Őrteszt:** a mérés maga (`chord_change_latency_test.dart`) padlót állít — ha a
+motor a kurzus váltásainak többségét egyáltalán nem követi, az nem pontatlanság,
+hanem lehetetlenség —, a korlátot pedig
+`test/features/curriculum/rhythm_assignment_test.dart` → „a chord cannot be asked
+for in a bar shorter than the engine needs to follow a change" tartja. Lásd még
+[ADR 0545](adr/0545-no-change-timing-score-the-engine-lag-is-not-subtractable.md).
+
+
+## L658 — A kockázat-hipotézis nem helyettesíti a végigmérést: a megjósolt hibamódot (kromapollúció) a mérés MEGDÖNTÖTTE, és egy másikat talált (minden klikk hamis pengetés) (E18-R17, 2026-09-12)
+
+**Mi történt.** A tananyag ritmus-képernyője néma volt, pedig három mód
+`needsMetronome: true`-t deklarál és az app szállít metronómot. A bekötés előtt
+feltettem a helyes kérdést — „mit tesz a klikk a felismeréssel?" —, és **meg is
+jósoltam egy konkrét, megnevezhető hibamódot**:
+
+> A klikk 1000 Hz-es szinusz, 1000 Hz ≈ B5, és a B az E-moll (E-G-B) ÉS a G (G-B-D)
+> akkord hangja — a kurzus első és negyedik akkordja. Tehát a klikk a kroma-binekre
+> esik, amiket a dekóder mérlegel.
+
+Az érv jó volt: specifikus, ellenőrizhető, és a zenei tartalom alapján helyes. Ha
+csak erre mértem volna rá egy célzott próbát, „megerősítést vagy cáfolatot" kaptam
+volna — és **mindkét kimenet félrevezetett volna.**
+
+**Amit a mérés mondott.** A kroma **érintetlen**: az akkord azonossága egyetlen
+klikk-szinten sem változott, a megerősített képkockák száma legfeljebb 1-gyel mozdult
+~200-ból, és a csak-klikkek **egyáltalán nem neveznek akkordot**, teljes skálán sem.
+A hipotézisem megdőlt.
+
+Ugyanaz a futás viszont kiírta azt is, amit nem erre a kérdésre gyűjtöttem:
+
+```
+csak klikkek, gain 0.10: 15 jelentett pengetés
+csak klikkek, gain 0.30: 15 jelentett pengetés
+csak klikkek, gain 1.00: 15 jelentett pengetés
+```
+
+**16 klikkből 15 pengetés, gitár nélkül, minden szinten** — és a klikk pontosan az
+ütésre esik, pontosan oda, ahol a rács pengetést vár. Egy tanuló, aki semmit nem
+játszik, teli, tökéletesen időzített körrel lenne kreditálva. Ez nem pontatlanság,
+hanem a pontozás teljes meghamisítása, és sokkal súlyosabb, mint amit jósoltam.
+
+**Miért maradt volna észrevétlen.** A hamis onset NEM rontja el az akkordot, tehát a
+képernyő minden jele jó maradt volna: az akkord zölden konfirmál, a szint-méter szól,
+a kör „teli" lesz. A hiba csak a PONTSZÁMBAN létezik, és épp abba az irányba hajlít,
+amit senki nem jelent be: a tanuló jobb eredményt kap, mint amit játszott. Egy
+hízelgő hiba nem generál bugreportot.
+
+**Ami megmentette.** Hogy a próbát nem a hipotézisre szabtam, hanem a lánc KIMENETEIRE:
+pengetésszám, akkord-azonosság, megerősített képkockák — szintenként, és egy
+kontrollal, amiben **egyáltalán nincs gitár**. Az a kontroll adta a döntő számot, és
+nem azért szerepelt benne, mert gyanakodtam rá, hanem mert „a klikk önmagában mit
+tesz" a legegyszerűbb elkülönítés.
+
+**Az általános szabály.** *Egy hipotézis azt mondja meg, hogy MÉRJ — nem azt, hogy MIT
+mérj. A próbának a lánc összes megfigyelhető kimenetét ki kell írnia, plusz egy olyan
+kontrollt, amiből a vizsgált jel kimarad.* Egy hipotézisre szabott próba a
+hipotézissel együtt áll vagy bukik, és ha megbukik, magával viszi azt a hibát is,
+amit észrevehetett volna.
+
+**Amit a szám eldöntött, nem az érv.** Hallható klikk csak a **beszámolásban** (ott
+semmi nincs pontozva), a pontozott körben **haptikus** pulzus (érezhető, a mikrofon
+nem hallja), kalibráció alatt **semmi** — mert a kalibrátor a `latestStrumTime`-ból
+regisztrál koppintást, tehát egy klikk a saját metronómjára kalibrálná a készüléket.
+
+**Őrteszt:** `test/features/curriculum/metronome_pulse_test.dart` kimerítően
+állítja a csatorna-táblát (fázis × akcentus × némítás), és a mérés maga
+`test/features/live/metronome_click_pollution_test.dart`. A döntés tiszta funkcióban
+él (`metronome_pulse.dart`), nem a widget tick-callbackjében, mert a legnagyobb súlyú
+eset — a csend kalibráció alatt — az, amit egy widget-teszt a legnehezebben ér el.
+Lásd még [ADR 0546](adr/0546-the-pulse-channel-is-decided-by-what-is-being-measured.md).
+
+
+## L659 — Egy őrteszt, ami ROSSZ ALANYT nevez meg, rosszabb a védelem hiányánál: a „produkciós út, amit a vezérlő minden befejezésnél bejár" kommentet semmi nem olvasta (E18-R20, 2026-09-12)
+
+**Mi történt.** A „kössünk be mindent" felmérés során kiírtam minden providert, amit a
+saját fájlján kívül semmi nem olvas. A listán ott volt a
+`practiceSessionRecorderProvider` — a gyakorlás-munkamenetek **rögzítője**, a legélőbb
+feature-ben (19 importáló).
+
+A provider szándékosan `NoopPracticeSessionRecorder`-t ad, amíg a metaadat-kódok
+placeholderek, és ez **jól** van dokumentálva: a valódi rögzítő olyan rekordot írna,
+amit az olvasó eldob (`JsonRecordException` ismeretlen enum-kódra) — write-then-drop.
+Van rá B2 biztonsági teszt is, ezzel a kommenttel:
+
+> „A real record() call (**the production path the controller takes on every finish**)
+> returns Success without writing anything that would be discarded by the reader."
+
+Első olvasásra ez azt jelenti, hogy a gyakorlás **nem rögzül** — súlyos, csendes
+adatvesztés. Megmértem, mit kap valójában a vezérlő:
+
+```
+practice_session_providers.dart:245
+  final recorder = PracticeHistoryRecorder(
+    repository: repository,
+    mapperFactory: () => PracticeSessionResultHistoryMapper(
+      modeCode: inputs.definition.mode.code,      // VALÓDI
+      sourceCode: inputs.definition.source.code,  // VALÓDI
+      definitionId: inputs.definition.id,         // VALÓDI
+```
+
+A `practiceSessionControllerProvider` családja **inline** építi a valódi rögzítőt a
+tényleges metaadatokkal. A gyakorlás **rögzül**; a provider túlélt kód.
+
+**A valódi hiba tehát nem adatvesztés, hanem az őr alanya.** A B2 cella egy olyan ágat
+védett, amibe a produkció soha nem lép be, és **magáról azt állította**, hogy az élest
+védi. Ez rosszabb, mint a védelem hiánya: aki utána ránéz, abban a hitben hagyja, hogy
+az éles út le van fedve. És ha az inline rögzítő egyszer placeholder metaadatot kapna,
+ez a cella **zöld maradna**.
+
+**A javítás nem a provider törlése.** A prediktátuma (`isPlaceholderPracticeMetadata`)
+az a hely, ahol a csapda le van írva, és az éles út őrét is ennek a fogalmaiban lehet
+megfogalmazni. Amit javítani kellett, az az **állítás**, plusz a hiányzó fedés:
+
+- a provider doksija és a cella kommentje most kimondja, hogy **ez nem a produkciós
+  út**;
+- az éles utat `practice_recorder_live_path_test.dart` védi, **két független
+  mechanizmusra** állítva: a **típusok** (`PracticeMode` / `PracticeSource` kódjai
+  valódi értékek, tehát a placeholder azokon keresztül **elérhetetlen**, nem csak
+  „nem használt"), és a **katalógus** (egy szállított definíció sem viseli a
+  placeholder id-t — ez az egyetlen szabad szöveges mező).
+
+**Az általános szabály.** *Egy őrteszt annyit véd, amennyit az alanya, és az alany a
+kommentben szerepel — nem a kódban.* Amikor egy cella azt írja magáról, hogy „a
+produkciós utat" védi, azt meg kell MÉRNI: ki olvassa a providert, és mit kap a
+konstruktor. A „semmi nem olvassa" lista erre a legjobb szűrő — egy őrzött provider,
+amit senki nem olvas, vagy halott kód, vagy egy rossz alanyra állított őr.
+
+**Mellékhatás, ami önmagában is hiba volt.** Ugyanez a felmérés mutatta meg, hogy az
+E18-R19-ben bekötött közösségi felület lánca **nem volt végig állítva**: három
+provider, egy null rövidzárral a közepén, és `accountEnabled: false` mellett a
+`DisabledSocialGraphRepository` minden hívásra `ConfigurationFailure`-t ad — a
+képernyők renderelnek, görgetnek, és soha nem töltenek be semmit. Az L652 hibaosztály,
+csak csendesebben. Őrteszt:
+`test/features/community/community_production_chain_test.dart`, mindkét irányra.
+
+Lásd még [`docs/operations/unwired-surfaces.md`](operations/unwired-surfaces.md) — a
+teljes felmérés megismételhető parancsokkal.
+
+
+## L660 — A mérőeszköz is mérés alatt áll: a modellezett gitár átlapoló csengéssel 12 pengetésre 22 onsetet termel, és ez egy szállított mérés kimenetében ott volt olvasatlanul (E18-R21, 2026-09-12)
+
+**Mi történt.** A hallás-utáni-ismétlés idővonalát mértem (demó → csendes ütem →
+beszámolás → pontozott ütemek), egy kontrollal: ugyanaz az előadás, egyszer hangzó,
+egyszer néma pre-rollal. A keresett válasz tiszta volt. De a kiírás mellékesen ezt
+mutatta:
+
+```
+notated strokes : 24
+pre-roll OFF    : reported 43, scored 43
+```
+
+**43 onset 24 notált ütésre — a kontroll felvételen.** Nem arról, amit mértem.
+
+**Nem mentem el mellette**, mert a `D DU UDU` nyolcad-minta **ma is szállított,
+pontozott rung** (`mission.dDuUdU`), és egy felülszámoló detektor olyan ütésekkel
+kreditálna vagy rontana, amiket a tanuló nem játszott. Három gyanúsítottat néven
+nevezve, rácsban mérve:
+
+```
+ring/gap 0.8 KS-chord: struck 12 | LivePipeline 12 | rawSuperFlux 12
+ring/gap 0.8 harmonic: struck 12 | LivePipeline 12 | rawSuperFlux 12
+ring/gap 2.0 KS-chord: struck 12 | LivePipeline 22 | rawSuperFlux 22
+ring/gap 2.0 harmonic: struck 12 | LivePipeline 12 | rawSuperFlux 12
+ring/gap 2.4 KS-chord: struck 12 | LivePipeline 22 | rawSuperFlux 22
+ring/gap 2.4 harmonic: struck 12 | LivePipeline 12 | rawSuperFlux 12
+```
+
+- **Nem a sűrűség**: ring ≤ gap esetén mindkét modell pontos.
+- **Nem a réteg**: a nyers detektor onsetre egyezik a teljes `LivePipeline`-nal
+  mind a hat cellában.
+- **A stimulus.** A `modelled_guitar.dart` húronként és pengetésenként egy
+  **független, zajjal gerjesztett** Karplus-Strong hangot ad össze. Átlapolásnál két
+  függetlenül seedelt zajos hang szól ugyanazon a magasságon, és az interferenciájuk
+  véletlen konstruktív kitöréseket termel — amik pontosan úgy néznek ki, mint
+  attackok. Az additív harmonikus modell determinisztikus és fázisban van, ezért
+  simán összeadódik.
+
+**A tanulság két részes, és a második a fontosabb.**
+
+*Egy:* aki **onsetet SZÁMOL**, annak a `ringSeconds` nem lehet nagyobb a következő
+pengetésig tartó résnél, különben a modell saját interferenciáját számolja. Az
+átlapolás továbbra is helyes, ha azt mérjük, **mennyi idő alatt követi** a dekóder a
+váltást (`strumSequence` szándékosan így teszi) — ott a kérdés az akkord-címke, nem
+az onset-szám. Ez a szabály most az `addStrummedChord` doksijában áll, vagyis ott,
+ahol a következő hívó *kénytelen* látni.
+
+*Kettő:* **ez a szám egy szállított mérés kimenetében ült olvasatlanul.** A
+`metronome_click_pollution_test.dart` `23/16`-ot ír ki ugyanebből az okból, és mivel
+a pengetés-számot csak **kiírja, soha nem állítja**, soha nem bukott el, és én magam
+sem néztem rá jelként, amikor az ADR 0546-ot írtam. Egy nem állított szám egy
+mérésben nem bizonyíték — *díszlet*, és a díszlet bármit mutathat. Ahol egy mérés
+számot ír ki, ott vagy állítás van mögötte, vagy ki kell mondani, hogy nem az
+állítása (most ki van mondva, és a stimulus szándékosan érintetlen, hogy az ADR
+számai reprodukálhatók maradjanak).
+
+**Amit ez NEM igazol, és ezért nyitott.** Hogy a motor egy **valódi** gitár
+nyolcad-pengetését helyesen számolja. Az immunis stimulus azért immunis, mert *sima*,
+nem mert *valósághű*; egy valódi húr újra gerjed, nem adódik össze önmaga második
+példányával. A kért felvételek listája ezzel kiegészült:
+[`docs/research/real-audio-hearing-probe-2026-09.md`](research/real-audio-hearing-probe-2026-09.md).
+
+Lásd még [[L269]] (egy közös segéd, soha két példány) — a szabály azért kerülhetett
+egyetlen helyre, mert a modell is egyetlen helyen van.
+
+
+## L661 — A mérés KOMMENTBEN szereplő osztálynevet route-helyként számolt: egy szándékosan nem route-olt képernyő „elérhető" volt, és ugyanabban a körben három lejárt pin derült ki (E18-R22, 2026-09-12)
+
+**Hogyan bukkant elő.** Nem kerestem. A fül-rung köre után lefuttattam néhány
+szomszédos tooling-tesztet, és a `screen_reachability_test.dart` két cellája bukott.
+Először megnéztem, **az én változásaim előtt is bukik-e** — stashelve igen —, tehát
+korábbi, és nem az enyém. Eddig ez csak egy lejárt szám lett volna. De amikor a plan
+hiányzó sorait akartam megírni, a mérés ezt mondta:
+
+```
+lib/features/community/presentation/screens/community_challenges_screen.dart
+  declarative = lib/app/routing/app_router.dart:522
+```
+
+Ez **ellentmondott a saját dokumentumomnak**: a `docs/operations/unwired-surfaces.md`
+azt írja, a kihívás-képernyő *szándékosan* nincs route-olva, mert a futó backend nem
+szolgál ki kihívás-listát. Megnéztem az 522. sort:
+
+```dart
+// `CommunityChallengesScreen` would be a screen that always fails, and a
+```
+
+**Komment.** A szkenner a kommentben szereplő osztálynevet route-helyként számolta.
+
+**És nem egyetlen sor volt.** A kommentek levágása után a mérés az egész fán
+megváltozott: **Reachable 86 → 85, Flag-gated 36 → 37**, és az `app_router.dart`-ban
+**tizenöt** hivatkozott „route-sor" bizonyult prózának — mind a tizenötöt egyenként
+ellenőriztem, hogy valódi kódot ne vágjak le. A legsúlyosabb következmény nem a
+kihívás-képernyő volt:
+
+- **`ProgressDashboardScreen`** egyetlen VALÓDI regisztrációja az `adaptiveShellEnabled`
+  mögött van. Korábban **kapu nélkülinek** volt mérve — vagyis olyannak, ami minden
+  buildben elérhető.
+- **A teszt-hivatkozások száma széles körben fel volt fújva** (`OnboardingScreen`
+  27 → 20, `LearnScreen` 33 → 27, `TunerScreen` 34 → 32), tehát a „mennyire le van
+  fedve ez a képernyő" magasabbnak olvasódott, mint amilyen.
+
+**A javítás.** `ScreenReachability.stripLineComment`, **idézőjel-tudatosan** — egy
+`//`-t tartalmazó route-útvonal vagy URL levágása ugyanaz a hiba lenne fordított
+előjellel: valódi kódot dobna el, és route-olt képernyőket mutatna elérhetetlennek.
+A `/* ... */` blokk-kommentet **nem** kezeli (ahhoz állapot kell, amit ez az
+egysoros szkennelés nem visz, és az eszköz szándékosan nem tartalmaz Dart-parsert) —
+ezért a korlát **mérve** van: a `blockCommentSources()` jelenti, ha egy szkennelt
+forrás mégis tartalmaz ilyet, és az őr **elbukik**, ahelyett hogy a rés csendben
+visszanyílna.
+
+**A mélyebb tanulság, és ez a harmadik ugyanerről ebben a munkamenetben.** Az
+[[L660]] arról szólt, hogy a mérőeszközöm felülszámolt onseteket, és a szám egy
+szállított mérés kimenetében ült olvasatlanul. Ez ugyanaz a családból: *a mérés
+forrásszövegként olvasta a kódot, és a próza is forrásszöveg.* A tanulság nem „vágd le
+a kommenteket", hanem: **egy szöveg-illesztésen alapuló mérés azt méri, amit a fájlban
+TALÁL, nem amit a fordító LÁT** — és a kettő különbségét ki kell mondani, különben a
+mérés a dokumentációt méri.
+
+Ugyanez érinti a saját felmérésemet is: a `docs/operations/unwired-surfaces.md`
+módszertani grep-je szintén nem vág kommentet, tehát egy csak kommentben említett
+képernyő „hivatkozottnak" tűnhet. A fájl most ezt kimondja.
+
+**És a kísérő tanulság a pinekről.** Ugyanebben a körben **három** kipinezett szám
+bizonyult lejártnak, mind 96-on, miközben a valóság 98: a
+`screen_reachability_test.dart` A1 és A3 cellái, és a `test/ui/ui_inventory_test.dart`.
+A `theme_adoption_test` negyedikként már korábban kiderült. Mindegyik ugyanabból az
+okból maradt észrevétlen: **a körök, amik a két curriculum-képernyőt hozzáadták, a
+saját teszt-útjaikon futtatták a kaput.** *Egy kipinezett szám csak addig véd, amíg
+valami lefuttatja* — és a kör teszt-útjainak megválasztása ezért nem kényelmi kérdés.
+
+
+## L662 — A produkciós OSZTÁLY alapértelmezett konstruktora nem a produkciós KONFIGURÁCIÓ: a `LivePipeline(sampleRate:)` csendben a heurisztikára esik vissza (E18-R23, 2026-09-12)
+
+**Mi történt.** Megírtam a GuitarSet-próbát, lefuttattam, és megkaptam az első valódi
+irány-számot: macro-F1 **0,2953**, `up` FP 1863 = `down` FN 1863 — vagyis a motor 86%-ban
+„fel"-et mond olyan anyagon, ami 73%-ban „le". Majdnem inverzió.
+
+**Nem jelentettem le.** Két dolgot kellett előbb kizárni: fordítva van-e a *címkém*
+(nem — a `data_source` 0 hangmagasságai MIDI 40-től indulnak, tehát tényleg az alsó E),
+és azonos-e a *konvenció* (igen — `gap = highRise - lowRise`). Eközben a
+`strum_direction_classifier.dart` doc-kommentjében megláttam a szót: **CRNN**.
+
+```
+lib/features/live/engine/dsp/strum_direction_classifier.dart:88  HeuristicStrumClassifier
+lib/features/live/engine/ml/live_crnn_classifier.dart:121        LiveCrnnStrumClassifier
+```
+
+Két osztályozó van. A próbám `LivePipeline(sampleRate: sampleRate)`-t hívott —
+**súlyok nélkül**. A gyár ilyenkor nem hibázik: `_activateLiveCrnn(null, …)`
+**visszaesik a heurisztikára**, és feljegyzi, miért (ADR 0355). A produkció ellenben
+(`real_strum_engine.dart:113`) `crnnWeights: await _liveCrnnWeights()`-t ad át, és a
+`assets/ml/strum_crnn_live_3c.bin` szállított assetet tölti be.
+
+**Tehát a heurisztikát mértem, és majdnem „a mi pontosságunkként" publikáltam.**
+A két szám nem közel van egymáshoz: irány macro-F1 **0,2953 vs 0,4195**, valódi
+pengetésekre vett recall **0,954 vs 0,595**. Ellentétes irányban is tévedtem volna.
+
+**A szabály.** *Egy produkciós osztály alapértelmezett konstruktora nem a produkciós
+konfiguráció.* Egy opcionális, null-elfogadó függőség — `Uint8List? crnnWeights` — olyan
+szeam, ami **hangtalanul** más rendszert ad, és a visszaesés jól dokumentált jósága
+pont azt teszi észrevehetetlenné. A mérésnek ezért nem a *típust* kell megtalálnia
+(`LivePipeline`), hanem a **bemeneteket, amiket a produkció ad neki** — és ha az egyik
+egy asset, akkor a mérés olvassa be azt az assetet.
+
+Ezért a próba most **mindkét ágat** futtatja azonos pontozó kóddal és egymás mellé írja
+őket, plusz **hibával elhasal**, ha a súly-asset nem létezik — a csendes visszaesés
+helyett. Egy mérés, ami vissza tud esni, előbb-utóbb vissza is esik.
+
+Ez a **harmadik** eset ebben a munkamenetben ugyanerről a családról: [[L660]] (a
+stimulus-modell felülszámolt), [[L661]] (a szkenner kommentet olvasott), és most a
+konfiguráció. Mindhárom ugyanazt mondja: *a mérés annyit ér, amennyire ismerjük a
+mérőeszközt — és az eszköz a kódunk része.* Lásd még [[L652]] és [[L659]].
+
+Az eredmények: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md).
+
+
+## L663 — Két hibát a PRÓBÁMBAN a beépített állításaim fogtak meg, nem én: a hoisztolt állapotos osztályozó és a képkocka-egybeolvadás (E18-R24, 2026-09-12)
+
+**A kontextus.** A küszöb-söprést egyetlen átfutásra terveztem: a valószínűségeket egy
+becsomagoló osztályozó rögzíti, minden kaput utólag alkalmazok. Két dolog romlott el,
+és egyik sem abból derült ki, hogy okos voltam.
+
+### 1. A `strumSeq`-alapú megfigyelés CSENDBEN nyel el pengetéseket
+
+Beépítettem egy állítást arra, hogy az osztályozások száma egyezzen a kibocsátott
+pengetésekével. **173 → 172.** Két hipotézist megbuktattam mérve: néma farokkal nem
+javult (tehát nem vég-effektus), és a margó-kapu kiiktatásával sem (tehát nem a kapu).
+
+A valódi ok a **saját ciklusomban** volt: a `LiveFrame` ~15 Hz-en jön ki, és csak a
+**legutolsó** pengetést hordozza, míg a `strumSeq` mindet számolja. Két pengetés egyetlen
+~66 ms-os ablakban tehát kettőt léptet a számlálón és **egy** időpontot ad — a korábbit
+a képkocka-folyamból nem lehet visszanyerni.
+
+Ez nem a próba sajátja: a `test/support/modelled_guitar.dart` `strumOnsets`-e **ugyanezt a
+ciklust** használja, tehát ugyanez a vakfolt. Ott ártalmatlan, mert a pengetések több
+száz ms-ra vannak — de ugyanaz az alak, és most ki van mondva.
+
+A kezelés nem elfedés: egy *k*-s ugrásnál az időpont az utolsóhoz tartozik, az előző
+*k−1* pedig **kizárásra kerül és jelentve van** (10286-ból 12). *Egy kizárás, amit senki
+nem lát, csak egy csendesebb hiba.*
+
+### 2. A hoisztolt osztályozó idegen audióból olvasott
+
+A `LiveCrnnStrumClassifier`-t a fájl-ciklus **elé** építettem, egyszer. Csak az a gond,
+hogy **állapotot tart** (`LiveCrnnFrontend`: audio-puffer + képkocka-index), miközben
+minden fájl friss pipeline-t indít, aminek a képkocka-számlálója **nulláról** kezd. A
+modell tehát az **előző fájl** audiójából olvasott ablakokat.
+
+Amiből kiderült, az nem egy állítás volt, hanem az, hogy **a számok lehetetlent
+mondtak**: a szállított kapunál 10286 onsetből **15** maradt meg, miközben a független
+futás 3784-et tartott. És az árulkodó jel: az **onset-oszlopok stimmeltek** (0,701 /
+0,7847 / 0,955 ≈ a heurisztika-ág), mert azok nem a modelltől jönnek. *Egy részlegesen
+helyes eredmény pontosabban mutat a hibára, mint egy teljesen hibás.*
+
+**A szabály.** Egy osztályozó, ami `observe(frame)`-et vesz, **állapotos** — és
+állapotos komponenst fájl-ciklus elé emelni ugyanaz a hiba, mint ugyanazt a
+`LivePipeline`-t újrahasználni. A produkció fájlonként (munkamenetenként) **egy**
+aktivációt épít; egy mérés, ami ettől eltér, **más rendszert mér**. Ez ugyanaz a
+család, mint [[L662]]: ott a konfiguráció tért el a produkciótól, itt az
+**életciklus**.
+
+Három mérőeszköz-hiba három körben ([[L660]], [[L661]], [[L662]]) után ez a negyedik, és
+a minta már kimondható: **a mérés annyit ér, amennyit a mérőeszközéről ÁLLÍTUNK.**
+Mindegyik esetben az fogta meg, amit előre leírtam állításként — nem az, amit utólag
+átnéztem.
+
+Az eredmények: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md).
+
+
+## L664 — Lapos hangoló görbe + emelkedő tartalék görbe = a PRIORT illesztem, nem a jelet (E18-R26, 2026-09-12)
+
+**A helyzet.** Az ADR 0549 után az irány-hibák egyetlen torzításból jöttek: 919 valódi
+lefelé ütést nevezett a modell felfelének. A döntés sima argmax (`pUp > pDown`), vagyis a
+határ fixen 0,5, és semmi nem illesztette. Kézenfekvő „ingyenes" javítás lett volna
+eltolni — pont úgy, ahogy az elnyomó kapu eltolása valódit hozott egy körrel korábban.
+
+**Amit előre megtettem.** Nem a teljes korpuszon söpörtem. **Játékos szerint osztottam**
+(hangolás 00/01/02, kiértékelés 03/04/05), mert az ADR 0549 épp azt írta le, mi történik,
+ha egy korpuszra illesztett döntést korpuszon kívül használunk.
+
+**És az osztás megfogta.** A tartalék halmazon a macro-F1 0,3876 → 0,4343-ra nőtt, ami
+nyereségnek látszik. Három jel mondja, hogy nem az:
+
+1. **A hangoló görbe lapos**: +0,0066 a TELJES söprésen (0,4697 → 0,4763), és a „legjobb"
+   érték hajszállal veri a szomszédjait. *Ha nincs csúcs, nincs mit hangolni — csak zajra
+   illesztek.*
+2. **A tartalék görbe a priort követi**: a test fél 90% lefelé a tune 72%-ával szemben, és
+   minél inkább lefelé tolom a határt, annál jobb pont azon a felén, ahol több a lefelé.
+3. **A kisebbségi osztály F1-je meg sem mozdul**: felütés 0,1905 → 0,1848, miközben a
+   lefelé 0,5848 → 0,6837. A nyereség **100%-ban** abból jön, hogy több dolgot nevez a
+   többségi osztálynak.
+
+**A szabály, amit ebből megtartok.** Egy döntési határ eltolása akkor és csak akkor
+javítás, ha **a kisebbségi osztály metrikája is javul**. Ha csak a többségi osztályé
+emelkedik, akkor a „nyereség" a teszthalmaz osztály-arányának ajándéka, és egy más
+arányú anyagon (nálunk: a `reggae-skank` lecke, ami szinte csak felütés) **rontás** lesz
+belőle.
+
+És a diagnosztikai minta, ami ezt azonnal elárulja: **lapos hangoló görbe emelkedő
+tartalék görbe mellett.** Ha az igazi jel lenne benne, a hangoló görbének is csúcsa
+volna ugyanott.
+
+**A valódi diagnózis.** Minden határnál a felütés F1 ≈ 0,19 a tartalék játékosokon: a
+modell erre az anyagra **nem tudja azonosítani a felütéseket**. Ez képesség-hiány, nem
+küszöb-hiba — és ez a felismerés az, ami a következő lépést *nem* egy újabb skalár
+hangolásává teszi.
+
+Lásd még [[L662]], [[L663]] (a mérőeszköz), és ADR 0549 (a korpuszra illesztett kapu).
+Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md).
+
+## L665 — Két hibám: egy BLOKKOLÓT rögzítettem utánanézés nélkül, és a hipotézisemet a saját kísérletem buktatta meg (E18-R27, 2026-09-12)
+
+### 1. A blokkoló, ami nem létezett — és három körön át szerepelt
+
+Az ADR 0549 és az utána jövő kör is azzal zárult, hogy a következő lépés
+*„iránycímkés tanítóadat, és az a blokkoló"*. Ezt **bele is írtam a mérés-dokumentumba**,
+és a körök között tovább vittem.
+
+**Nem volt igaz.** A `ml/klangio.py` **első sora** azt mondja, hogy az arXiv 2508.07973
+saját adatkészlete **publikus** (Apache-2.0), 82 felvétel, `D|U` címkékkel és
+**telefon-mikrofonos** felvétellel — és a szállított modell **ezen tanult**
+(`ml/honest_eval.py:34`). 11767 címkézett ütés, 38% felütés.
+
+Nem egy rejtett fájl volt. Egy **adapter modul, a repóban, a témára elnevezve**, aminek
+a docstringje pont ezt a kérdést válaszolja meg. Elég volt volna egyszer megnyitni.
+
+**A szabály, amit ebből megtartok.** Egy **blokkoló kijelentése állítás a repóról** —
+ugyanaz a műfaj, mint egy mérési szám, és ugyanúgy bizonyíték kell hozzá. „Nincs X" a
+legdrágább fajta állítás, mert **lezár egy irányt**, és senki nem fut neki még egyszer.
+Mielőtt blokkolót írok le, meg kell néznem a helyet, ahol az X lenne, ha lenne — itt
+`ml/` és a `ml/README.md`.
+
+És ennek a hibának **iránya** volt: a hamis blokkoló három kört tolt a
+*skalár-hangolás* felé (kapu, döntési határ, margó), mert a „modellt javítani nem
+lehet, nincs adat" következménye az, hogy csak a küszöbök maradnak. Az ADR 0549 így is
+hozott valódit, de a sorrend rossz volt.
+
+### 2. A hipotézisem megbukott — és ez a kör legjobb része
+
+Azzal indultam, hogy a bemenet **időfelbontása** a baj: `ml/features.py` N_FFT 2048
+@ 16 kHz = **128 ms elemző ablak**, miközben a tiszta söprések medián hossza **22,2 ms**
+és a húrok közti késés **~8 ms**. Mértem is: a söprések **40,7%-a két 10 ms-os frame
+alatt** lezajlik. A történet kerek volt: „a hat húr belépési sorrendje egyetlen ablakba
+esik és elmosódik".
+
+**A kontrollált kísérlet ezt megbuktatta.** Ugyanaz az osztályozó, ugyanazok a címkék,
+ugyanaz az osztás, és — ez a döntő — **ugyanannyi jellemző mindkét ágon (240)**, hogy a
+kapacitás ne lehessen a magyarázat. Csak a felbontás mozgott:
+
+```
+  lo = a modell saját geometriája (128 ms)   macro 0,7723   AUC 0,8928
+  hi = 5,8 ms ablak, 3,7 ms hop              macro 0,6435   AUC 0,7900
+```
+
+A nagy felbontás **rosszabb**, mindhárom osztáson. Az irány a mikrofonon nem elsősorban
+a söprés **sorrendje**, hanem a **spektrális egyensúly** — amit a hosszabb ablak
+stabilabban mér.
+
+**Amit ebből megtartok.** A kísérletet *úgy* terveztem, hogy **meg tudjon buktatni**: az
+egyenlő jellemzőszám nélkül a „hi rosszabb" eredményt elmagyarázhattam volna
+kapacitás-különbséggel, és a hipotézisem **életben maradt volna egy hibás érvvel**. Az
+egyetlen mozgó változó nem tisztaság-kérdés — az a *különbség* a „megtudtam valamit" és a
+„megerősítettem magamat" között.
+
+És a hipotézis bukása hozta a valódi leletet: mivel a modell saját bemenete volt a
+*jobb* ág, kiderült, hogy egy **sima logisztikus regresszió** abból a bemenetből fel-F1
+**0,6294**-et hoz, ahol a szállított CRNN **0,1905**-öt. Vagyis az információ ott van, a
+modell nem nyeri ki — és innen a diagnózis **átviteli hiba** (ADR 0550), nem adat-,
+felbontás- vagy küszöb-hiba. *A hipotézisem megmentése elrejtette volna a leletet.*
+
+### 3. És a kontroll, ami egy maggal hazudott volna
+
+A véletlenített címkés kontroll **első futása** AUC 0,5776-ot adott, ami 0,5 felett van
+és szivárgásnak látszott. Hét maggal a null-sáv **0,4096–0,5905**: az első húzás a sáv
+felső szélén volt. **Egy mag nem kontroll**, csak egy minta a null-eloszlásból — és ha
+elhittem volna, egy nem létező szivárgást kerestem volna a következő órában.
+
+Lásd még [[L662]], [[L663]], [[L664]] (a mérőeszköz-hibák sorozata), ADR 0549 (a
+korpuszra illesztett kapu), ADR 0550 (a diagnózis áthelyezése).
+Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md),
+eszköz: `ml/probe_direction_headroom.py`.
+
+## L666 — A mérőeszköz a PRODUKCIÓ ablakát nézze, ne csak a paramétereit — és a saját szabályom fogta meg, egy körrel később (E18-R28, 2026-09-12)
+
+**A hiba.** Az E18-R27-ben azt állítottam, hogy egy lineáris olvasó **a modell saját
+bemenetéből** macro **0,7723**-at ér el, szemben a CRNN 0,3876-jával, és ebből azt
+következtettem, hogy „az információ ott van, a modell nem nyeri ki". Ezt ADR-be,
+mérés-dokumentumba, RAG chunkba és a HANDOFF blokkoló-listájába is beírtam.
+
+Ellenőriztem, hogy a **paraméterek** egyezzenek: N_FFT 2048, HOP 160, 15 frame, 16 kHz.
+Egyeztek. **Az ablak POZÍCIÓJÁT nem ellenőriztem:**
+
+```
+az én próbám:   start = onset − PRE·HOP − N_FFT//2   →  onset − 94 ms,  nincs levágás
+a produkció:    start = (center − PRE)·HOP           →  onset − 30 ms,  seg[onset+70ms:]=0
+```
+
+**64 ms extra felvezetés, és a 70 ms utáni hang.** A valódi padló 0,5885, nem 0,7723 — a
+CRNN 0,5017-je tehát **0,087**-tel van alatta, nem 0,39-cel.
+
+**Miért ez a legrosszabb fajta igazítási hiba.** Nem egy véletlen 64 ms. Az **ugyanaz a
+kör** mérte ki a D3-ban, hogy a szigorúan onset **előtti** hang AUC **0,7128**-cal jelzi
+az irányt a comping váltakozásából, és mondta ki, hogy ez **tipp, nem mérés**, amit a mi
+nem-váltakozó mintáinkon nem szabad beszámítani. A főszámom **pont azzal a jellel
+pontozott, amit a szomszédos döntésem megtiltott.** Két számot írtam le ugyanabban a
+dokumentumban, amelyek egymást cáfolták, és nem vettem észre.
+
+**A szabály.** „Ugyanaz a geometria" nem paraméter-egyezés. A mérőeszköznek a produkció
+**ablakát** kell kivágnia — ugyanaz a **kezdő minta**, ugyanaz a **levágás** —, és ezt
+nem szemre kell egyeztetni, hanem **a produkció saját függvényével** (itt:
+`window_truncated`) kell előállítani, vagy egy fixtúrán egyeztetni vele. Ez ugyanaz a
+család, mint az [[L662]] (a konfiguráció tért el) és az [[L663]] (az életciklus tért el);
+itt az **ablak pozíciója** tért el. Mindhárom ugyanazt az alakot veszi fel: *a mérés
+egy szomszédos rendszert mér, és a szám hihető.*
+
+**Ami megfogta.** Nem újraolvasás, hanem az, hogy **a következő kör a produkció valódi
+tömbjén mért** — azon a `guitarset_live70.npz`-n, amin a CRNN tanul. A szám ott rögtön
+0,5885 lett, és a 0,7723-at nem lehetett hova tenni. *Ha mérni akarod, amit a modell lát,
+vedd el tőle azt a tömböt, amit megeszik.*
+
+És az, hogy a D3-as szabály **ki volt írva**. Ha nem lett volna kimondva, hogy az
+onset-előtti hang tipp, a 0,7723-nak nem lett volna mihez ütköznie, és a kör azzal zárult
+volna, hogy „a CRNN rossz" — a 70 ms-os határidőt, ami a valódi korlát, **meg sem
+kerestem volna**. *Egy szabály, amit a mérésed ellen is alkalmazsz, többet ér, mint egy
+szabály, amit csak a termékre.*
+
+**A lelet, amit a javítás hozott.** A helyes igazításon kiderült, hogy 150 és 250 ms
+között **+0,12 macro** ugrás van, és a fel-F1 megduplázódik (0,3356 → 0,5466). Az irány a
+mikrofonon tehát **a lecsengés** jellemzője, nem attack-tranziens — és ezért a kötő korlát
+a **70 ms-os élő határidő**, nem a korpusz és nem a modell (ADR 0551). A hibás szám
+javítása **egy jobb kérdést** adott, nem csak egy kisebb számot.
+
+**Mellékág, ami önmagában is szabály.** A korpusz-kísérlet kontroll-karja („csak
+GuitarSet") macro-F1-ben **megverte a győztest** (0,5068 vs 0,5017), miközben a Klangión
+**0,00**-t mondott felütésnek: összeomlott a többségi osztályra egy 81%-ban lefelé
+teszten. Macro-F1 egyedül **a rosszabb modellt hozta volna ki győztesnek.** Ezért minden
+irány-eredmény mellé ki kell írni a **jósolt osztály-arányt a valódi mellé** — ugyanaz a
+prior-csapda, mint az [[L664]], de ott csak egy küszöböt rontott volna el, itt a
+**modellválasztást**.
+
+Lásd még ADR 0550 (a felülírt főszám), ADR 0551 (a javítás és a határidő-lelet).
+Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md),
+eszközök: `ml/probe_direction_budget.py`, `ml/experiment_cross_corpus.py`,
+`ml/guitarset.py`.
+
+## L667 — Három kör beszélt „javulásról" alapvonal nélkül; és egy orákulum, ami nulla információval AUC 0,7386-ot ér (E18-R29, 2026-09-12)
+
+### 1. A kérdés, amit nem tettem fel: mihez képest?
+
+Az ADR 0549 (kapu), az utána jövő kör (döntési határ), az ADR 0550 és az ADR 0551 mind
+irány-macro-F1-et hasonlított **egy korábbi irány-macro-F1-hez**. Egyik sem írta le azt az
+egy sort, amihez képest a szám egyáltalán jelent valamit:
+
+```
+  többségi alapvonal („mindig lefelé")
+    GuitarSet teszt (n=530):   macro 0,4468
+    Klangio  teszt (n=3721):   macro 0,3836
+  SZÁLLÍTOTT 3 osztályos CRNN, GuitarSeten:  macro 0,3876
+```
+
+**A szállított irány-kimenet a többségi alapvonal ALATT van.** Négy kör mért rá, és ez
+egyikben sem derült ki — nem azért, mert a számok rosszak voltak, hanem mert **nem volt
+hova tenni őket**. Egy 0,43-ról 0,50-re javulás úgy hangzik, mint előrelépés; azt, hogy
+mindkettő a találgatás szintje körül van, csak az alapvonal mondja meg.
+
+A kínos rész: **a repó tudja ezt a fegyelmet.** A GOV-06 akkord-mérése így van leírva:
+„67,069% a 18,832%-os többségi-osztály baseline fölött". Az irány-mérések ugyanabban a
+repóban, ugyanabban a stílusban íródtak — alapvonal nélkül.
+
+**A szabály.** Egy osztályozási szám **alapvonal nélkül nem eredmény, hanem szám.** Az
+alapvonal a triviális stratégia a *konkrét teszthalmazon* (többségi osztály, vagy a
+legerősebb nem-informatív prediktor), és **a mérőeszközbe kell égetni**, nem a prózába —
+ezért a `probe_direction_budget.py` most minden futásnál előbb az alapvonalat írja ki, és
+csak utána a sorokat.
+
+### 2. Az orákulum, ami nulla információval jól rangsorol
+
+Építettem egy prediktort, ami **semmit nem tud az ütésről** — csak azt, **melyik
+felvételből** jött, és a take-ek felütés-aránya szerint rangsorol. **AUC 0,7386.**
+
+Ebből az következik, hogy ezen a korpuszon **minden 0,74 alatti AUC semmilyen
+irány-diszkriminációt nem bizonyít** — és több AUC, amit a saját ADR-jeimben idéztem, ott
+van vagy alatta (a szállított log-mel 0,6523, a 16 sávos 0,7484 épphogy fölötte).
+
+**A szabály.** Az AUC **a teszthalmaz szerkezetére** érzékeny: ha a halmaz felvételekből
+áll, és a felvételek osztály-aránya különbözik, akkor a **felvétel felismerése** már
+rangsorol. Egy rangsoroló metrikához tehát **ugyanúgy kell nem-informatív alapvonal**, mint
+egy döntési metrikához — és ha az alapvonal magas, **nem az a metrika**, amit olvasni kell.
+Itt a macro-F1 az (az orákulum ott csak 0,4468, mert felütést egyáltalán nem tud termelni).
+
+### 3. És ez buktatta meg a saját mechanizmus-magyarázatomat
+
+Az ADR 0550 D3-ban megmértem, hogy a szigorúan onset **előtti** hang AUC 0,7128-cal jelzi
+az irányt, és a mechanizmust **„váltakozás-tippnek"** nevezte el. A mérés igaz. **A név
+téves volt, és nem mértem meg, mielőtt leírtam.** Az egymást követő ütések a GuitarSeten
+**61,4%-ban ugyanolyan irányúak** (Klangión 45,4%) — nincs erős váltakozás, amit tippelni
+lehetne.
+
+A valódi mechanizmus **rosszabb**: 128 ms terem, gitár és akkord **azonosítja a take-et**,
+és a take osztály-aránya elvégzi a többit — pontosan az, amit a 2. pont orákuluma mér. A
+0,7128 tehát **nem is jellemző-alapú tipp, hanem felvétel-felismerés.**
+
+A *döntés* (ne számítsuk be az onset előtti kontextust) **változatlan, és erősebb lett**.
+De a mellé írt *érvem* pontatlan volt: azt mondtam, a `D DU UDU` „nem váltakozik", ezért ott
+a tipp hazudna — a `D DU UDU` valójában **60%-ban** váltakozik, vagyis **többet**, mint a
+korpusz. A helyes érv nem a váltakozási arány, hanem hogy a kontextus-prior **a korpusz
+repertoárjára** jellemző, és bármi másra átvive téved.
+
+**A szabály.** Egy megfigyelt korrelációhoz adott **mechanizmus-magyarázat is állítás**, és
+ugyanúgy mérni kell, mint a korrelációt. Ha nem mérem, akkor egy helyes mérés mellé egy
+téves *miért*-et írok — és a következő döntés már a miértre épül. (Ez az [[L665]] 1. pontja
+megint: ott egy blokkolót állítottam utánanézés nélkül, itt egy mechanizmust.)
+
+### 4. Amit a kör pozitívan hozott
+
+A mérce bevezetése után a grid (3 tanítókészlet × 2 határidő) azt mutatta, hogy **a két
+emelő nem helyettesíti egymást**: plusz hang egyedül a saját doménben +0,2133, idegen
+felvételen **nulla**; második korpusz egyedül +0,1465, de a hang-költségvetést asztalon
+hagyja; együtt GuitarSet **0,6446** / Klangio **0,6321** — a 0,4468 / 0,3836 alapvonalak
+fölött, a szállított 0,3876-ról. *A „több hang" javítja a modellt azon, amit már ismer; a
+„több korpusz" teszi átvihetővé.*
+
+Lásd még [[L664]] (prior-illesztés küszöbön), [[L665]] (hamis blokkoló), [[L666]]
+(ablak-igazítás), ADR 0552 (a kétszintű döntés).
+Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md).
+
+## L668 — Egy osztás monoton trendet mutatott, 14 fold megbuktatta; és amikor a normális CI meg az előjel-teszt ellentmond, a CI a hibás (E18-R30, 2026-09-12)
+
+### 1. A trend, ami nem volt
+
+Az előző körben egyetlen, játékos- és darab-diszjunkt osztáson megmértem, hogy a
+frekvenciasávok **számát** csökkentve a lineáris padló **monoton** javul:
+
+```
+  128 log-mel  0,6601   →   32 sáv  0,6882   →   16 sáv  0,7143   →   8 sáv  0,7160
+```
+
+Szép, rendezett, és volt rá **jó magyarázatom** is: 128 mel × 15 frame = 1920 jellemző
+~1055 tanító söprésre, az irány pedig széles spektrális egyensúly jel, tehát a finom
+mel-felbontás zaj. A történet kerek volt.
+
+**14 foldon nem replikált, és nem is rendezett:**
+
+```
+  128: 0,6715   32: 0,7090   16: 0,6731   8: 0,6931      (sd 0,08–0,11 mindegyiken)
+```
+
+A 16 sáv **rosszabb**, mint a 32, és minden érték benne van minden másik szórásában. Az
+egyetlen osztáson látott monotonitás **műtermék** volt — négy szám, ami véletlenül sorba
+állt.
+
+**Amit majdnem megvett.** Ez a „megállapítás" `ml/features.py` + `crnn_frontend.dart`
+cserét jelentett volna az r134-es paritás-fegyelem alatt: fixtúrák, paritás-tesztek,
+exportált súlyok, újratanítás. **Egy egész kör, nulla nyereségért.**
+
+**A szabály.** Egy **trend** k pont fölött nem erősebb bizonyíték, mint egy pont — ugyanaz
+az egy minta, csak többször leolvasva. *A monotonitás nem replikáció.* Ha egy rendezett
+sorozatból döntés lesz, a sorozatot **független osztásokon** kell újra előállítani, nem
+megmagyarázni. És a jó magyarázat **rontja** a helyzetet, nem javítja: attól lesz hihető,
+ami nem igaz.
+
+### 2. Amikor két teszt ellentmond, nézd meg, melyik feltevését sérti az adat
+
+A maradék jelölt (16 geometriai amplitúdó-sáv a 128 log-mel helyett) **párosítva**, 13
+foldon:
+
+```
+  átlagos különbség   +0,0636   sd 0,0981   SE 0,0272
+  95% CI (normális)   [+0,0103, +0,1170]   ← nullát KIZÁR
+  előjel-teszt        p = 0,2668           ← NEM utasít el
+  geometriai nyer     9/13 fold,  a legnagyobb egyetlen fold +0,3096
+```
+
+Könnyű lett volna a CI-t idézni és „szignifikánsat" írni. De a két teszt **nem
+ugyanazt** kérdezi: a CI azt, hogy az **átlag** elválik-e nullától *normalitás
+feltevése mellett*, az előjel-teszt azt, hogy a **többség** elválik-e, feltevés nélkül. Itt
+4 fold negatív és egy fold **+0,31** — vagyis az átlagot a farok viszi, és pont a
+normalitás az, amit az adat sért.
+
+**A szabály.** Ellentmondó tesztek esetén nem az „erősebb" nyer, hanem az, amelyiknek a
+**feltevései állnak**. Egy párosított különbségnél ezért mindig ki kell írni a
+**foldonkénti előjeleket és a legnagyobb egyedi hozzájárulást** — ezek mondják meg, hogy a
+CI eloszlásról beszél-e vagy egy kiugró pontról. A `probe_direction_representation.py`
+ezért **mindkettőt** kinyomtatja, szándékosan.
+
+### 3. És a pozitív lelet: a rés ADAT, nem modell és nem jellemző
+
+Ugyanez a kör lezárt két utat — mérve, nem érveléssel:
+
+- **Modell:** a CRNN **0,0155**-tel van a *saját bemenetének* lineáris plafonja alatt
+  (0,6446 vs 0,6601, hibahatáron belül). Nincs hova több epoch, paraméter vagy
+  regularizáció. A zsugorítás összeomlaszt (ADR 0551 D5).
+- **Jellemzők:** a gradient boosting **minden** reprezentáción *rosszabb*, mint a
+  logisztikus regresszió (pl. 0,6822 vs 0,7270). Erősebb olvasó **kevesebbet** nyer ki,
+  tehát nincs kiaknázatlan nemlineáris szerkezet: a ~0,73 **plafon**, nem padló.
+
+A kapu 0,80. Tehát a maradék rés **adat** — és ez nem feltételezés, hanem az egyetlen emelő,
+ami eddig mérhetően **átvitt** (ADR 0552 D2). Kilenc gitáros van összesen. *Egy negatív
+kör, ami két utat lezár és egy harmadikra mutat, többet ér, mint egy pozitív, ami egy
+műtermékre épít.*
+
+Lásd még [[L664]] (prior-illesztés), [[L665]] (hamis blokkoló), [[L666]] (ablak-igazítás),
+[[L667]] (hiányzó alapvonal), ADR 0553.
+Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md).
+
+## L669 — A repónak VOLT multi-seed konvenciója, és nem használtam; egy mag mindkét irányban tévedett (E18-R31, 2026-09-12)
+
+**A helyzet.** Az E18-R29 (ADR 0552) a kétszintű irány-döntést **egy magon** (`seed 42`)
+mérte, és abból hozott döntést meg nyereség-számot. A `honest_eval.py` 37. sora viszont
+pont erre létezik:
+
+```python
+STD_SEEDS = [42, 1, 2]  # standard-config multi-seed sweep
+```
+
+Három maggal ugyanazok a cellák:
+
+```
+  A @70 ms,  GuitarSet:   0,5017 (egy mag)  →  0,4690 ± 0,0603    optimista volt
+  B @238 ms, GuitarSet:   0,6446 (egy mag)  →  0,6954 ± 0,0362    pesszimista volt
+```
+
+**A hiba alakja nem „egy mag optimista".** Egyik cella felé, másik lefelé tévedett — vagyis
+nem lehet fejben korrigálni, és nem lehet „konzervatív becslésnek" nevezni. *Egy mag nem
+mérés, hanem minta — és a minta iránya nem kiszámítható.*
+
+**És ez már a negyedik alakja ugyanannak a hibának ebben az epicben:** egy osztás
+([[L666]] ablak-igazítás), egy osztás monoton trendje ([[L668]]), egy osztás tanító-mérete
+(ADR 0553 D3a), és most **egy mag**. A minta kimondható: **ahol a repónak van konvenciója a
+többszöri mérésre, ott azért van, mert valaki már belefutott.** A `STD_SEEDS` nem stílus,
+hanem egy korábbi kör tanulsága kódba írva — és átlépni rajta ugyanaz, mint az L665-ben a
+róla elnevezett modult ki sem nyitni.
+
+**Amit a három mag megvett.** Nem a kis különbségek: az **összeomlások** stabilitása. A
+238 ms-ra tanított fej a 70 ms-os bemeneten három magon át **0,08**-at mond felütésnek a
+valódi 0,38 mellett, és a 70 ms-ra tanított fej 238 ms-on **0,4269 ± 0,0063** — a szórás
+parányi, tehát a „többségi alapvonal alatt" **tulajdonság**, nem ingadozás. Egy magon
+mindkettő elmagyarázható lett volna rossz inicializálásként, és akkor a kétszintű terv
+maradt volna „ugyanaz a modell, két időben hívva" — ami mérve **a nyíl helyén omlik össze**.
+
+**A második tanulság: a nyereséget a SAJÁT súlykészletén kell mérni.** Az ADR 0552 a
+„+0,1429"-et úgy kapta, hogy A @ 70 ms-t hasonlította B @ 238 ms-hoz — **egyszerre
+változtatva a szintet és a tanítást**. Ugyanazon a súlykészleten (amit valóban szállítanánk)
+a szint-nyereség **+0,0725 / +0,0847**, nem +0,1429.
+
+*Egy A/B összehasonlításban pontosan egy dolog változhat — és ha a terméket egy harmadik
+konfiguráció szállítja, akkor a nyereséget azon kell mérni, nem a két karon.* Ez ugyanaz a
+család, mint [[L662]] (a konfiguráció tért el a produkciótól), csak itt a **mért különbség**
+tért el a szállítandótól.
+
+Lásd még [[L664]]–[[L668]], ADR 0552, ADR 0554.
+Mérés: [`docs/eval/guitarset-strum-baseline.md`](eval/guitarset-strum-baseline.md),
+eszköz: `ml/experiment_deadline_augmentation.py`.
+
+## L670 — A „jó ötletem" egy 2000-es tétel volt; és az irodalom egy KÖTELEZŐ ellenőrzést írt elő, amit nem végeztem el (E18-R32, 2026-09-12)
+
+### 1. Mérés után, kutatás előtt döntöttem volna
+
+Megmértem, hogy a no-strum kapu a felütéseket **1,3–2,8-szor** gyakrabban nyomja el, mint a
+lefelé ütéseket, mert a felütések P(no-strum) mediánja **ötszörös**. Kitaláltam a javítást —
+osztályonkénti kvantilis, a maximumot szállítva —, megmértem, hogy mind a négy cellában
+jobb, és **kész lettem volna rögzíteni saját ötletként.**
+
+Ez a javítás **nem új**:
+
+- az osztály-vak szabály **tankönyvi Chow (1970)**, és a formulájában
+  `t = (C_r − C_c)/(C_e − C_c)` **nincs osztály-index**, mert szimmetrikus költségeket tesz
+  fel — a mért eltérés tehát ennek a feltevésnek a **dokumentált** bukása, nem egy általam
+  felfedezett anomália;
+- a javítás neve **Mondrian / címke-feltételes konformális predikció** (Vovk és mások 2003;
+  Vovk–Gammerman–Shafer 2005), és **egzakt véges mintás osztályonkénti garanciát** ad —
+  nem csak empirikus javulást;
+- Barber és mások (2021) szerint ez folytonos feltételre **lehetetlen**, véges partícióra
+  **egzaktul elérhető** — a három osztályom véges partíció, tehát nincs elvi kifogás;
+- és **Fumera–Roli–Giacinto (2000)** már **bizonyította**, hogy az osztályonkénti
+  elutasítási küszöbök **Pareto-dominálják** az egy-küszöbű Chow-t.
+
+**Amit ebből megtartok.** Egy empirikusan igazolt javítás **akkor is** megérdemli a
+szakirodalmi keresést, ha a mérés már meggyőzött. Nem azért, hogy hivatkozást tegyek alá,
+hanem mert **a név garanciát és bukási módot hoz magával**: a nevetlen verzióm „jobb
+számokat" adott volna, a nevezett verzió **formális osztályonkénti garanciát**, plusz a
+tudást, hogy *mikor nem működik*. A mérés megmondja, hogy jobb; a szakirodalom megmondja,
+hogy **miért és meddig**.
+
+### 2. És épp azt az ellenőrzést nem végeztem el, amit a bukási mód előír
+
+Jones, Sanyal és mások (NeurIPS 2020) és Cresswell és mások (ICLR 2025) ugyanazt mondja: a
+**megtartás** kiegyenlítése osztályok között **nem** egyenlíti ki a **megtartott halmaz**
+hibaarányát, és a hátrányos osztályt akár **rontani** is tudja — a költség egyszerűen
+átkerül egy másik tengelyre (halmaz-méret, pontosság, hamis-elfogadás).
+
+Én a **megtartási arányokat** és a **macro-F1-et** mértem. Az utóbbi tartalmazza a
+pontosságot, de nem *bontja* osztályra a megtartott halmazon — vagyis a figyelmeztetett
+csere pont láthatatlan volt a műszereimen.
+
+Utólag megmérve: a felütés megtartott **pontossága** −0,005…+0,003 (mozdulatlan), a
+**recall** +0,020…+0,063. A visszaütés **nem történt meg** — de **kicsiben látható**, és a
+magnitúdók szerencséje, nem az én tervezésem érdeme.
+
+**A szabály.** Amikor egy ismert bukási módú javítást vezetek be, a mérőeszköznek **azt a
+tengelyt kell mutatnia, amelyre a bukás átterheli a költséget** — nem csak azt, amit
+javítani akartam. A `train_live_3c_settled.py` ezért **mindkét** kapun, osztályonkénti
+megtartott pontossággal ÉS recall-lal riportál. *Egy javítás, ami csak a saját célmetrikáját
+nézi, nem tudja megmondani, mit rontott el.*
+
+### 3. A pedagógiai kutatás attól volt hasznos, hogy kimondta, mit NEM tud
+
+A kétszintű nyíl tervéhez azt kérdeztem, jobb-e az azonnali-de-javítható visszajelzés a
+késleltetett-de-helyesnél. A guidance-hipotézis irodalma (Salmoni, Schmidt & Walter 1984;
+Winstein & Schmidt 1990) erős és jól replikált — **de másodperces skálán mért gyakoriságot**,
+nem 70 vs 240 ms-ot. A kutatás ezt **kimondta**, és nem vetítette rá.
+
+Ami helyette használható volt, az egy **analógia mért költséggel**: az élő feliratozás
+(Du és mások, CHI 2023), ahol a gyors, bizonytalan kimenet **látható javítása** mérhetően
+zavaró **még akkor is, ha a végeredmény helyes**. Ebből lett a döntés, hogy a nyíl **soha
+nem fordul át** — és a hozzá tartozó őszinte címke: ez **indoklással bíró választás, nem
+eredmény** (ADR 0556 D5).
+
+*Egy „az irodalom nem válaszol erre" többet ér, mint egy magabiztos rávetítés — mert
+megmondja, hogy a döntést nekünk kell megmérnünk.*
+
+Lásd még [[L664]]–[[L669]], ADR 0549, ADR 0555, ADR 0556.
+
+## L671 — Négy körön át a kereten BELÜL optimalizáltam, és a keretet nem teszteltem; a döntő mérés másodpercekbe került és az első körben is elérhető volt (E18-R33, 2026-09-12)
+
+### 1. A hiba nem egy rossz szám volt, hanem egy nem feltett kérdés
+
+Négy kör mérte az irány-jelet: ablak-felbontás, határidő-söprés, reprezentáció, modell-
+kapacitás, adat-összetétel. Mindegyik korrekt volt, mindegyiket kontrolláltam, és a
+végén eljutottam egy valódi következtetésig — „a modell és a jellemzők kimerültek, a rés
+adat" (ADR 0553).
+
+**Mind a négy mérés ugyanazt a csatornát mérte**: a hangot, egyetlen izolált ütésben. Egyik
+sem kérdezte meg, hogy **van-e másik csatorna**. A pengető kéz inga, a lüktetéshez kötve —
+ezt a gitár-pedagógia így tanítja, és **az app maga kirajzolja** (`ss_strum_pendulum.dart`).
+Az ütemen belüli hely tartalék AUC-ja **0,9797**, nulla illesztett paraméterrel, ismeretlen
+játékosokon és ismeretlen dalokon — szemben az akusztikus csatorna **0,7484**-ével.
+
+És a mérés **annotáció-olvasás** volt. A GuitarSet a hexafonikus `note_midi` mellé
+`beat_position` rácsot is ad, **ugyanabban a fájlban**, amit négy körön át minden egyes
+körben beolvastam. Sosem listáztam ki a névtereit.
+
+**A szabály, amit ebből megtartok.** Amikor egy mérés-sorozat plafonra fut, a következő kör
+**ne** a plafon alatti paramétereket finomítsa. Írjam ki, **mit tart fixen a keret** — itt:
+„egy ütés, csak a hangja" —, és kérdezzem meg, hogy **a termékben tényleg fix-e**. Nem volt:
+a `TempoTracker` és a `_placeInBar` a fázist **ma kiszámolja a produkcióban**, és
+irány-jelként **eldobja**. *Egy kimerült keretben a legjobb következő mérés nem a keret
+belsejében van.*
+
+Gyakorlati sarokpont: **mielőtt egy korpuszt negyedszer olvasok, listázzam ki, mit tartalmaz.**
+
+### 2. A túl jó szám kontrollt érdemel, nem örömöt — és az egyik „kontrollom" vakon ment át
+
+0,98-at látni nem eredmény, hanem **riasztás**. Mielőtt bármit rögzítettem, négy dolgot
+kellett kizárni: szivárog-e a címke az ütés saját idején keresztül (a seprés szórása
+21,8/23,5 ms, a különbség 1,7 ms, a tizenhatod 134 ms → kizárva); felvétel-szintű prior-e
+(fázis-keverés felvételen belül: 0,98 → 0,56); sáv-illesztési műtermék-e (a paraméter
+nélküli folytonos jellemző megismétli); egy játékos viszi-e (0,90 / 1,00 / 0,99).
+
+**De az egyik „kontrollom" semmit nem kontrollált.** „A legközelebbi *nyolcadtól* mért
+távolság" pontosan ugyanazt az AUC-t adta (0,9797), és ezt egy pillanatra **független
+megerősítésnek** olvastam. Nem az: a két pontszám **affin transzformációja** egymásnak
+(`d8 = 0,25 − d16`), az AUC pedig monoton transzformációra invariáns. **Matematikailag
+lehetetlen volt, hogy más számot adjon.**
+
+**A szabály.** Egy kontrollról azt kell megmutatni, hogy **tudott volna megbukni**. Ha a
+kontroll pontszáma a fő pontszám monoton függvénye, akkor nem kontroll, hanem ugyanaz a
+mérés kétszer kiírva. *Egy kontroll, ami nem tud nemet mondani, nem mond igent sem.*
+
+### 3. A lelet legértékesebb fele a kellemetlen fele volt, és csak egy további kérdéstől jött
+
+A fejlécnél megállhattam volna. A feltett kérdés ez volt: **ha a hely ennyire megmondja az
+irányt, akkor mennyi ütés SÉRTI meg az ingát?** Mert pont azok az ütések azok, ahol a
+metrikus csatorna **téved**, és ahol az akusztikusnak egyedül kell döntenie — vagyis a
+tanuló hibái.
+
+Válasz: az ütések **96%-a engedelmeskedik**; a tanító felosztásban **41 sértés 1037-ből,
+ebből 39 rácson kívüli felütés**. Az akusztikus csatorna tehát **szinte soha nem látta** azt
+a hibaosztályt, amiért az app létezik — és ez átírja az ADR 0553 adat-diagnózisát:
+**a Guitar-TECHS (9 → 12 játékos) ezt nem javítja meg, mert profik nem követik el ezt a
+hibát.**
+
+*Egy erős lelet után a legtöbbet hozó kérdés nem „mennyire jó", hanem „mi következik
+belőle arra, amit eddig hittem".*
+
+### 4. És amit a siker majdnem elrejtett: a csatorna önmagában hazugságot szállít
+
+A metrikus csatorna az **előírt mintából** a legerősebb. Ha prior-ként eldöntheti az
+irányt, akkor az app a **saját megoldókulcsa ellen** mér: visszaigazolja a leckét, amit a
+tanuló nem játszott. Ez pontosan a megtiltott hamis tanítás, **és annál is rosszabb, mint
+a hiányzó jel** — mert magabiztosan szól.
+
+Ezért a döntés nem „fuzionálj", hanem **„két mérés, soha egybeolvasztva"**: a nyíl fúziót
+kap, a **pontozás csak az akusztikus csatornát**, a metrikus pedig a tartózkodás lécét
+mozdíthatja, de a hívást **soha nem fordítja át** — és a két csatorna **egyet nem értése**
+maga a pedagógiai kimenet (ADR 0557 D4). *Egy erős prior a megoldókulcs felé nem
+pontosság, hanem csalás — a jó kérdés nem az, hogy javítja-e a számot, hanem hogy mit mér
+helyette.*
+
+Lásd még [[L667]], [[L668]], [[L670]], ADR 0551, ADR 0553, ADR 0557.
+
+## L672 — A tartalék szám nem generalizációs becslés, ha a tartalék halmaz majdnem konstans abban, amit az új jellemző kihasznál (E18-R34, 2026-09-12)
+
+### 1. A fejléc-szám hazudott, és nem szivárgás miatt
+
+A metrikus csatorna fúziója a nyíl pontosságát **0,6377 → 0,9000**-re vitte **tartalék**
+halmazon: ismeretlen játékos, ismeretlen dal, szivárgás-kontrollok lefuttatva (L671 §2).
+Minden szabály szerint ez tiszta szám. **Mégis félrevezető.**
+
+Mert a tartalék ütések **98%-a engedelmeskedik az ingának**, vagyis a rácsra bízó szabály
+nagyrészt azt a feladatot kapja, hogy **a rácsot jósolja meg a rácsból**. A tartalék halmaz
+*disjunkt* volt, de **nem volt reprezentatív abban az egy változóban, amit az új jellemző
+kihasznál** — és ez a két dolog nem ugyanaz.
+
+**A módszer, amit ebből megtartok.** Ha egy új jellemző egy olyan változót használ, amiben a
+tartalék halmaz majdnem konstans, akkor a tartalék pontszám **nem** generalizációs becslés.
+Ilyenkor **újra kell paraméterezni a pontosságot annak a változónak a függvényében**, és
+megtérülési pontot kell közölni, nem fejlécet:
+
+```
+  pont(c) = c · pont(követő) + (1 − c) · pont(sértő)
+```
+
+Ez egyenes, tehát minden szabály **egy ponton** metszi az alapvonalat — és az a metszés a
+szállíthatóság kritériuma. Mérve: a teljes fúzió 70 ms-on `c* = 0,401`, 238 ms-on `c* =
+0,591`; a döntetlen-törő szabály 238 ms-on `c* = 0,000`, vagyis **semmilyen engedelmességi
+szinten nem veszít**.
+
+*Egy diszjunkt tartalék halmaz a szivárgás ellen védi a számot, nem a reprezentativitás
+ellen. A kérdés nem „láttam-e ezt az adatot", hanem „olyan-e, mint amin futni fog".*
+
+### 2. A „konzervatívnak" tervezett szabályom ott volt rosszabb, ahol a legtöbb múlt rajta
+
+Két szabályt terveztem: teljes Bayes-fúzió, és egy óvatos változat, ami a metrikus
+csatornát **csak döntetlenre** engedi (alacsony akusztikus margó). Meg voltam róla
+győződve, hogy a második a biztonságos, mert **nem írja felül a magabiztos akusztikus
+hívást** — pont azt a védelmet adja, amit az ADR 0557 D4-ben etikai korlátként kimondtam.
+
+Mérve: **238 ms-on** igazam volt, és jobban, mint hittem (`c* = 0,000`, soha nem veszít).
+**70 ms-on viszont fordítva**: a „konzervatív" szabály megtérülése **0,481**, a teljes
+fúzióé **0,401** — vagyis a gyors tieren, ahol az akusztikus csatorna a leggyengébb és a
+legtöbb a tét, **az óvatos szabály hamarabb kezd veszíteni.**
+
+A mechanizmus utólag átlátszó: ha az akusztikus hívás magabiztos **és téved** — és 70 ms-on
+gyakran az —, akkor épp a „ne írd felül a magabiztosat" védelem tartja meg a hibát. A
+margó 70 ms-on **nem mér megbízhatóságot**, tehát a rá épített óvatosság nem óvatosság,
+hanem zaj.
+
+**A szabály.** Egy biztonsági szabály, ami egy **megbízhatóságnak hitt** jelre (itt: margó)
+épül, csak ott biztonságos, ahol az a jel **kalibrált**. Ezt külön kell megmérni, tierenként
+— nem átvinni abból a rendszerből, ahol működött. *A „konzervatív" nem a szabály
+tulajdonsága, hanem a szabály és a rendszer párjának a tulajdonsága.*
+
+> **⚠ KORREKCIÓ (E18-R40, ADR 0563 D4): a fenti MECHANIZMUS-magyarázatom téves volt.**
+> Azt állítottam, hogy „a margó 70 ms-on nem mér megbízhatóságot". Megmérve
+> (`ml/probe_settled_tier_value.py`) a margó **monoton** jelzi a helyességet: a gyors
+> pontosság 0,4000 a 0,0–0,2 sávban és **0,8500** a 0,8–1,0 sávban.
+>
+> A valódi ok, amiért a teljes fúzió megverte a döntetlen-törőt: `lam = 0,99`-nél a teljes
+> fúzió **gyakorlatilag a rácsra cserélte az akusztikus hívást mindenhol**, és egy **96%-ban
+> inga-követő** korpusz ezt jutalmazza. A döntetlen-törő csak a rövid margójú ütéseken
+> támaszkodott a rácsra, tehát **kevesebbet nyert ebből** — az összehasonlítás a margó
+> megbízhatóságáról **semmit nem mondott**. Ez **erősíti az ADR 0562-t**: a „jobb" sor azért
+> volt jobb, mert **többet csalt**.
+>
+> A szabály **fele áll**: egy jelre épített óvatosságot külön meg kell mérni. A **magyarázat**
+> nem állt, és azt is külön kellett volna megmérni — lásd [[L679]].
+
+### 3. Az etikai korlát és a mérés egyetértett — és ezt egybeesésként kell kimondani
+
+Az ADR 0557 D4-et **mérés előtt** mondtam ki: a metrikus csatorna a tartózkodás lécét
+mozdíthatja, a hívást soha nem fordítja át. A mérés ezt a pontozó úton **kiválasztotta**
+(`c* = 0,000`). Kényelmes lett volna úgy írni le, mintha a mérés **igazolta volna** a
+döntést.
+
+Nem igazolta — **egybeesett vele.** A D4 azért kötött, mert a megoldókulcs ellen mérni
+hamis tanítás, **nem azért**, mert jobb számot ad. Ha a mérés nem egyezett volna, a D4
+**akkor is kötne**, és akkor azt kellett volna kiírnom, hogy a szabály **macrót fizet**
+becsületességért. *Egy etikai korlát, amit utólag optimalizációs eredményként adok el,
+legközelebb el fog tűnni, amikor a számok nem egyeznek vele.*
+
+### 4. És ami valójában blokkol: a harm-mérés 11 ütésen áll
+
+A sértő részhalmaz **11 ütés**. Minden „sértő" pontosság **1/11 többszöröse**, a mért
+romlás (0,3636 → 0,1818) **két ütés**. A megtérülési pontok ezt öröklik.
+
+Ez nem a mérés hibája, hanem **ugyanaz a lelet még egyszer** (ADR 0557 D5): a korpusz nem
+tartalmazza azt a hibaosztályt, amiért az app létezik. Ezért a döntés **korlátozva** van,
+nem elhagyva: a Pareto-biztos szabály (238 ms) szállítható most, az erősebb (70 ms, nyíl)
+**funkció-kapu mögé** kerül, amíg tanulói adat nem mérhető.
+
+*Ha a kockázat-oldali minta n = 11, akkor nem munkapontot mértem, hanem korlátot — és a
+kettőt nem szabad ugyanazzal a magabiztossággal idézni.*
+
+Lásd még [[L670]], [[L671]], ADR 0557, ADR 0558.
+
+## L673 — Egy szabállyal mértem és egy másikat készültem szállítani; a produkciós kód megírása fogta el, nem a mérés (E18-R35, 2026-09-12)
+
+### 1. A mérés szabálya nem az volt, amit szállítani akartam
+
+Az ADR 0557 és 0558 minden száma ezzel a szabállyal készült: „felütés, ha a
+tizenhatod-offbeattől mért távolság ≤ 0,09375 ütem". Két körön át ezt mértem, kontrolláltam,
+rögzítettem, idéztem.
+
+Amikor leültem megírni a Dart-egységet, a **kódnak fel kellett tennie a kérdést, amit a
+próba nem tett fel: mi pontosan a szabály?** És a válasz nem az lehetett, ami a próbában
+volt — mert az offbeat-szabály **egy korpusz mintáját** kódolja, a leckék mintája viszont
+nyolcad, tizenhatod, vagy bármi, amit a jelölés megenged. A produkciós szabály így a
+**legközelebbi előírt rés** lett.
+
+Ez **L662 ismétlése** (egy konfiguráció, ami eltér a produkciótól, más rendszert mér) —
+csak most nem a geometrián, hanem a **döntési szabályon**. És nem kozmetikai: a két szabály
+a tartalék soroknak csak **0,95%-án** tér el, mégis
+
+- a sértő részhalmaz **11 → 8 ütésre** csökkent, tehát a kockázat-becslés **vékonyabb** lett,
+- a nyíl fúziójának megtérülése **0,401 → 0,475** romlott — lényegesen közelebb a 0,5-höz,
+- a szállítható D1 szabály viszont **változatlanul** `c* = 0,000`.
+
+**A szabály, amit megtartok.** A produkciós implementáció megírása **a mérés ellenőrzése**, és
+csak akkor ér valamit, ha **a számok véglegesként idézése ELŐTT** történik. Egy próba
+megírhat egy szabályt, ami a korpuszra illik; a produkciós kód nem tud ilyet, mert neki
+minden leckére működnie kell. *Ha a produkciós kód kérdése nehezebb, mint a próba kérdése
+volt, akkor nem a kódot kell a próbához igazítani.*
+
+Gyakorlati sarokpont: **egy mért szabályt előbb kell paritás-fixtúrába kötni, mint
+ADR-címsorba.** A fixtúra (`test/fixtures/strum_metric_channel_parity.json`,
+`ml/make_metric_channel_fixture.py`) most ugyanazt az aritmetikát generálja, amivel a próba
+mér, tehát a kettő **nem tud szétcsúszni** — ezt kellett volna először megépíteni.
+
+### 2. Hogy a jobb szabály vékonyabb kockázat-becslést ad, az nem paradoxon, hanem figyelmeztetés
+
+A szállított szabály **pontosabb** (0,9848 vs 0,9791). Épp ezért **kevesebb sértést** talál —
+és a sértések az **egyetlen** hely, ahol a fúzió kárt tud tenni. Vagyis a jellemző javítása
+automatikusan **elvette a kockázat-mérés mintáját**.
+
+Ez általános csapda: ha a kockázatot a modell **saját hibáinak** részhalmazán méred, akkor
+minden javítás **csökkenti a mintaszámot**, amin a kockázatot becsülni tudod — és a
+magabiztosság pont akkor nő, amikor a bizonyíték fogy. Minden „sértő" pontosság most
+**1/8 többszöröse**, a mért romlás **két ütés**.
+
+*Ha a kockázat-oldali n a javítással együtt fogy, akkor a kockázat nem lett kisebb, csak
+kevésbé mérhető — és a kettőt nem szabad összekeverni.*
+
+Lásd még [[L662]], [[L670]], [[L671]], [[L672]], ADR 0557, ADR 0558.
+
+## L674 — Zöld tesztek azt bizonyítják, hogy a dolog MŰKÖDIK, nem azt, hogy FUTNIA kell; egy fogyasztó nélküli számítást egy kapu-futásra voltam a szállítástól (E18-R36, 2026-09-12)
+
+### 1. Kilenc zöld teszt után még mindig hibás volt, amit csinálni készültem
+
+A letisztult tier megépült: derivált időzítés, három csapda-teszt, a streamelt ablak
+paritása a referenciával, a gyors ablak nullázásának bizonyítéka. **9/9 zöld**, kapu zöld.
+Ebben az állapotban lett volna commit.
+
+Aztán feltettem a kérdést, amit a tesztek nem tesznek fel: **ki olvassa ezt?** Senki. A
+`settledRevision`-nak **nincs fogyasztója** — az azt használó szabály (ADR 0558 D1) a
+következő kör. Viszont az élő CRNN a sín mögött `settleAfterFrames = 41`-et ad, tehát a tier
+**ütésenként egy második modell-forwardot** indított volna a produkcióban, 200 bpm
+tizenhatodon ~13 ütés/másodperc mellett, **nulla haszonért**.
+
+Megmértem, amit meg tudtam: ezen a **JIT-es teszt-harnesszen** egy forward **~29 ms**. Ez
+**nem** az eszközön mért szám és nem is átvihető (a release AOT lényegesen gyorsabb) — de
+pont elég ahhoz, hogy kiderüljön: a duplázás **nem ingyenes**, és a mértéke **ismeretlen**.
+Egy ismeretlen nagyságú költség nulla haszonért nem „apró szépséghiba".
+
+**A szabály, amit megtartok.** Egy új kimenet befejezése nem a teszt, hanem **a fogyasztója**.
+Amíg nincs olvasója, a default az, hogy **nem fut** — nem az, hogy fut és figyelmen kívül
+marad. A tesztek a „működik?" kérdésre felelnek; a „futnia kell?" kérdést **nekem** kell
+feltennem, és a zöld szín pont elnyomja a késztetést rá.
+
+Gyakorlati sarokpont: **amikor egy kör terméke egy mező, amit senki nem olvas, a körnek egy
+kapcsolóval kell zárulnia, ami kikapcsolva van** — és egy teszttel, ami őrzi. Itt a teszt nem
+csak azt ellenőrzi, hogy nincs revízió, hanem hogy **a második forward ki sem megy**: a
+„figyelmen kívül hagyjuk" és a „nem számoljuk ki" két különböző rendszer, és csak a második
+ingyenes.
+
+### 2. A kapcsoló nem feature-flag, és ezt ki kell írni
+
+Kísértés volt „feature toggle"-nek nevezni. Nem az: felhasználó sosem látja, és nem
+viselkedés-variáns. **A sín, ami megakadályozza, hogy egy fogyasztó nélküli számítás
+szállítódjon** — és a felkapcsolása nem termék-döntés, hanem két feltétel: (a) legyen olvasó,
+(b) legyen **profile-buildben mért** költség. Ha „flag"-nek hívom, hat hónap múlva valaki
+felkapcsolja, mert „a flagek fel szoktak kerülni".
+
+*Egy kapcsoló neve és doksija dönti el, hogy kapu lesz-e vagy törmelék.*
+
+### 3. És egy kötelező interfész-tag nyolc helyen „bosszúság", ami kétszer valódi hiba volt
+
+A `settleAfterFrames`-t default nélkül tettem a sínbe, így **nyolc teszt-dublőrt** kellett
+hozzáírni. Default-tal egy sort sem. De a default **csendben** beválasztotta volna a jövő
+osztályozóit a „nincs letisztult tier" értékbe — ami a biztonságos érték, és épp ezért
+**elrejti a döntést**.
+
+Kettőnél ez nem formalitás volt: két tooling-rekorder a **valódi** osztályozóhoz delegál és
+minden hívást egy `calls` listába fűz. Ha ezek delegálták volna a `settleAfterFrames`-t, a
+mért futás **ütésenként egy extra verdiktet** kapott volna, **más levágáson** — pont azt a
+felvételt rontva el, amiből minden küszöb-határ újrapontozódik. A „bosszúság" kényszerített
+rá, hogy mindkettőt elolvassam; egy default mellett **észre sem vettem volna**.
+
+*Egy kötelező tag ott fizetődik ki, ahol egy default csendben helyes választ adna a rossz
+okból.*
+
+Lásd még [[L662]], [[L672]], [[L673]], ADR 0556, ADR 0558, ADR 0559.
+
+## L675 — A bemenetet, amin egy mért jellemző áll, külön kell megmérni; a sajátjában biztos csatorna egy gyártott rácson rosszabb lett, mint egy konstans (E18-R37, 2026-09-12)
+
+### 1. Két körön át a jellemzőt mértem, a bemenetét nem
+
+A metrikus csatorna tartalék pontossága **0,9848**, nulla illesztett paraméterrel, ismeretlen
+játékosokon és dalokon, öt kontrollal (L671). Erre építettem egy fúziós szabályt (ADR 0558),
+egy Dart-egységet paritás-fixtúrával (E18-R35), és kimondtam a következő lépést: „a
+`TempoTracker` rácsa + a bar-horgony átadása a csatornának".
+
+**Mind a 0,9848 a GuitarSet ANNOTÁLT ütem-rácsán állt** — helyes tempó **és** helyes
+fázis-origó. Azt nem kérdeztem meg, hogy az app **ilyen rácsot tud-e adni**. Nem tud: a
+`TempoTracker` medián-IOI-t ad, **oktávot hajtogatva** és fázis nélkül, a `_barStartSec`
+pedig egy **önkényes ütés saját idejéhez** horgonyoz.
+
+Megmérve, ugyanazon a tartalék halmazon, a **„mindig lefelé" 0,8080** ellen:
+
+```
+  annotált rács                       0,9848
+  önhorgonyzott, helyes tempó         0,8612   (seedenként 0,73 – 0,95)
+  rossz tempó-oktáv                   0,6597 / 0,7985
+  mindkettő téves (szabad játék)       0,6179 / 0,7662
+```
+
+A gyártott rácson a csatorna **rosszabb, mint egy konstans**, és közben **magabiztos**. Egy
+kör korábban ezt kötöttem volna be.
+
+**A szabály, amit megtartok.** Ha egy jellemző egy **származtatott bemenetet** használ (rács,
+szegmentálás, igazítás, referencia-idő), akkor a mérés **két** dolgot állít: hogy a jellemző
+működik, ÉS hogy a bemenet elég jó. A kettőt **külön** kell megmérni, és a második a
+kockázatos. *Egy korpusz annotációja nem a termék bemenete — a jellemzőt a korpusz adja, a
+bemenetet az app, és csak az egyiket mértem.*
+
+Gyakorlati sarokpont: **minden mért jellemzőnél le kell írni, mi adja a bemenetét a
+produkcióban**, és ha a válasz „valami becsült", akkor a becslés hibája a jellemző mérésének
+a része, nem utólagos részlet.
+
+### 2. Az átlag elrejtette, hogy a tanulók fele FORDÍTVA kapná
+
+A 0,8612 úgy néz ki, mint egy mérsékelt romlás. Nem az. A horgony-ütés **81,2%-ban lefelé,
+18,8%-ban felfelé** lenne, és egy **felfelé** horgony egy réssel csúsztatja a rácsot, ami
+szigorú alternáción **minden hívást átfordít**. A seedenkénti 0,73–0,95 szórás ezt mutatja: a
+sorok **majdnem tökéletes és majdnem invertált felvételek keveréke**.
+
+Vagyis nem „kicsit pontatlanabb mindenkinek", hanem „**helyes a tanulók egy részének,
+fordított a másiknak**". Egy átlagolt pontosság ezt a szerkezetet **nem tudja megmutatni** —
+ugyanaz a hiba-osztály, mint amikor a megtartási arányt mértem a megtartott pontosság helyett
+(L670), csak most a felvételek, nem az osztályok tengelyén.
+
+*Ha egy hiba egy diszkrét választástól függ (melyik ütés a horgony), akkor a metrika
+eloszlását kell megmutatni, nem az átlagát — az átlag egy bimodális jelet közepesnek mutat.*
+
+### 3. Amit a negatív eredmény megvédett, és amit ki kell mondani
+
+Ez a kör **nem épített semmit**, és ez a haszna: a három állapotos `MetricCall` (nincs rács /
+szünet van előírva / előírt irány) pont ezt az esetet modellezte, és most **mért indoka** van
+annak, hogy a szabad Live a „nincs rács" állapotban maradjon. A csatorna csak ott
+admisszibilis, ahol az app **birtokolja** a rácsot — a metronóm/lecke időrácsán, aminek a
+fázisa definíció szerint ismert.
+
+És egy kockázatot is talált, amit nem kerestem: a repó már megmérte, hogy **16 metronóm-
+klikkből 15 jelentett ütés** lesz. A klikk **pontosan az ütemre** esik, tehát a metrikus
+csatorna **magabiztos lefelé ütésként** bélyegezné, és a fúzió a fantom ütést **még
+magabiztosabbá** tenné. A meglévő mérséklés (pontozás alatt **haptikus** pulzus) innentől nem
+kényelem, hanem **a csatorna előfeltétele**.
+
+*Egy „ne kösd be" eredmény ugyanannyit ér, mint egy bekötés — de csak akkor, ha kiírom, mi
+lett volna a kár.*
+
+Lásd még [[L667]], [[L670]], [[L673]], ADR 0557, ADR 0558, ADR 0560.
+
+## L676 — Harmadszor fordult elő ugyanaz: a repó már tartalmazta, amit kitaláltam, és jobban; ez már nem eset, hanem MINTA (E18-R38, 2026-09-12)
+
+### 1. A konkrét eset
+
+Megépítettem a `StrumMetricChannel`-t: minta-alapú irány-jóslat, `List<StrumDirection?>`
+résekkel, ahol a `null` rés „nincs véleménye". Paritás-fixtúra, property-tesztek, ADR. Aztán
+a rács forrását keresve elolvastam a `lib/features/curriculum/domain/rhythm_grid.dart`-ot, és
+a repó **már tartalmazta az egészet, jobban**:
+
+- `RhythmGrid.pendulumDirection` — az inga-deriváció, **ugyanazokra a pedagógiai forrásokra**
+  hivatkozva, amikre az ADR 0557-et építettem;
+- `StrokeSound.ghost` — és a **kimondott** indoklás, hogy egy csendben hagyott rés **hordoz
+  irányt**, mert a kéz inga és nem áll meg;
+- `RhythmGrid.authored` + `followsPendulum` — a tanított 3/4 oom-pah mint **dokumentált
+  ellenpélda**, amit nem szabad kitörvényesíteni;
+- `handCrossings` — a **kimondott** különbség „amit kérnek" és „amit a kéz tesz" között;
+- `onsetUs({bar, slotIndex, bpm})` — **ismert fázisú időrács**, pontosan az, amit az ADR 0560
+  egy körrel korábban megkívánt és nem talált.
+
+És az elolvasása **két valódi hibát** talált a saját osztályomban: a „ghost = nincs véleménye"
+**pedagógiailag téves**, és egy **negyed** rácsot rés-felbontáson olvasva minden off-beat
+ütés **átfordul** (a kéz felfelé tart, a négy-rés rács lefelét mond).
+
+### 2. Ez a harmadik ugyanebből a családból, és ezt ki kell mondani
+
+- **L669** — a repóban ott volt a `STD_SEEDS`, és nem használtam: egy-seedes számokat
+  rögzítettem ADR-be.
+- **L671** — a GuitarSet `beat_position` rácsa ott volt **ugyanabban a fájlban**, amit négy
+  körön át beolvastam, és sosem listáztam ki a névtereit.
+- **L676** (ez) — a `RhythmGrid` ott volt, a **pendulum-derivációval és a pedagógiai
+  forrásokkal együtt**, miközben ugyanazt újraépítettem mellé.
+
+Három eset után ez **nem véletlen, hanem mintázat**: amikor egy új fogalmat építek, a
+keresésem a **technikai** szomszédságra irányul (ugyanaz a réteg, ugyanaz a könyvtár, ugyanaz
+a modalitás), nem a **fogalmi** szomszédságra. A `RhythmGrid` a `curriculum` rétegben van, én
+a `live/engine/dsp`-ben dolgoztam — más könyvtár, más réteg, **ugyanaz a fogalom**.
+
+**A szabály, amit ebből csinálok.** Mielőtt egy **domain-fogalmat** kódolok (inga, irány,
+rács, ütem, minta, tolerancia), a fogalom **nevére** kell keresnem a teljes repóban — nem a
+réteg könyvtárában. Konkrétan: a fogalom magyar és angol nevére, `lib/` **egészében**, plusz
+a `docs/research/` és `docs/superpowers/specs/` alatt. Ha egy `docs/research/*.md` már
+létezik a témáról, akkor **biztosan** van kód is, ami rá hivatkozik.
+
+*A technikai szomszédság azt mondja meg, hol fog a kódom élni; a fogalmi szomszédság azt,
+hogy létezik-e már. Eddig csak az elsőt kérdeztem.*
+
+### 3. Ami ebből jó: nem az volt a kár, amit hittem
+
+Ösztönösen „elvesztegetett munkának" olvastam. Nem az: a `StrumMetricChannel` **kell**, mert
+a DSP réteg nem importálhatja a curriculumot, és a mérés oldalán a Python próbának is kell egy
+párja. Amit elvesztettem, az **két kör**, amiben a kontraktus **téves** volt — és a
+tévedéseket nem a tesztek fogták el (16 teszt zöld volt a hibás szemantikával), hanem **a
+meglévő fájl elolvasása**.
+
+Ezért a javítás nem „használd a `RhythmGrid`-et helyette", hanem: **a `RhythmGrid` az inga
+egyetlen hatósága**, a csatorna pedig **készen kapott irányú** réseket vesz át, hogy ne legyen
+két implementáció, ami elsodródhat. A duplikáció megszüntetése a javítás, nem az osztály
+eldobása.
+
+*Egy zöld tesztsor a saját feltevéseimet is validálja — ha a feltevés téves, a tesztek
+pontosan a téves viselkedést védik meg.*
+
+Lásd még [[L669]], [[L671]], [[L673]], ADR 0557, ADR 0560, ADR 0561.
+
+## L677 — Azt írtam, hogy a mért szabály „egybeesik" az etikai korláttal, miközben megsértette; és a metrika, amin mértem, nem tudta megkérdezni a termék kérdését (E18-R39, 2026-09-12)
+
+### 1. A hiba nem szám volt, hanem egy állítás
+
+Az **ADR 0557 D4** korlátja: *„a pontozás az akusztikus csatornát veszi, tartózkodással. Ez a
+csatorna a tartózkodás lécét mozdíthatja; a hívást **soha nem fordítja át**."*
+
+Az **ADR 0558 D1** szabálya: *„az akusztikus dönt, ha a margója meghaladja `t`-t, **a metrikus
+hívás dönt `t` alatt**"* — vagyis `t` alatt **átfordítja** a hívást.
+
+És az ADR 0558 D1-be ezt írtam: *„Ez egybeesik az ADR 0557 D4-gyel."* **Nem esett egybe: a D1
+megsértette a D4-et.** Sőt, egy bekezdéssel lejjebb még azt is kiírtam, hogy „ez egybeesés,
+nem levezetés" — vagyis az egybeesés **gyanússágát** éreztem, és a választ mégsem
+ellenőriztem le a korlát **szövegén**.
+
+Azért lett ilyen könnyű, mert a `c* = 0,000` mérés **valódi** volt. Egy erős szám mellé
+odaírtam egy kényelmes mondatot a korlátról, és a szám hitelessége átszivárgott a mondatra.
+
+**A szabály, amit megtartok.** Amikor egy mért szabályról azt állítom, hogy megfelel egy
+korábbi korlátnak, a korlát **szövegét** kell odatennem és szóról szóra összevetnem — nem a
+szellemét felidéznem. Egy korlát, aminek a betűjét nem ellenőriztem, nem korlát, hanem
+szándék. *Az „egybeesik" a legdrágább szó, amit mérés mellé írhatok, mert úgy viselkedik,
+mintha mérés lenne.*
+
+### 2. És a metrika nem tudta megkérdezni a termék kérdését
+
+A fúziót **irány-macro-F1-en** mértem az igazsághoz. Az jól mérte azt, hogy *milyen gyakran
+helyes a jelentett irány*. Amit **nem** tudott megkérdezni: *képes-e a pontozó még észlelni
+egy minta-sértést?*
+
+Pedig a `gradeRhythm` a felismert irányt **a rács előírt irányához** hasonlítja, és ebből lesz
+a `wrongDirection` — amiről maga a kód azt írja: **„this is the thing only this app can tell a
+learner"**. Ha a rács előírását beolvasztom a felismert irányba, a grader **a rácsot a ráccsal**
+hasonlítja: a `wrongDirection` nullára megy, és az app **minden tanulónak azt mondja, hogy a
+pengető keze hibátlan**.
+
+A szám ott volt a táblámban: az inga-sértő ütéseken a fúzió **0,5000 → 0,2500**. Azok a sértő
+ütések **pontosan a `wrongDirection` esetek**. Leírtam „a sértő részhalmazon jelentkező
+kár"-nak, és **nem kötöttem össze a termék kimenetével** — pedig egy körrel korábban (L670)
+épp azt a szabályt vettem fel, hogy a bukási mód tengelyét kell mérni.
+
+A különbség L670-hez: ott a tengelyt nem mértem. **Itt megmértem, és nem olvastam el.** Egy
+számot kiírni nem ugyanaz, mint megérteni, mire vonatkozik.
+
+**A szabály.** Egy termék-metrikának **meg kell tudnia kérdezni, amiért a termék létezik**. Ha
+a differenciátor „észrevesszük, hogy rossz irányba ütöttél", akkor a mérésnek **közvetlenül
+ezt** kell riportálnia (hány sértést észlel a rendszer), nem egy átlagos helyességet, amiben a
+sértések 1,5%-ot nyomnak. *A célmetrika megválasztása terméki döntés, nem mérési kényelem.*
+
+### 3. Negyedszer: a repó már tartalmazta a teljes kontraktust
+
+Az [[L676]]-ban mintázatként nevezte meg magát, és a következő körben **azonnal** megismétlődött
+— nagyobban. A `gradeRhythm` már tartalmazta:
+
+| amit a csatornához terveztem | ami már ott volt |
+|---|---|
+| a megoldókulcs-védelem | **1. szabály: „a párosítás IDŐT használ, SOHA nem irányt"** |
+| „az egyet nem értés a pedagógiai kimenet" | `RhythmSlotOutcome.wrongDirection` |
+| tartózkodás | `RhythmSlotOutcome.unclear` |
+| ghost-résre ütött ütés | `extraConfirmedStrokes` |
+| ismert fázisú rács | `startUs` + `grid.onsetUs(...)` |
+
+Az L676 szabályát (fogalom nevére keresni `lib/` egészében) **ebben a körben alkalmaztam is**,
+és ezért találtam meg — tehát a szabály működik. Amit hozzáteszek: **a megtalált fájl
+fej-kommentárját végig kell olvasni, mielőtt bármit tervezek**, mert a döntései ott vannak
+kimondva. A `gradeRhythm` három „fork"-ja a fájl fejében van, és az első pont az én D4-em.
+
+### 4. Amit ez megvédett
+
+A kör **nem épített semmit**, és visszavont két korábbi döntést (ADR 0558 D1 és D2). A haszna:
+ha bekötöm, a ritmus-pillér **saját differenciátorát** tüntettem volna el — és zöld teszt,
+zöld kapu, mért `c* = 0,000` mellett tettem volna.
+
+*Egy mérés, ami a rossz kérdésre felel, pontosan annyira megnyugtató, mint egy jó mérés — és
+ez a baj vele.*
+
+Lásd még [[L670]], [[L673]], [[L676]], ADR 0557, ADR 0558, ADR 0562.
+
+## L678 — Egy törlő írás-idióma 28 000 sort semmisített meg, és a diffstat fogta el, nem teszt (E18-R39, 2026-09-12)
+
+### 1. A hiba
+
+Az előző körökben a hozzáfűzés így ment, és ez **helyes**:
+
+```python
+cur = io.open(dst, encoding='utf-8').read()
+io.open(dst, 'w', encoding='utf-8', newline='\n').write(cur + add)
+```
+
+Az E18-R39-ben „rövidítettem" egy sort:
+
+```python
+io.open(p, 'w', encoding='utf-8', newline='\n').write(
+    io.open(p, encoding='utf-8').read() + add)     # HIBÁS
+```
+
+A Python a **külső** hívást értékeli előbb: az `open(p, 'w')` **azonnal kiüríti a fájlt**, és
+a belső `read()` utána **üres stringet** ad. Eredmény: a `docs/LESSONS.md` **28 059 sort**, a
+`018-strum-ml-pipeline.md` **1 268 sort** vesztett — csak az aznapi hozzáfűzés maradt benne.
+
+### 2. Mi fogta el, és mi NEM
+
+**Nem fogta el:** a kapu zöld volt (a `LESSONS.md`-re nincs teszt), a commit lefutott, a push
+lefutott. Egy dokumentáció-fájl csendben elveszhet, mert semmi nem állítja róla, hogy növekszik.
+
+**Elfogta:** a `git commit` **diffstat**-ja — `5 files changed, 304 insertions(+), 29235
+deletions(-)`. Öt fájl, amiből négy kis szerkesztés volt, és 29 ezer törlés. A szám **nem
+illett a leírt munkához**, és ezért néztem meg.
+
+### 3. A két szabály
+
+**(a) Soha ne nyisson írásra egy fájlt úgy, hogy a tartalma még kell.** Olvasás előbb, saját
+utasításban; vagy ideiglenes fájlba írni és utána cserélni. A rövidítés itt nem
+kényelem volt, hanem egy `truncate` elrejtése egy kifejezésben.
+
+**(b) A commit diffstatot el kell olvasni, mielőtt push.** Nem formalitásként: a
+**nagyságrendnek illenie kell a leírt munkához**. Egy dokumentációs kör, ami ezres törléseket
+mutat, nem dokumentációs kör. Ez az egyetlen ellenőrzés, ami egy teszt nélküli fájl
+megsemmisülését elfogja — és itt ez fogta el.
+
+*A zöld kapu azt mondja meg, hogy amit tesztelek, működik. A diffstat azt, hogy amit
+csináltam, az volt-e, amit hittem.*
+
+Lásd még [[L674]], ADR 0562.
+
+
+## L679 — Adtam egy mechanizmus-magyarázatot egy mért különbségre, és a magyarázatot nem mértem meg; két körig téves okot hittem (E18-R40, 2026-09-12)
+
+### 1. A hiba
+
+Az E18-R34-ben mértem, hogy a „konzervatív" döntetlen-törő szabály a gyors tieren rosszabb a
+teljes fúziónál (megtérülés 0,481 vs 0,401). A **számot** helyesen mértem. Aztán odaírtam egy
+**mechanizmust**:
+
+> „ha az akusztikus hívás magabiztos ÉS téved — 70 ms-on gyakran az —, akkor épp a »ne írd
+> felül a magabiztosat« védelem tartja meg a hibát. A margó 70 ms-on **nem mér
+> megbízhatóságot**."
+
+Ez **magabiztosan hangzott**, illeszkedett a számhoz, és **nem mértem meg**. Most megmértem:
+a margó monoton jelzi a helyességet — **0,4000** a 0,0–0,2 sávban, **0,8500** a 0,8–1,0-ban.
+A magyarázatom fordítva volt.
+
+A valódi ok: a teljes fúzió `lam = 0,99`-nél **a rácsra cserélte az akusztikus hívást
+mindenhol**, és egy 96%-ban inga-követő korpusz ezt jutalmazza. A döntetlen-törő csak a rövid
+margójú részhalmazon használta a rácsot, tehát **kevesebbet nyert a megoldókulcsból**. Az
+összehasonlítás tehát **nem a margóról szólt**, hanem arról, melyik szabály támaszkodik
+jobban a válaszkulcsra — ami utólag az ADR 0562 érvét **erősíti**: a „jobb" sor azért volt
+jobb, mert **többet csalt**.
+
+### 2. Miért volt ez ennyire könnyű
+
+A mérés és a magyarázat **ugyanabban a bekezdésben** volt. A szám hitelessége átszivárgott a
+mellette álló mondatra — **pontosan ugyanaz a mechanizmus, mint az [[L677]] „egybeesik"-je.**
+Ott egy **korlátról** állítottam valótlant mérés mellé, itt egy **okról**. Kétszer ugyanaz a
+hiba két körön belül, tehát nem figyelmetlenség, hanem **szokás**: ha van egy erős számom,
+engedem magamnak, hogy a körülötte lévő prózát ne ellenőrizzem.
+
+### 3. A szabály
+
+Egy **mechanizmus-állítás önálló állítás**, és vagy mérem, vagy **sejtésnek jelölöm**. Nem
+elég, hogy illeszkedik a számhoz — a rossz magyarázat is illeszkedik, ez a baj vele. Három
+forma, ami megengedett:
+
+1. *„Mérve: a margó 0,40-ról 0,85-re nő."* — állítás, méréssel.
+2. *„Sejtés: a margó talán nem kalibrált; **nem mértem**."* — megjelölt sejtés.
+3. *„Nem tudom, mi a mechanizmus."* — a leginkább használható, ha igaz.
+
+Amit nem: egy mérés mellé odatett magyarázat mérés-jelölés nélkül. Gyakorlati sarokpont:
+**ha a magyarázatomban szerepel egy mérhető állítás („X nem mér Y-t"), akkor az a kör ki nem
+kész, amíg azt is meg nem mértem** — vagy amíg ki nem írtam, hogy nem mértem.
+
+*Egy szám mellé írt hihető ok a legrosszabb fajta dokumentáció: úgy olvasódik, mint egy
+eredmény, és úgy viselkedik, mint egy találgatás.*
+
+Lásd még [[L670]], [[L672]] (ott a korrekció), [[L677]], ADR 0562, ADR 0563.
+
+## L680 — Egy paraméter-számból becsült latencia 45×-esen téves volt, és hónapokig a szállított forrás fejlécében állt (E18-R41, 2026-09-12)
+
+### 1. A hiba, és hogy miért pont ennyi
+
+A `crnn_strum_net.dart` fejléce ezt állította: *„a net ~350k params / **~1 ms per window**"*.
+A paraméter-szám helyes (363 891). A latencia **45×-esen** téves: mérve **27–29 ms**.
+
+A becslés módja a hiba: **a paraméter-szám nem a munka**. Egy konvolúciós kernel **minden
+térbeli pozíción** alkalmazódik, a GRU mátrixai **mind a 15 időlépésen**:
+
+```
+  conv1  0,28 M MAC · conv2  4,42 M · conv3  6,64 M · GRU  5,16 M   =  16,5 M MAC
+  363 891 paraméter ellen                                           =  45×
+```
+
+A 16,5 M MAC / 28 ms ≈ **0,6 GMAC/s**, ami **szokásos** skalár Dart-sebesség — tehát nem a kód
+lassú. A becslés implicit feltevése az volt, hogy **minden paramétert egyszer használunk**.
+
+**A szabály.** Latenciát **soha ne becsüljek paraméter-számból**. A munka a paraméter-szám
+**újrahasználati faktorral** szorozva: konvolúciónál a kimeneti pozíciók száma, rekurrensnél
+az időlépések száma, attention-nél a szekvencia-hossz négyzete. Ha a faktort nem írom le, a
+becslésem nem becslés, hanem **alsó korlát**, aminek felső korlátként hisznek.
+
+### 2. És a becslés AOT-feltevésem is téves volt
+
+Az ADR 0559-ben a ~29 ms-os JIT-számot úgy kezeltem, mint **pesszimista korlátot**, azzal,
+hogy „a release AOT lényegesen gyorsabb". Megmérve: **az AOT nem gyorsabb** (27–29 ms vs
+JIT 25,8 ms). Ez is egy **mechanizmus-állítás mérés nélkül** — pontosan az [[L679]] mintája,
+egy körrel a rögzítése után.
+
+A miért utólag érthető: a forward `Float64List`-eken futó szoros skalár ciklusokból áll, amit
+a JIT a 200+ hívás alatt már optimalizált — nincs mit az AOT-nak hozzátennie. De ezt **meg
+kellett volna mérnem**, nem feltennem.
+
+### 3. Amit a kör valójában talált: a rossz kérdéssel indultam
+
+A kör kérdése az volt, hogy „megengedhetjük-e a **második** forwardot". A mérés válasza:
+
+```
+  200 bpm tizenhatod:  gyors tier (MA SZÁLLÍT)  37,6 % egy magból
+                       letisztult tier (+20%)    7,4 %
+```
+
+Az **inkrementum kicsi, az alap nagy**. Az a kérdés, amit hetek óta kerülgettem („kifizetődik-e
+a tier"), **kevesebbet dönt el**, mint az, amit soha nem tettem fel: **mennyibe kerül az, ami
+már fut.** És azért nem tettem fel, mert a fejléc ~1 ms-ot állított, és **elhittem egy
+szállított forrásban álló számnak mérés nélkül**.
+
+**A szabály.** Amikor egy **inkrementum** költségét mérem, ugyanazzal a műszerrel meg kell
+mérnem az **alapot** is. Az inkrementum önmagában értelmezhetetlen, és az alap számáról
+kiderülhet, hogy az a valódi lelet.
+
+### 4. A repó eszköze készen állt, és nem használtam
+
+Az ADR 0474 egy **formális benchmark-rekord-sémát** ad, pont ezzel a négy `kind`-dal:
+`measured` / `upperBound` / `derivedContract` / `target` — és a célja szó szerint az, hogy egy
+felső korlát ne olvasódjon mért baseline-ként. Az ADR 0559-ben a „~29 ms JIT, nem on-device"
+megfogalmazás **prózában** tette ugyanezt a distinkciót, a sémán **kívül** — tehát nem
+összevethetően, nem regresszió-figyelve, és a következő olvasó számára nem kötelezően.
+
+Ez ugyanaz a család, mint [[L676]] és [[L677]] (negyedszer, ötödször): a repó már tartalmazta a
+megoldást egy **másik rétegben**. Most viszont a szabályom működött — a fogalomra („benchmark",
+„performance budget") kerestem `lib/` és `tool/` egészében, és **megtaláltam**, mielőtt sajátot
+írtam volna.
+
+*Egy szám, ami egy forrásfájl fejlécében áll mérés nélkül, hónapokig lesz igaz — nem azért,
+mert helyes, hanem mert senki nem kéri tőle a bizonyítékot.*
+
+Lásd még [[L674]], [[L676]], [[L677]], [[L679]], ADR 0474, ADR 0559, ADR 0563, ADR 0564.
+
+## L681 — Szintetikus bemeneten mértem egy adat-függő költséget; és ugyanabban a körben KÉTSZER adtam téves mechanizmust egy mért különbségre (E18-R42, 2026-09-12)
+
+### 1. A benchmark bemenete nem részlet, hanem a mért munka
+
+Az ADR 0564 benchmarkja **szintetikus** ablakot használt, egy determinisztikus
+`((r*31+c*17)%97)` mintát, azzal az indoklással, hogy „egy konstans bemenet elfuthat egy
+branch-es kernelben egy nem reprezentatív úton". Ez igaz, de **nem elég**: a trunk költsége
+**post-ReLU nulla-arányon** múlik, ami az **adat** tulajdonsága. Egy szintetikus ablak tehát
+**más munkát** mér, és azt jelenti be ennek.
+
+Mennyire más:
+
+```
+                                  szintetikus   valódi (paritás-fixtúra)
+  dense forward median              ~28 ms       ~32,5 ms
+  sparse forward median             ~18,4 ms     ~13–16 ms
+  gyorsulás                          1,5×         2,0–2,4×
+```
+
+Ha a szintetikus számot hiszem el, a ritkásítás nyereségét **harmadával alábecsülöm**, a
+szállított út költségét pedig **15%-kal**. A benchmark most a **paritás-fixtúra valódi,
+normalizált ablakát** olvassa, és hiányzó fixtúránál **hangosan** jelzi, hogy szintetikusra
+esett vissza — nem csendben.
+
+**A szabály.** Ha egy mért költség a **bemenet statisztikájától** függ (ritkaság, hossz,
+elágazás-arány, cache-lokalitás), akkor a benchmark bemenete **valódi adat**, vagy a szám nem
+a rendszerről szól. És ezt a függést **ki kell írni** a benchmarkba, mert a következő olvasó
+különben beteszi a saját kényelmes bemenetét. *Egy szintetikus bemenet nem egyszerűsítés,
+hanem egy másik kísérlet.*
+
+### 2. Kétszer adtam mechanizmust, amit a saját számaim cáfoltak
+
+Az [[L679]] szabálya egy körrel korábban született: **egy mechanizmus-állítás önálló állítás,
+vagy mérem, vagy sejtésnek jelölöm.** Ebben a körben **kétszer** sértettem meg.
+
+**Először:** megmagyaráztam, miért gyorsabb a dense a szintetikus ablakon — „a szintetikus
+kevesebb GRU-munkát végez". A mérés, amit ugyanabban a szkriptben írattam ki: a szintetikus
+**1,90 M** GRU-MAC-ot végez, a valódi **1,15 M**-et. **Többet, nem kevesebbet.** A magyarázó
+mondatot a szám **előtt** írtam meg, és a kiírás cáfolta.
+
+**Másodszor:** amikor a két sparse bináris 13 ms-ot és 16 ms-ot adott, az első gondolatom
+„gépterhelés" volt. Interleaved futtatás: **reprodukálható, ~20%**, azonos conv-kóddal, csak a
+**timed loopon kívüli** print-ekben különböző binárisokkal. Tehát **kód-elhelyezés**, nem
+terhelés.
+
+A különbség az L679-hez: ott a magyarázatot **nem mértem**. Itt **megmértem, és a mérés mellé
+írtam a cáfolt magyarázatot** — a szkript kiírta mindkettőt, egymásnak ellentmondva. Ez rosszabb
+szokás, mert a hibás mondat **mérés mellett** áll, tehát hitelesebbnek látszik.
+
+**A megszorítás, amit felveszek.** Amikor egy mérést magyarázok, a magyarázatot **a szám
+kiolvasása után** írom meg, és ha a szám nem támasztja alá, akkor a dokumentumba **„ezt nem
+tudom megmagyarázni"** kerül. A dense szintetikus↔valódi különbség ezért most **kimondottan
+megmagyarázatlan** az ADR 0565-ben. *Egy megmagyarázatlan mérés becsületes; egy megmagyarázott,
+de cáfolt mérés hazugság, ami méréssé öltözött.*
+
+### 3. A módszertani lelet, ami ezután minden perf-mérésre érvényes
+
+Ezen a hoston az AOT **kód-elhelyezés önmagában ~20%-ot** mozdít a latencián. Ebből:
+
+1. **Abszolút latencia nem idézhető 20%-nál pontosabban** ezen a hoston.
+2. Egy A/B csak akkor érvényes, ha a **két összevetendő binárist interleaved** futtatom — amit
+   megtettem, és a sorozatokon belül az arány stabil (1,93–2,04, illetve 2,37–2,48), a sorozatok
+   **között** viszont nem.
+3. Ha két sorozat eltér, a **konzervatív** vég a szállítható állítás. Itt: **2,00×**, nem 2,43×,
+   mert egy szállítási döntés nem épülhet a legszerencsésebb binárisra.
+
+*Egy mikrobenchmark, amiben nem interleaved az A és a B, a fordító szerencséjét méri.*
+
+Lásd még [[L674]], [[L679]], [[L680]], ADR 0474, ADR 0564, ADR 0565.
+
+## L682 — Két szám két MODELLRŐL nem „rés"; és harmadszor írtam le mechanizmust, amit a saját mérésem cáfolt (E18-R43, 2026-09-12)
+
+### 1. Majdnem leírtam egy 30 pontos „rést", ami két különböző modell volt
+
+Megmértem, hogy a no-strum kapu a valódi pengetések **0,944**-ét tartja meg
+Python-ablakokon az annotált onseten, és a végponti söprés szerint **0,633**-ot a
+szállító úton. Elneveztem 30 pontos résnek, és elkezdtem a **mechanizmusát** keresni:
+ablak-központozás, populáció, újraminta-vétel, fixtúra-határ. Mindegyiket megmértem,
+mindegyik kiesett.
+
+Amit **nem** kérdeztem meg: **melyik modellen készült a két szám.** Az ADR 0555 D3 —
+amit ugyanebben a körben olvastam — kimondja, hogy a `strum_crnn_live_3c_settled.bin`
+**szándékosan bekötetlen**, és a `ml/weights_live_3c_settled.npz` (amit **minden**
+`ml/probe_*.py` betölt) **ennek** a súlyai. A söprés viszont a szállított
+`strum_crnn_live_3c.bin`-t futtatja. **A két szám két modellről szólt**, és a
+hányadosuk semmiről.
+
+Az apples-to-apples mérés (a söprés a settled assettel, `STRUM_3C_ASSET`):
+
+```
+  ugyanaz a modell, ugyanaz a korpusz      megtartás .439 / .650 / .850
+  Python, annotált onset, orákulum-ablak     0,944 / 0,963 / 0,976
+  a szállító Dart út, detektált onseten      0,941 / 0,954 / 0,971
+```
+
+**0,3–0,5 ponton belül egyeznek.** Az `audio → ablak` lánc tehát rendben van, a „rés"
+**teljes egészében a modell** volt: a szállított asset in situ 0,633/0,659/0,690-et tart
+meg, a bekötetlen 0,941/0,954/0,971-et **ugyanazon az úton**.
+
+**És ugyanez a hiba másodszor, tíz perccel később.** Ráállítottam a söprést a settled
+assetre — és mind a **72** fájlon mértem. A settled modell viszont **GuitarSeten is
+tanult** (ADR 0554: players 00–02 × 8 dallam), tehát a 72 fájlos szám **kontaminált**: a
+modell memóriáját jelenti be képességként. A kontaminált tábla **+0,284** irány-macro-F1-et
+mutatott, a held-out szelet **+0,186**-ot — a kontamináció a nyereséget **felével**
+felnagyította. Ugyanaz a hiba-családba tartozó kérdés maradt ki: *melyik szeleten?*
+
+**A szabály.** Mielőtt két mérést elosztasz vagy egymás mellé teszel, nevezd meg, **melyik
+artefaktumon** készült mindkettő: **modell-súlyok, ablak-építő, korpusz-szelet,
+kód-revízió**. Ha bármelyik eltér, nem egy rést mértél, hanem **két kísérletet**. És a
+mérőeszköz **írja ki**, mit mért — a söprés fejléce most kiírja az **assetet** és a
+**szeletet** is (`STRUM_3C_ASSET`, `STRUM_SPLIT`), pont azért, hogy egy tábla ne
+*látszódjon* összevethetőnek eggyel, amivel nem az.
+
+**Amiért mégis érdemes volt utánamenni:** az érvénytelen hányados hajtott rá az
+apples-to-apples mérésre, és **az** mutatta meg, hogy a bekötetlen asset a szállító úton,
+tiszta held-out szeleten **+0,186 irány-macro-F1-et** és **+0,161 pengetés-recallt** ér
+(ADR 0567) — ami a lefedési szakadékot 2,4%-ról 0,02%-ra viszi. A tanulság tehát nem „ne
+nyomozz", hanem **„ne publikáld a hányadost"**: a nyomozás jó volt, a szám nem.
+
+### 2. Harmadszor: mechanizmust írtam a szám mellé, és a saját mérésem cáfolta
+
+Az [[L679]] rögzítette, hogy a mechanizmus önálló állítás; az [[L681]] §2-ben
+**kétszer** sértettem meg, és megfogadtam, hogy a magyarázatot a szám **kiolvasása után**
+írom. Ebben a körben **kétszer** adtam mechanizmust, és mindkettőt mérés cáfolta:
+
+1. **„Az ablak központja elmozdul, mert a produkció a detektált onsetre épít."** Megírtam
+   a `probe_gate_window_jitter.py`-t, ami a középpontot szándékosan tolja: a görbe erősen
+   aszimmetrikus (−15 ms: 0,936; 0 ms: 0,938; +15 ms: 0,802; +30 ms: 0,454 a 0,439-es
+   kapun). Aztán **megmértem a detektor előjeles késését** is a szállító úton:
+   **p50 = −8,3 ms** (korán!), p90 = +1,5 ms, és csak **1,4%** van +30 ms-on túl. És a
+   kód: a `windowAt` **ugyanazt** a +2,5 hop attack-korrekciót alkalmazza, mint a jelentett
+   idő — tehát a produkciós ablak a táblám **0 ms** sora, ami **pontosan** az orákulum-szám.
+   A hipotézis megdőlt, és a próba, amit a teszteléséhez írtam, ölte meg.
+2. **„A tompított/perkusszív ütések, mert a negatív-bányász pitch-alapú annotációt
+   használ."** Ez a `ml/negatives.py` saját docstringjéből jött, tehát jól dokumentált
+   jelölt — és mérve **részben igaz, de nem elég**: a legcsendesebb decilis elnyomása
+   **0,147**, a leghangosabbé **0,020** (7×-es gradiens), de az össz-elnyomás ott **5,6%**,
+   nem 30%.
+
+A minta, ami három kör alatt kirajzolódott: **amint meglátok egy számot, mechanizmust
+nyúlok hozzá — és a mechanizmus arról szól, amit a rendszerről épp tudok.** A jitter a
+friss ismeretem volt (az L681-ben az AOT kód-elhelyezés), a tompítás a frissen olvasott
+docstring. Egyik sem azért került elő, mert a szám odavezetett.
+
+**A megszorítás, amit hozzáveszek az L681-hez.** Egy két mérés **közötti** különbség
+magyarázatának **első** lépése nem mechanizmus, hanem **provenancia**: ugyanaz a modell?
+ugyanaz az építő? ugyanaz a szelet? Csak ha mindhárom igen, akkor van különbség, amit
+magyarázni kell. Ebben a körben a provenancia-kérdés **megszüntette** a magyarázandót.
+*Egy mechanizmus, amit egy fantom-rés magyarázatára találtam, két órát ért — és a két óra
+az apples-to-apples mérést szülte, nem a mechanizmust.*
+
+### 3. Egy mérőeszköz, ami csendben duplán számolt
+
+A `guitarset_threshold_sweep_test.dart` kapu-listája nyolc `(suppress, margin)` rekord, és
+a tálkák map-je **rekord-érték szerint** kulcsol. Amikor az ADR 0549 a szállított
+`noStrumThreshold`-ot **0,85-re** állította, a listában **már volt** egy `0.85` literál — a
+két érték-egyenlő rekord **egy** tálkára esett, a ciklus kétszer futott rá. A szállított
+sor `kept`-je **8558**-at írt 4279 helyett, a fantom-szám 862-t 431 helyett.
+
+**És semmi nem látszott hibásnak**, mert minden *arány* osztás, amiben a kettes kiesik: a
+precizitás, az F1, a recall mind helyes maradt. Csak a darabszámok duplázódtak — és a
+táblát azért nézi az ember, hogy arányokat olvasson.
+
+**A szabály.** Egy eszköz, ami **konfigurációkat sorol fel**, állítsa is, hogy a
+konfigurációi **különbözőek**. Egy kétszer szereplő sor nem hibát ad, hanem egy másik
+kísérletet, és ha az eszköz arányokat is ír, a hiba **láthatatlan**. A guard bekerült; a
+tábla most pontosan reprodukálja a független alapvonalat (3789 / 4015 / 4279 / 10106).
+
+### 4. Négy kör alatt nem kérdeztem meg, KI fogyasztja a számot
+
+A szállított 0,85 indoklása (a `live_crnn_classifier.dart` fejlécében) két költséget tett
+egymás mellé: „az elnyomott pengetés levonás" és „a fantom olyan slotot kreditál, amit a
+tanuló nem játszott". A kapu ezen a két hazugságon áll, és **egyiket sem ellenőriztem a
+kódban**, pedig mindkettő ellenőrizhető:
+
+- „**levonás**" — a `rhythm_grading.dart` 3. döntése szerint **nem**: „egy kihagyott slot
+  nem von le semmit". Amit valóban tesz: a lefedés esik, és a `minimumRhythmCoverage`
+  (0,5) alatt a `rhythmAttemptEvidence` **nulla bizonyítékot** ad — nem levonás, hanem
+  **szakadék** (a szállított kapun a hibátlanul eljátszott 8-slotos kísérletek
+  **2,4–10,7%-a**, korpusztól függően — és mindkét vég alsó korlát).
+- „**kreditál**" — csak **nyitott** slotban (mérve: a fantomok **4,7%-a** 8 slotnál
+  80 bpm-en), különben `extraConfirmedStrokes`, amit **egyetlen widget sem jelenít meg**.
+- a **nyíl**, ami a fantomot megmutatná: végigolvastam a widgeteket. A `RhythmLane` a
+  **notált** rácsot rajzolja és észlelt ütést nem is kap; a `practice_highway` és a
+  `practice_feedback` is a **várt** irányt (`CompiledTargetEvent`, `expectedDirection`). Az
+  egyetlen hely, ami **észlelt** irányt mutat, a **megosztó kártya** nyíl-sora; az ADR 0556
+  élő nyila **tervezett, de sötét**.
+
+Vagyis a költség, ami a kaput szorosan tartja, nagyrészt egy felületet védett, ami **ma
+nincs**. (A laza vég mégsem ingyenes, de **más** okból, mint amit a fejléc írt: kapu nélkül
+a **FEL precizitás 0,206 → 0,043** omlik, mert a beengedett fantomok **93,8%-át** hívja a
+modell „fel"-nek. Ez aggregált precizitás, nem slot-verdikt — megint egy **másik fogyasztó**.)
+
+**A szabály.** Mielőtt A hibát B hibával váltod, keresd meg a kódot, ami **megjeleníti**
+mindkettőt. Nem az ADR-t, ami leírja, és nem a kommentet, ami indokolja: a widgetet és a
+pontozót. Négy kör költség-érvelést építettem egy olyan nyílra, amit sosem grepeltem.
+*Egy költség, aminek nincs fogyasztója, nem költség — csak egy mondat.*
+
+Lásd még [[L662]], [[L671]], [[L675]], [[L679]], [[L681]], ADR 0549, ADR 0555, ADR 0566.
+
+## L683 — Egy fixtúra, amit senki nem olvas, nem bizonyíték; és a modellt a portja ellenőrzése ELŐTT mértem meg (E18-R43, 2026-09-12)
+
+### 1. Három hiba, amelyik mindegyike a másik kettő miatt volt láthatatlan
+
+A settled asset paritás-aranya (`test/fixtures/crnn_live_3c_settled_parity.json`, 1,26 MB)
+az E18-R32-ben készült, és az ADR 0555 D3 úgy hivatkozik rá, mintha fedést jelentene: „a
+paritás-fixtúra `...settled_parity.json`-ban van". Megvan. És:
+
+1. **semmi nem olvasta** — nulla fogyasztó tizenegy körön át;
+2. **nem volt a manifesztben** — a fán 54 adatfájl, a nyilvántartásban 52;
+3. **a rossz térben volt** — normalizált ablakokat tárolt, miközben a
+   `CrnnStrumNet.forward` **maga standardizál**, tehát nyers log-melt vár.
+
+A három **egymást** takarta el. (3) csak akkor derül ki, ha valaki megírja (1)-et. (2) csak
+akkor, ha az őr tud jelezni — és nem tudott (lásd §2). És (1) hiánya nem tűnt fel, mert a
+fixtúra **létezése** úgy olvasódott, mint fedés: egy ADR-sor, ami egy fájlra mutat, úgy néz
+ki, mint egy teljesített §9 láb.
+
+Mérve, a két arany tere: a szállítotté mean **−4,906** / std **6,884** (nyers), a settledé
+**+0,126** / **0,960** (normalizált). A fixtúra önmagában konzisztens volt — a
+Keras-referencia a normalizált sorokra **max|Δ| = 0,000000** —, csak a Dart belépési
+pontjával nem. Vagyis **egy belsőleg hibátlan fixtúra is lehet fogyaszthatatlan**, és ezt
+csak a fogyasztó mutatja meg.
+
+**A szabály.** Egy fixtúra és az **első olvasója** ugyanabban a körben szállít, különben
+nem teszt, hanem fájl. És egy ADR nem írhatja le úgy, hogy „a fixtúra megvan", mintha az
+a lábat teljesítené — a láb az **olvasó**, nem az arany.
+
+### 2. A repó öntesztje találta meg, nem én
+
+A `tool/check_fixture_manifest.dart` bejárója a normalizált absolute path-ot egy **nem
+normalizált** prefixhez hasonlította, tehát Windowson a `startsWith` soha nem egyezett és a
+bejárás **semmit** nem adott vissza: a „lemezen van, manifesztben nincs" irány itt egyáltalán
+nem tudott jelezni, és a „valódi manifeszt tiszta" állítás **üres** volt.
+
+Nem kódolvasás hozta elő. A `fixture_manifest_test.dart`-ban van egy eset, ami azt állítja,
+hogy **az őr tud bukni** — temp-projekt, bedobott fájl, üres manifeszt, „ezt jeleznie kell".
+**Ez** volt piros, és ez volt az egyetlen jelzés. Ez az [[L671]] („egy kontroll, ami nem tud
+elbukni, nem mond semmit") **kifizetődése**: egy korábbi kör megírta az őr őrét, és ma az
+fogta meg a platform-specifikus csendet. Javítás után **mindkét irányt** ellenőriztem
+(bedobott fájl → jelez; tiszta fa → `OK (54 fixture(s))`), mert a javításra ugyanaz a
+szabály áll, mint az eredetire.
+
+### 3. A két nem regisztrált arany egyikét ÉN hagytam ott
+
+A `strum_metric_channel_parity.json` az E18-R35-ben lett commitolva — nyolc körrel ezelőtt,
+általam —, és nem került a manifesztbe. A kör-kapu nem fogta, mert a `tools/round-gate.sh`
+**megnevezett** teszt-utakat futtat, és nyolc körön át egyszer sem neveztem meg a
+`fixture_manifest_test.dart`-ot. A CI-é a teljes suite, tehát ott (Linuxon, ahol a bejárás
+működik) ez **piros** volt.
+
+**A szabály.** Ha egy kör bármit letesz a `test/fixtures/` alá, akkor **ugyanabban a körben**
+nevezze meg a kapuban a `fixture_manifest_test.dart`-ot. A „megnevezett teszt-utak" kapu
+gyors, de azt és csak azt ellenőrzi, amit megnevezek — tehát a megnevezés **a kör része**,
+nem a kapu dolga.
+
+### 4. A modellt a portja ellenőrzése ELŐTT mértem meg
+
+Az ADR 0567 a settled assetet a szállított Dart pipeline-on mérte, és **+0,186**
+irány-macro-F1-et jelentett. Utána írtam meg a paritás-tesztet. Ha az elbukott volna
+érdemben, az a szám **egy ismeretlen modellről** szólt volna — nem arról, amit a Keras
+tanított, hanem arról, amit a Dart parse-ol belőle. Szerencsém volt: a mért legnagyobb
+eltérés **1,78e-07**, vagyis a két oldal ugyanazt számolja, és a szám áll.
+
+De a sorrend fordítva helyes, és ez nem stílus-kérdés: a paritás a **mérőeszköz
+kalibrációja**, a +0,186 a **leolvasás**. Leolvasást kalibráció előtt publikálni ugyanaz a
+családba tartozó hiba, mint amit az [[L682]] §1 ír le — csak ott **melyik** artefaktumot
+mértem volt a kérdés, itt meg azt, hogy **reprodukálja-e** az artefaktum azt, aminek hiszem.
+
+**A szabály.** Egy új assetet először a **portja** paritásán kell átvinni, és csak utána
+mérni vele; ha a sorrend mégis felborult, akkor a paritást **ugyanabban a körben** kell
+pótolni, és a kimondani, hogy visszafelé történt.
+
+*Egy ADR-sor, ami egy fájlra mutat, nem fedés. A fedés az, ha valami elbukik, amikor a fájl
+rossz.*
+
+Lásd még [[L671]], [[L682]], ADR 0473, ADR 0555, ADR 0567, ADR 0568.
+
+## L684 — Egy ablációs alapvonalhoz mért javulás nem elfogadási kritérium; és „egyik sem tanult ezeken az ablakokon" nem azonos azzal, hogy „egyformán ismeretlen" (E18-R43, 2026-09-12)
+
+### 1. Tizenegy körön át egy assetet a saját alapvonalához mértünk, a szállítotthoz soha
+
+Az ADR 0554 azt állította — helyesen —, hogy a GuitarSet hozzáadása **mindkét** tartalék
+korpuszt emelte: GuitarSet 0,4468 → ..., Klangio 0,3836 → ... Ez **adat-abláció**: ugyanaz a
+szerelvény, ugyanazok a splitek, egy kar hozzáadva. Igaz állítás.
+
+Amit **soha senki nem mért**: a jelölt assetet **a szállított assethez**, egy műszerrel,
+minden korpuszon. Amikor végre megmértem:
+
+```
+  Klangio, irány-macro-F1, azonos foldon      szállított   settled    delta
+  A  gitáros 4 (a settled tiszta held-outja)    0,9490     0,5072   −0,4418
+  B  a szállított eval-foldja (a settled ELŐNYBEN)  0,7950 0,7428   −0,0521
+  C  egyik sem tanult ezeken az ablakokon       0,8013     0,5359   −0,2653
+```
+
+A settled asset a **telepítési** korpuszon (Klangio = `recording_*_phone.wav`, a
+`klangio.py` saját szavaival „our deployment condition") **rosszabb** — miközben GuitarSeten
+in situ **+0,186**. Csere, nem nyereség, és a rossz irányba.
+
+**És miért nem derült ki hamarabb:** a szállított asset súlyai **csak `.bin`-ként** léteznek
+(a tanítási artefaktumai nincsenek meg), és **nem volt olvasó**. Az összevetés tehát nem
+*kimaradt*, hanem **lehetetlen** volt. Ez a rosszabb eset, mert semmi nem jelzi: egy kimaradt
+mérés hiányzik a listáról, egy lehetetlen mérés **nem kerül fel** a listára.
+
+**A szabály.** Ha egy összevetés lehetetlen, az **eszköz-hiányosság**, amit be kell zárni —
+nem ok arra, hogy valami mást vessünk össze helyette. Az `ml/read_ssml.py` harminc sor;
+tizenegy kör állítása függött attól, hogy senki meg nem írta. És az elfogadási kritérium
+innentől: **egy jelölt asset akkor szállítható, ha a szállítottat MINDEN korpuszon legyőzi
+vagy hozza, egy műszerrel mérve** — ablációs alapvonalhoz mért javulás nem elég.
+
+### 2. „Egyik sem tanult ezeken az ablakokon" ≠ „egyformán ismeretlen"
+
+A próbát három folddal terveztem, és a harmadikat **torzításmentesnek** neveztem: a gitáros-4
+és a szállított eval-foldjának metszete, ahol egyik modell sem tanult ezeken a mintákon.
+Leírtam a kódba, hogy ez „BOTH clean", és ez **hibás**.
+
+A két split **fajtájában** különbözik: a szállított a **felvételek** 20%-át tartotta ki, a
+settled a **4-es gitárost** teljesen. A metszeten tehát egyik sem memorizálta a mintát, de a
+szállított **látta a 4-es gitáros többi felvételét**, a settled **egyet sem**. A C fold így
+is a szállított felé torzít — nem memorizáláson, hanem **ugyanaz-a-gitáros transzferen**
+keresztül. Nincs torzításmentes sejt, és ezt a tervezés **nem tudta megadni**.
+
+Ami megmaradt, egyszerűbb és erősebb: **a B foldon a settled az előnyben lévő** (ott
+tanult), és **mégis veszít** — ehhez nem kell torzításmentes sejt, csak a torzítás **ismert
+iránya**. A mérés értéke nem a semleges foldból jött, hanem abból, hogy tudtam, **melyik
+irányba** hazudik mindegyik.
+
+**A szabály.** Ha két modell splitje **fajtájában** különbözik, akkor nincs közös tiszta
+halmaz, és nem is kell keresni: építs olyan foldot, ami **az általad cáfolni kívánt állítás
+felé** torzít, és ha az állítás ott is elbukik, megvan a következtetés. *Egy ismert irányú
+torzítás műszer; egy „semlegesnek" hitt fold vakfolt.*
+
+### 3. Egy korpusz nem szám, hanem állítás a felhasználóról
+
+A döntést nem a két delta nagysága hozta meg (+0,186 vs −0,052), hanem az, hogy **melyik
+korpusz hasonlít a telepítésre**. A Klangio telefon-mikrofonos felvételek; a GuitarSet
+mikrofon-tömb stúdióban. Az app **a telefon mikrofonját** hallja.
+
+Ha csak a számokat nézem, a +0,186 „nagyobb", és a csere jónak látszik. A reláció azonban nem
+a deltákon van, hanem a korpuszokon. **A szabály:** egy kereszt-korpusz delta mellé ki kell
+írni, **melyik korpusz a telepítési feltétel** — különben a nagyobb szám győz, és az a szám
+egy másik felhasználóról szól.
+
+Lásd még [[L682]], ADR 0554, ADR 0567, ADR 0569.
+
+## L685 — Egy routing-jel érvényessége a MODELL tulajdonsága, nem az ötlet; és egy sötét konstans is állít valamit (E18-R43, 2026-09-12)
+
+### 1. Ugyanaz a jel az egyik assetn jelez, a másikon nem
+
+A `_settleBelowMargin = 0.30` azért legitim, mert az irány-margó **tényleg** jelzi, hogy a
+gyors hívás téved — ezt az [[L672]] §2 kritériumként rögzítette, és a próba **kiírja**. A
+tábla, amire az ADR 0563 épült:
+
+```
+  fast margó    settled asset    szállított asset
+   0,0–0,2         0,4000            0,2188
+   0,2–0,4         0,4167            0,4545
+   0,4–0,6         0,5455            0,2286
+   0,6–0,8         0,5588            0,3000
+   0,8–1,0         0,8500            0,3202
+```
+
+Bal oldal **monoton**, jobb oldal **lapos és nem monoton** — ugyanaz a jel, ugyanaz a szelet,
+ugyanaz az 530 ütés, **más modell**. A kritérium tehát nem egyszer eldönthető kérdés: a
+routing-jel érvényessége **asset-enként** mérendő.
+
+És a következmény nem kozmetikai: a szállított assetn a letisztult tier **+0,1919**-et ér
+(macro 0,3340 → 0,5259), de a margó-alapú routing ebből **+0,0044**-et fog, mert a nyereség a
+**megfelelő** margójú ütéseken van (+0,3230), nem a rövideken (+0,0909). A szabály a jó
+ötletből a rossz részhalmazt választja ki — nem azért, mert a szabály hibás, hanem mert egy
+**másik** modellre illesztették.
+
+**A szabály.** Egy jel, amire routolunk (margó, konfidencia, entrópia, bármi), **nem**
+öröklődik modellcserén át. A kritériumot — „jelez-e?" — minden assetre újra ki kell mérni, és
+az eredményt **az asset nevével együtt** kell leírni.
+
+### 2. A doc-komment mindent megnevezett, csak azt nem, ami számított
+
+A `_settleBelowMargin` kommentje gondosan rögzítette a próbát (`probe_settled_tier_value.py`),
+a szeletet (held-out GuitarSet, ismeretlen játékos ÉS darab), a mintaszámot (530 ütés), a
+hibrid-görbét, sőt azt is, miért nem a magasabb sorokat választottuk. **Az assetet nem.**
+
+És pont az volt a különbség. A tábla a `weights_live_3c_settled.npz`-n készült — azon az
+assetn, amit az ADR 0555 D3 szándékosan **bekötetlenül** hagyott, és amiről az ADR 0569
+kimutatta, hogy a telepítési korpuszon **visszaesik**. Egy komment, ami ennyi
+proveniencia-részletet felsorol, **általánosnak látszik**: a következő olvasó (én, négy
+körrel később) nem kérdezi meg, hogy melyik súlyokról van szó.
+
+**A szabály.** Ha egy komment **mért táblát** hordoz, akkor a tábla **artefaktumát** is
+nevezze meg — súlyok, asset-fájl, revízió. A split és az n nem elég: azok a *mérésről*
+szólnak, az asset arról, hogy **miről**.
+
+### 3. Egy sötét konstans nem mis-shippel, de az indoklása igen
+
+A `settledTier` **false**, tehát a `_settleBelowMargin` ma nem fut: semmilyen viselkedés nem
+hibás. Mégis javítani kellett, mert amit szállít, az az **érvelés** — és azt a következő kör
+örökli. Ha a felkapcsoló kör elolvassa a régi kommentet, a margó-routingot készen kapja
+indoklással, és a szállított assetn **+0,0044**-et épít oda, ahol **+0,1919** lett volna.
+
+*A sötétség a viselkedést védi, nem a gondolatmenetet.*
+
+Lásd még [[L672]], [[L682]], [[L684]], ADR 0556, ADR 0563, ADR 0569, ADR 0570.
+
+## L686 — Egy eloszláson kívüli bemenet nem „rosszabb", hanem KISZÁMÍTHATATLAN; és egy osztály gyengesége csak akkor az osztályról szól, ha két korpuszon megvan (E18-R43, 2026-09-12)
+
+### 1. Ugyanaz a szabály, ugyanaz az asset, két korpusz, ELLENTÉTES előjel
+
+A „minden ütést letisztítani" szabályt az ADR 0571 GuitarSeten **in situ** mérte:
+**+0,1679** macro. Meggyőző szám, saját műszerrel, a szállító úton. Aztán a telepítési
+korpuszon:
+
+```
+  szállított asset, csak gyors → csak letisztult      macro
+  GuitarSet (in situ)                              +0,1679
+  Klangio   (orákulum, a telepítési feltétel)      −0,2455
+```
+
+A felütés Klangion **0,7579 → 0,3118**-ra omlik. Ugyanaz az asset, ugyanaz a szabály.
+
+A magyarázat, ami **nem** mechanizmus, hanem a bizonyíték általánosítása: a szállított asset
+a **csonkítatlan** ablakot sosem látta (`train_live_3c.py` csak `live70`-et tölt). Egy
+eloszláson kívüli bemeneten a modell nem *rosszabb* — **kiszámíthatatlan**, és a
+kiszámíthatatlanság úgy néz ki, ahogy itt: két korpusz, két előjel. Amelyik korpuszon
+először mérek, azt fogom elhinni.
+
+És a kontroll, ami ezt eldöntötte: ugyanaz a mérés azon az assetn, ami **mindkét** levágáson
+tanult (ADR 0554) — ott a letisztult tier **mindkét** korpuszon pozitív (+0,0655 GuitarSet,
++0,1299 Klangio). Tehát nem az **ötlet** rossz, hanem a **bemenet** volt eloszláson kívül.
+
+**A szabály.** Ha egy döntés a modellt olyan bemeneten használja, amin **nem tanult** (más
+levágás, más mintavételezés, más ablakhossz), akkor egy korpusz mérése **nem elég** — és nem
+azért, mert kevés, hanem mert az előjel sem garantált. A kontroll egy olyan modell, ami **az
+adott bemeneten tanult**: ha ott a hatás konzisztens, a különbség az eloszlás-eltérés, nem az
+ötlet.
+
+### 2. Egy korpuszon mért osztály-gyengeség nem az osztályról szól
+
+Egy körrel korábban ezt írtam: „aminek több hang kell, az a lefelé ütés volt; **a felütéshez
+adat kell**". GuitarSeten a szállított asset felütés-F1-je **0,2007** — a szám stimmel, a
+következtetés nem:
+
+```
+  szállított asset, gyors tier, fel-F1     GuitarSet 0,2007     Klangio 0,7579
+```
+
+Ugyanaz a modell a **saját** korpuszán a felütést **0,76**-tal hozza. Tehát **tud** felütést;
+amit nem tud, az **átvinni** — ez az [[ADR 0550]] diagnózisa (kereszt-korpusz transzfer),
+nem az adat-hiány. Az „adat kell" következtetés egy **transzfer**-hibát adat-hibának
+nevezett, és ezzel egy rossz kört írt volna elő (több felütés-adat gyűjtése helyett a
+transzfer javítása kell).
+
+**A szabály.** Egy osztály gyengesége akkor **az osztály** tulajdonsága, ha **legalább két**
+korpuszon megvan. Egy korpuszon mért osztály-gyengeség alapértelmezésben **transzfer**, amíg
+nem bizonyított az ellenkezője. *A „hiányzik az adat" a legdrágább diagnózis, amit egyetlen
+korpuszból fel lehet írni: egy adatgyűjtő kört rendel olyan hibára, ami nem is ott van.*
+
+### 3. A fegyelem, ami ezt elkapta, a saját előző köröm szabálya volt
+
+Az [[L684]] §3-ban írtam fel: *egy kereszt-korpusz delta mellé ki kell írni, melyik korpusz a
+telepítési feltétel.* Egy körrel később pont ezt kellett alkalmaznom a saját
+GuitarSet-eredményemre — és az eredmény egy visszavont ajánlás lett. A szabályok akkor
+érnek valamit, ha a következő kör a **saját** munkájára alkalmazza őket, nem csak a
+korábbiakra.
+
+Lásd még [[L681]], [[L682]], [[L684]], ADR 0550, ADR 0553, ADR 0554, ADR 0569, ADR 0571,
+ADR 0572.
+
+## L687 — A „tiszta held-out"-nak MÉRTÉKEGYSÉGE van: a felvétel-diszjunkt nem játékos-diszjunkt, és egy same-player szám bíróként órákat visz el (E18-R44, 2026-09-12)
+
+### 1. Két kör épült egy számra, ami nem az volt, aminek hittem
+
+Az ADR 0569 D1-ben végiggondoltam a fold-torzítás **irányát**, táblázatban, három foldra,
+és a C foldról még egy tévedést is javítottam benne („nincs torzításmentes sejt, és a C NEM
+az"). Jó munka volt — és a **fajtát** mégis elvétette. A szállított asset splitje
+`split_by_recording`: a **felvételek** 20%-át tartja ki.
+
+```
+  gitáros   TRAIN felvétel   EVAL felvétel
+  1              21                6
+  2              23                5
+  4              22                5     <- a 4-es gitáros 27 felvételéből 22 a tanításban
+```
+
+Tehát a „tiszta held-out eval fold" **felvétel**-diszjunkt, de **nem játékos**-diszjunkt.
+A 0,7950 egy **same-player, új-felvétel** szám. És a fold A-ban, ahol a 4-es gitáros összes
+pengetését mértem, a sorok **78%-a literálisan a tanítókészletben** volt — ott a 0,9490
+nagyrészt memorizálás.
+
+Két kör (ADR 0569, ADR 0572) ezekre a számokra mint **bíróra** épült.
+
+### 2. A nagyságot a repó MÁR megmérte, és nem néztem meg
+
+`ml/model_card.json`, r172, leave-one-guitarist-out, **live-70 ms**, a 4-es fold `n_test`
+értéke **3721** — bitre ugyanaz a fold:
+
+```
+  kihagyott gitáros   test_acc      same-player (live70, új felvétel): ~0,799
+  1                   0,6508
+  2                   0,6387
+  4                   0,5289   <- a LEGROSSZABB a három közül
+```
+
+A `docs/rag/chunks/018` saját szavaival: *„a legrosszabb ismeretlen gitáros közel
+pénzfeldobás"*, és *„a ~15 pontos same-player→new-player esés a valódi telepítési rés"*.
+
+A settled split tehát **pont a legnehezebb gitárost** tartja ki — és ezt a tényt a model card
+tizenegy kör óta tartalmazta. A torzítás **irányáról** gondolkodtam, amikor a **nagysága** már
+meg volt mérve és le volt írva.
+
+### 3. A szabály
+
+**Egy kereszt-asset összevetés előtt nem azt kell megkérdezni, hogy „melyik modell látta ezt a
+foldot", hanem azt, hogy „MIBEN diszjunkt a régebbi asset splitje".** Felvétel? Take? Játékos?
+Darab? Korpusz? A „held-out" szó mértékegység nélkül nem jelent semmit, és egy
+felvétel-diszjunkt szám ugyanúgy same-player, mint egy in-sample.
+
+És utána: **a repó saját provenance-artefaktumát (model card, RAG chunk) fel kell lapozni,
+mielőtt a torzítás nagyságát becsüljük.** Az [[L682]] §1 azt írta fel, hogy *provenance
+mechanizmus előtt*. Ez a folytatása: **provenance a TORZÍTÁS-BECSLÉS előtt is** — és a
+provenance nem csak az, amit az artefaktum magáról állít, hanem az is, amit a repó korábban
+megmért róla.
+
+Lásd még [[L682]], [[L684]], [[L688]], ADR 0550, ADR 0569, ADR 0572, ADR 0573.
+
+## L688 — Egy elfogadási kritériumot a SEJTEK dönthetőségére kell ellenőrizni, különben nem kritérium, hanem örök blokk (E18-R44, 2026-09-12)
+
+### 1. A kritérium jó szándékkal született, és egyetlen jelölt sem teljesítheti
+
+Az ADR 0569 D4 ezt írta fel, és igaza volt abban, amit cáfolt (ablációs alapvonalhoz mért
+javulás nem elfogadás — [[L684]]):
+
+> „Egy jelölt asset akkor szállítható, ha **a szállítottat minden korpuszon legyőzi vagy
+> hozza**."
+
+Sorold fel viszont az **összes elérhető sejtet** egy mindkét korpuszon tanító jelölt és a
+szállított asset között:
+
+```
+  sejt                             SHIP           jelölt           tiszta?
+  Klangio, BÁRMELY fold            same-player    új-játékos       NEM — SHIP-nek kedvez
+  GuitarSet, Klangio-only jelölt   nem látta      nem látta        IGEN
+  GuitarSet, mindkét korpuszos     nem látta      TANULTA          NEM — a jelöltnek kedvez
+```
+
+Egyetlen sor sem dönthető. Minden Klangio-sejt a szállítottnak kedvez (mert a splitje nem ad
+új-játékos számot), minden GuitarSet-sejt a jelöltnek (mert a jelölt tanult rajta). A
+kritérium tehát nem szigorú — **mérhetetlen**, és emiatt **minden** jelöltet örökre blokkol,
+függetlenül attól, jó-e.
+
+### 2. Amit egy kritérium megírásakor el kell végezni
+
+**Írd fel a sejt-táblát, mielőtt a kritériumot felírod.** Minden sorra: mit látott az egyik
+modell, mit a másik, és melyik felé torzít. Ha nincs egyetlen dönthető sor sem, a kritérium
+nem szigorú, hanem **üres** — és egy üres kritérium a legdrágább fajta, mert szigorúságnak
+látszik, és a következő köröket olyan artefaktum keresésére küldi, amit nem tud elfogadni.
+
+### 3. Ami a helyére lép
+
+Két dolog, és mindkettő szerkezeti, nem szorgalmi:
+
+1. **Recept-vs-recept EGY splitten** — a szállított asset nem bíró, hanem egy sor a táblában,
+   a kitettségével kiírva. Ez **ma** elérhető (`ml/experiment_recipe_ladder.py`).
+2. **Egy HARMADIK korpusz, amit egyik sem látott.** Ez az egyetlen szerkezeti feloldás a
+   SHIP-vs-jelölt kérdésre. A HANDOFF listáján ez eddig „jó lenne" tételként állt (a
+   felhasználó címkézett felvétele, a Guitar-TECHS ingesztálás); ettől a körtől a szállítási
+   döntés **előfeltétele**.
+
+Lásd még [[L684]], [[L687]], ADR 0569, ADR 0573, ADR 0575.
+
+## L689 — A bemenet legSZEMBETŰNŐBB különbsége nem ott van, ahol a kár: mérd a különbség-profilt, ne a tájékozódási pontot (E18-R44, 2026-09-12)
+
+### 1. A hipotézis kézenfekvő volt, és a rá épített próba megdöntötte
+
+Megmértem, hogy a 70 ms-os ablakban a 15 frame-ből az utolsó **4 halott konstans** (sor-szórás
+**0,0015**, átlag −13,81, mind a 11767 ablakon), a csonkítatlanban pedig mindegyik hordoz
+jelet. Kézenfekvő következtetés: a két-tier OOD-kára ebben a 4 frame-ben van — ott változik a
+bemenet *látványosan*.
+
+Aztán megmértem (`ml/probe_settled_window_frames.py`):
+
+```
+  szállított asset, fold A (n=3721)            javít / reprodukál a kárból
+  RESTORE f11..14 (a halott régió)    0,7826      56 %
+  RESTORE f 7..14                    0,9339      96 %
+  INJECT  f11..14                    0,7964      40 %
+  INJECT  f 7..14                    0,5860      96 %
+```
+
+A halott régió a kár **40–56%-a**. Amit ~95%-ban magyaráz, az a **f7..f14** — mert az 1024
+mintás analízis-ablak **több frame-en át átlóg** a vágáson, és a különbség-profil **rampa**:
+
+```
+  |Δ| frame-enként:  f7 2,62   f8 4,20   f9 7,38   f10 14,04   f11..14 ~15,0
+```
+
+A f9 átlaga a `live70`-ben már −6,06 a csonkítatlan +1,32-vel szemben — **a 70 ms-os
+határidőn belül van, és már félig elhallgattatott.** A kárt tehát túlnyomórészt azok a
+frame-ek hordozzák, amik csak **elhalványulnak**, nem azok, amik **kilapulnak**.
+
+### 2. A szabály
+
+**Egy eloszlás-eltérés lokalizálásához a különbség PROFILJÁT kell megmérni, nem azt a pontot,
+ahol a különbség a legfeltűnőbb.** A konstans régió volt a tájékozódási pont: bináris,
+szemmel látható, könnyen elmondható. A rampa volt a válasz: folytonos, és csak akkor látszik,
+ha frame-enként kiíratod a `|Δ|`-t.
+
+A határidő egy **időpont**, a lábnyoma a tenzorban viszont **sáv** — mert minden időbeli vágást
+az analízis-ablak elmos. Aki a vágási időpontot keresi a tenzorban, rossz felbontáson keres.
+
+### 3. És a próba saját korlátja is mérés volt
+
+Minden ilyen szerkesztés olyan bemenetet épít, amit **egyik** tanító eloszlás sem tartalmaz.
+A settled assetn **csak a f14**-et visszatenni konstansra katasztrofális (macro 0,3325, le-F1
+**0,1368**), a f13..14 visszatétele viszont rendben (0,6351). Ezt **nem értelmezem** — azt
+határolja be, milyen felbontásig olvasható a próba: a 8-frame-es következtetés áll (két
+foldon, két irányban), a frame-enkénti ingadozás nem. *Egy ablációs próbánál a beépített
+kontroll (k=0 az ellenkező alapvonalat adja) és a felbontás-korlát kimondása ugyanannyira a
+mérés része, mint a szám.*
+
+Lásd még [[L681]], [[L686]], ADR 0554, ADR 0570, ADR 0572, ADR 0574.
+
+## L690 — Egy hamis „ez nem elérhető" állítás messzebb terjed, mint egy hamis szám, mert a számot a következő kör újramérné, a kifogást viszont megörökli (E18-R45, 2026-09-13)
+
+### 1. Az állítás, és mi épült rá
+
+Az ADR 0569 Kontextusában ezt írtam:
+
+> „Az in-situ változat ebben a környezetben nem elérhető: a Klangio korpusz **nincs a
+> gépen**, a Dart pipeline pedig audiót fogyaszt, nem gyorsítótárazott ablakot."
+
+Erre épült **három kör**:
+
+- az ADR 0569 egész Klangio-oldala **orákulum**-ablakon;
+- az ADR 0571 D4 korlátja (*„az orákulum-műszer delta-kérdésekre korroborált, szintekre
+  nem"*) — ami **igaz és hasznos**, de azért kellett, mert a szinteket nem mértem;
+- az ADR 0572 kikötése (*„a Klangio-számok orákulum-ablakosak, nem in situ (a korpusz nincs
+  a gépen)"*) és a HANDOFF visszatérő tétele: *„a Klangio in-situ söprése, **ha a korpusz
+  bekerül a gépre**"*.
+
+A korpusz a gépen volt. `ml/data/klangio/`, **82** telefon-wav + **82** `.strums`,
+gitignore-olva. És nem „azóta került oda":
+
+```
+  12:38–12:42   a 82 wav + 82 .strums a gépre kerül
+  12:53         ml/klangio_live70.npz       EBBŐL épül
+  15:53         ml/klangio_neg_live70.npz   EBBŐL épül
+  22:12         ADR 0569 commit: „a Klangio korpusz NINCS A GÉPEN"
+  22:44         ADR 0572 ugyanezt megismétli
+```
+
+Kilenc és fél óra.
+
+### 2. A bizonyíték nem hiányzott — RAJTA mértem
+
+A `honest_eval.build_live` a gyorsítótárat csak akkor **írja meg**, ha előtte **beolvasta**
+a korpuszt:
+
+```python
+    if os.path.exists(path):            # cache hit -> korai visszatérés
+        ...
+    for rid in recording_ids(DATA):     # különben: a KORPUSZT olvassa
+        pcm = _read_wav(f"{DATA}/recording_{rid}_phone.wav")
+```
+
+Tehát a `klangio_live70.npz` **létezése** maga cáfolta az állítást, és én **azon a fájlon
+mértem**, miközben kimondtam, hogy a forrása nem elérhető. Nem egy hiányzó bizonyítékot
+néztem el, hanem azt, amit a kezemben tartottam.
+
+*Ha gyorsítótárat használsz, kérdezd meg, mi építette. A derivátum létezése állítás a
+forrásról.*
+
+És volt egy harmadik cáfolat is, r164 óta a repóban: **két teszt, ami erre a könyvtárra
+mutat, és aminek az első dolga megnézni, ott van-e.**
+
+```
+  test/tools/klangio_real_ab_test.dart      const dataDir = 'ml/data/klangio';
+                                            „Auto-skips when ml/data/klangio is absent"
+  test/tools/onset_recall_probe_test.dart   ugyanazt a dataDir-t importálja
+```
+
+A repó tehát **kész elérhetőség-próbát** tartalmazott. Nem nehezen hozzáférhető tényt
+néztem el, hanem olyat, amire egy egysoros ellenőrzés várt — és a kifogás pont attól tudott
+három körön át megállni, hogy az ellenőrzést soha nem írtam le.
+
+### 3. Miért bírta ki három körön át — és ez az igazi tanulság
+
+Egy hamis **számot** a következő kör újramér. Megvan a műszer, megvan a fogás, és a
+fegyelem éppen arra való: ez az arc öt-hat saját állítást vont vissza így, a saját
+méréseivel.
+
+Egy hamis **„ezt nem tudjuk megmérni"** állítást viszont senki nem mér újra — mert nem
+mérésként viselkedik, hanem **kifogásként**. A következő kör nem ellenőrzi, hanem
+**örökli**, és épít rá: korlátot ír hozzá („orákulumon csak deltát"), elnapolási tételt tesz
+a HANDOFF-ba („ha bekerül a gépre"), és ezzel a kifogás **infrastruktúrát** kap. Minden
+további kör után drágább kimondani, hogy az alapja egy `ls` volt.
+
+**A szabály: egy „X nem elérhető ebben a környezetben" állítás MÉRÉS, és a legolcsóbb mérés
+az egész repóban. Írd ki a parancsot, ami ellenőrizte.** Ha egy ADR azt mondja, valami nem
+elérhető, ott kell lennie a mellette álló sornak, ami ezt megállapította — `ls`, `find`,
+`test -d` —, különben az állítás nem mérés, hanem emlék. Egy emlék pedig elavul, és
+csendben avul el: a környezet megváltozik, az állítás nem.
+
+### 4. Amit NEM állítok
+
+Az orákulum-mérések **nem hibásak**: azt mérték, amit mondtak, és az ADR 0571 D4
+delta-korroborációja áll. Ami megdőlt, az az **ok**, amiért nem mértem in situ — és három
+kör elnapolása.
+
+Lásd még [[L682]], [[L683]], [[L687]], ADR 0569, ADR 0571, ADR 0572, ADR 0576.
+
+## L691 — Két egyező seed nem replikáció: háromszor egymás után a harmadik fordította meg az előjelet, és a szabály nem t-próba, hanem előjel-egyezés (E18-R46, 2026-09-13)
+
+### 1. Ugyanaz az alak, háromszor
+
+```
+  állítás                                      s42       s1        s2       kimenet
+  ADR 0575 nettó R0→R4, Klangio              +0,1051   +0,0923   −0,0403  visszavonva
+  ADR 0578 R2→R3 (GuitarSet-adat) Klangión   +0,0810   +0,0642   −0,0413  visszavonva
+  ADR 0580 R4→R5 (reg elvétele) Klangión     +0,0533   +0,0440   −0,0244  elutasítva
+```
+
+Mindhárom esetben **s42 és s1 egyetértett, és s2 megfordította.** És mindhárom esetben
+ugyanazt gondoltam közben: *„két független seed ugyanazt az előjelet adta, ez nem lehet zaj."*
+
+Lehet. A Klangio@70 cella seed-szórása az R0 karon **0,0757** — ami **nagyobb**, mint a
+három vizsgált hatás bármelyike. Ha a zaj ekkora, két egyező előjel ~25% eséllyel adódik
+puszta szerencséből még akkor is, ha a valódi hatás nulla.
+
+### 2. Miért épp ez a csapda ragadós
+
+Egy seed után **tudom**, hogy egy seed nem elég — ezt az ADR 0575 D5 ki is írta. Két seed után
+viszont az agy „megerősítést" lát, nem „két mintát": megjelenik egy **minta**, és a minta
+meggyőzőbb, mint a szám. A kettő ráadásul *rendre* közel volt egymáshoz (+0,105/+0,092;
++0,081/+0,064; +0,053/+0,044) — ami **pont az**, amit két korrelált zajminta is produkál, de
+úgy *érződik*, mint konzisztencia.
+
+### 3. A szabály, és miért előjel és nem t-próba
+
+**Ezen a létrán egyetlen recept-állítás sem mehet ADR-be két seedből. Mindhárom `STD_SEEDS`
+kötelező, és ha egy delta előjele nem egyezik mind a háromon, az eredmény „NEM
+MEGÁLLAPÍTOTT" — nem „kisebb", nem „gyengébb".**
+
+Miért előjel-egyezés, és nem konfidencia-intervallum? Mert n=3 mellett a **szórás-becslés maga
+is zajos**, tehát egy t-próba pontossága látszat. Az előjel-egyezés durvább, de **őszintébb**
+kritérium: nem tesz úgy, mintha három pontból elosztást ismernénk.
+
+És van egy korábbi hibám, ami ugyanide tartozik: az ADR 0575 D5 megmért egy **zajpadlót**
+(~0,048 két script között, egy seeden), és azt a **nettóra** alkalmazta. *Egy egy-seedes
+zajpadló a LÉPÉSEKRE ad korlátot, nem az összegükre* — ha a lépések külön-külön
+seed-érzékenyek, a nettó szórása nagyobb lehet, nem kisebb. A padló szám önmagában nem tudta
+volna ezt megmondani; csak a seedek.
+
+### 4. Amit NEM jelent
+
+Nem azt, hogy az s2 „rossz seed", és nem azt, hogy a létra használhatatlan. A **GuitarSet**
+oldalon ugyanez a létra háromszor egyező, szoros deltákat ad (a GuitarSet-adat lépése
+**+0,2823 ± 0,0264**, a nettó **+0,3765 ± 0,0713**) — ott a hatás nagyobb, mint a zaj. A
+szabály nem a műszert utasítja el, hanem azt mondja meg, **mekkora hatást tud ez a műszer
+kimutatni**: a Klangio@70 cellán nagyjából a 0,08-as szóráson felül.
+
+Lásd még [[L681]], [[L685]], [[L687]], ADR 0554, ADR 0575, ADR 0578, ADR 0580.

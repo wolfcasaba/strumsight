@@ -13,6 +13,7 @@ import 'superflux_onset_detector.dart';
 /// confident the direction call is.
 class StrumEvent {
   const StrumEvent({
+    required this.onsetFrame,
     required this.timeSec,
     required this.direction,
     required this.confidence,
@@ -20,6 +21,16 @@ class StrumEvent {
     this.pUp,
     this.pNoStrum,
   });
+
+  /// The analyzer's own frame index for this strum's detected onset — its
+  /// IDENTITY, and what a later [StrumRevision] matches on.
+  ///
+  /// An integer on purpose. Matching on [timeSec] would need an epsilon, and at
+  /// 200 bpm sixteenths consecutive strokes are ~13 frames (75 ms) apart while a
+  /// settled verdict takes ~41 frames, so up to three strokes are in flight at
+  /// once. An epsilon wide enough to absorb float rounding could reach the
+  /// NEIGHBOURING stroke, which is exactly the hazard ADR 0556 names.
+  final int onsetFrame;
 
   final double timeSec;
   final StrumDirection? direction;
@@ -33,6 +44,48 @@ class StrumEvent {
   final double? pUp;
 
   /// See [pDown]; carried from [StrumClassification.pNoStrum].
+  final double? pNoStrum;
+}
+
+/// A SETTLED direction verdict for a strum [StrumAnalyzer.process] already
+/// reported (ADR 0556 D3).
+///
+/// It revises DIRECTION and nothing else. It cannot create a strum, cannot
+/// retract one, and says nothing about whether a stroke happened — those were
+/// decided at the fast deadline and are not reopened. A consumer must match it to
+/// the strum whose [StrumEvent.onsetFrame] equals [onsetFrame], never to "the
+/// latest strum": by the time a revision lands, later strokes may already have
+/// arrived.
+///
+/// Per ADR 0556 D1 the revision must NOT redraw an arrow the learner has seen.
+/// Its purpose is the direction used for SCORING and for the post-bar review —
+/// where there is no latency requirement and where a wrong answer actually costs
+/// the learner marks.
+class StrumRevision {
+  const StrumRevision({
+    required this.onsetFrame,
+    required this.timeSec,
+    required this.direction,
+    required this.confidence,
+    this.pDown,
+    this.pUp,
+    this.pNoStrum,
+  });
+
+  /// Identity of the strum being revised — matches [StrumEvent.onsetFrame].
+  final int onsetFrame;
+
+  /// Same reported attack instant the original [StrumEvent] carried, recomputed
+  /// from [onsetFrame] rather than stored, so the two can never disagree.
+  final double timeSec;
+
+  /// The settled direction (`null` = the model is still ambiguous, which is a
+  /// verdict, not a failure).
+  final StrumDirection? direction;
+
+  final double confidence;
+  final double? pDown;
+  final double? pUp;
   final double? pNoStrum;
 }
 
@@ -55,6 +108,7 @@ class StrumAnalyzer {
     this.window = DspConfig.onsetWindow,
     this.hop = DspConfig.onsetHop,
     StrumDirectionClassifier? classifier,
+    this.settledTier = false,
   }) : _fft = FFT(window),
        _hann = Float64List(window),
        _windowed = Float64List(window),
@@ -73,6 +127,22 @@ class StrumAnalyzer {
   final int window;
   final int hop;
 
+  /// Whether to produce [settledRevision] at all (ADR 0556 D3). **Off by
+  /// default, deliberately.**
+  ///
+  /// Enabling it makes the classifier run a SECOND time per strum — with the live
+  /// CRNN behind the seam that is a second model forward, doubling the direction
+  /// model's per-strum cost, and at 200 bpm sixteenths there are ~13 strums a
+  /// second. Until a consumer actually reads [settledRevision], that cost would
+  /// buy a learner's phone nothing, so the tier stays dark.
+  ///
+  /// It is switched on by the round that wires the settled direction into SCORING
+  /// (ADR 0558 D1: the tie-break fusion rule, measured to never lose at any
+  /// learner compliance) — the same round that can justify the cost with the
+  /// +0.0723 macro-F1 it buys. The flag is not a feature toggle for users; it is
+  /// the seam that keeps an unconsumed computation from shipping.
+  final bool settledTier;
+
   // Tunables (RAG chunks 005–006; update the chunk when retuned).
   static const _lowBandMaxHz = 200.0;
   static const _highBandMinHz = 1000.0;
@@ -88,6 +158,105 @@ class StrumAnalyzer {
   // baseline window into the attack).
   static const double _attackOffsetFrames = 2.5;
 
+  /// A fast verdict at or above this direction margin (`|pDown - pUp|`) is taken as
+  /// final: no settled verdict is requested, so no second model forward is spent.
+  ///
+  /// MEASURED (`ml/probe_settled_tier_value.py`, held-out GuitarSet, unseen player AND
+  /// tune, 530 strokes) **on `ml/weights_live_3c_settled.npz`** — the asset ADR 0555 D3
+  /// left unwired, NOT the one that ships. Naming it matters, because ADR 0570 re-ran this
+  /// table on the SHIPPED asset and got a different answer — the margin is flat there, so
+  /// routing on it is legitimate only for the asset it was measured on.
+  ///
+  /// ADR 0569 also read that asset as regressing on Klangio and withdrew its swap; **that
+  /// reading is itself withdrawn (ADR 0573/0575).** It compared a new-player model against
+  /// the shipped asset's SAME-PLAYER Klangio score: `split_by_recording` is
+  /// recording-disjoint, not player-disjoint, and the shipped asset trained on 22 of
+  /// guitarist 4's 27 recordings. On a matched split the settled recipe wins on BOTH corpora
+  /// (+0.1051 Klangio, +0.3448 GuitarSet — ADR 0575 D2). What still blocks the swap is not a
+  /// regression: it is the absence of a cell that can decide the two assets (ADR 0573 D6).
+  ///
+  /// On the settled asset the margin really does predict whether the fast call is right,
+  /// which is what makes routing on it legitimate:
+  ///
+  /// ```
+  ///   fast margin   n     fast accuracy
+  ///    0.0-0.2      70       0.4000
+  ///    0.2-0.4      72       0.4167
+  ///    0.4-0.6      66       0.5455
+  ///    0.6-0.8     102       0.5588
+  ///    0.8-1.0     220       0.8500
+  /// ```
+  ///
+  /// And the hybrid curve, against fast-only macro-F1 0.5262:
+  ///
+  /// ```
+  ///   margin t   macro    settled verdicts requested
+  ///     0.10     0.5389        6.4 %
+  ///     0.30     0.5813       19.8 %     <- this constant
+  ///     0.70     0.6044       49.1 %
+  ///     1.01     0.5917      100.0 %     (= settled-only)
+  /// ```
+  ///
+  /// 0.30 buys 84 % of the settled-only gain for a fifth of its cost. The higher rows
+  /// are NOT chosen: above ~0.3 the curve is within a handful of strokes of itself on
+  /// this sample (the t = 0.70 row even exceeds settled-only, which a 530-stroke
+  /// up-F1 cannot support), and each step costs both CPU and direction-neutral arrows.
+  ///
+  /// ## On the SHIPPED asset this routing rule does not hold (ADR 0570)
+  ///
+  /// The same probe, same split, same 530 strokes, `--asset=assets/ml/strum_crnn_live_3c.bin`
+  /// at its own 0.85 gate:
+  ///
+  /// ```
+  ///   fast margin   n     fast accuracy      <- flat and NON-MONOTONE
+  ///    0.0-0.2      32       0.2188
+  ///    0.2-0.4      22       0.4545
+  ///    0.4-0.6      35       0.2286
+  ///    0.6-0.8      60       0.3000
+  ///    0.8-1.0     381       0.3202
+  /// ```
+  ///
+  /// So for the asset that actually ships the margin carries no information about
+  /// correctness, and routing on it is unjustified. The settled tier is still worth a
+  /// great deal there — fast-only macro 0.3340, settled-only 0.5259, **+0.192** — but the
+  /// gain sits on the ADEQUATE-margin strokes (+0.323 at t = 0.30) rather than the short
+  /// ones (+0.091), so this constant captures **+0.0044** of it. The rule for the shipped
+  /// asset would be "settle EVERY stroke", not "settle the short-margin ones".
+  ///
+  /// And that +0.192 is no longer an oracle-window extrapolation: ADR 0571 recorded the
+  /// settled call IN SITU in the same sweep, and the shipped path gains **+0.1679** macro
+  /// with the settled direction on every stroke — with the whole of it on DOWNSTROKES
+  /// (0.5736 -> 0.9032) and essentially none on upstrokes (0.2007 -> 0.2069).
+  ///
+  /// **But that is a GuitarSet result, and ADR 0572 measured the other corpus.** On
+  /// Klangio — phone mic, the deployment condition — the same shipped asset with the same
+  /// rule loses **0.2455** macro (0.7950 -> 0.5495), because its up-F1 collapses from
+  /// 0.7579 to 0.3118. Opposite signs on the two corpora, which is what an
+  /// out-of-distribution input looks like: this asset trained on the 70 ms truncation only
+  /// (`train_live_3c.py` loads `live70`). On the asset that DID train at both truncations
+  /// the settled tier is positive on both corpora (+0.0655 GuitarSet, +0.1299 Klangio), so
+  /// the two-tier decision needs such an asset.
+  ///
+  /// **Do NOT light this with the shipped asset** — but note the reason changed. It is not
+  /// that the alternative asset regresses on Klangio: ADR 0573/0575 withdrew that reading
+  /// (it measured a new-player model against a same-player score, and on a matched split the
+  /// settled recipe wins on both corpora). The reason is the line above, which stands because
+  /// it is a WITHIN-asset comparison: feeding THIS asset an untruncated window is an
+  /// out-of-distribution input. ADR 0574 localised that damage to frames 7..14 of 15 — the
+  /// truncation's whole footprint, not the 4 dead tail frames, which account for only
+  /// 40-56 % of it.
+  ///
+  /// Also corrected there: the upstroke is not a data problem but a TRANSFER one. The
+  /// shipped asset's up-F1 is 0.7579 on Klangio against 0.2007 on GuitarSet — ADR 0550's
+  /// diagnosis, not ADR 0553's.
+  ///
+  /// None of that is live: [settledTier] is false, so this constant is dark either way.
+  /// It is written down because the justification above is asset-specific and the comment
+  /// did not say so — and because ADR 0556 D1/D3's objection to settling everything (the
+  /// arrow would wait or go direction-neutral) does not bind today: ADR 0566 D3 found that
+  /// no shipped surface renders a DETECTED direction at all.
+  static const double _settleBelowMargin = 0.30;
+
   final FFT _fft;
   final Float64List _hann;
   final Float64List _windowed;
@@ -101,6 +270,13 @@ class StrumAnalyzer {
   // slot): at 200 BPM 16ths the next onset (~75 ms) can land while the
   // previous one is still inside its ~70 ms classify window.
   final ListQueue<int> _pendingOnsets = ListQueue();
+
+  // Strums that have ALREADY been reported and are waiting for their settled
+  // verdict. Separate from [_pendingOnsets] because the two tiers drain at
+  // different delays, and because an onset the fast tier SUPPRESSED must never
+  // enter this queue — a suppressed onset that came back later would be the
+  // analyzer inventing a stroke (ADR 0556, hazard 3).
+  final ListQueue<int> _pendingSettled = ListQueue();
   int _frameIndex = -1;
 
   /// RMS of the most recent frame (level meter).
@@ -117,13 +293,35 @@ class StrumAnalyzer {
   /// publishes it as the onset-first "strings ring now" signal.
   double? lastOnsetTimeSec;
 
+  /// The settled verdict that came due on THIS frame, or `null`. Reset every
+  /// [process] call, the same idiom as [onsetJustFired] and [lastRms].
+  ///
+  /// A separate field rather than a second return value because one frame can
+  /// legitimately carry both: a settled verdict for an earlier strum and a fast
+  /// verdict for a later one. Returning a record would make every existing caller
+  /// unpack something it does not use.
+  StrumRevision? settledRevision;
+
   double get _frameSec => hop / sampleRate;
+
+  /// Whether this fast verdict is uncertain enough to be worth a settled one.
+  ///
+  /// A null direction is always worth settling: the fast call named nothing, so there
+  /// is no arrow claim for a later verdict to contradict, and the grader would
+  /// otherwise have nothing at all (ADR 0556 D3's direction-neutral case).
+  static bool _needsSettling(StrumClassification c) {
+    if (c.direction == null) return true;
+    final down = c.pDown, up = c.pUp;
+    if (down == null || up == null) return false;
+    return (down - up).abs() < _settleBelowMargin;
+  }
 
   /// Push the next [window]-sample frame (advanced by [hop]); returns a
   /// confirmed+classified strum when one completes its evidence window.
   StrumEvent? process(Float64List frame) {
     assert(frame.length == window);
     _frameIndex++;
+    settledRevision = null;
 
     var sumSq = 0.0;
     for (var i = 0; i < window; i++) {
@@ -164,6 +362,39 @@ class StrumAnalyzer {
       lastOnsetTimeSec = (onsetFrame + _attackOffsetFrames) * _frameSec;
     }
 
+    // The SETTLED tier (ADR 0556 D3), drained BEFORE the fast tier because that
+    // branch returns: in one frame a settled verdict for an EARLIER strum and a
+    // fast verdict for a LATER one can both come due, and the early return would
+    // otherwise swallow the settled one. At most one settled verdict per frame,
+    // mirroring the fast tier — the queue is FIFO, so a dense burst delays a
+    // verdict by a frame but can never skip one.
+    final settleAfter = settledTier ? _classifier.settleAfterFrames : null;
+    if (settleAfter != null &&
+        _pendingSettled.isNotEmpty &&
+        _frameIndex - _pendingSettled.first >= settleAfter) {
+      final onsetFrame = _pendingSettled.removeFirst();
+      final settled = _classifier.classifyAt(
+        onsetFrame: onsetFrame,
+        currentFrame: _frameIndex,
+      );
+      // A settled SUPPRESSION is deliberately ignored. Existence was decided at
+      // the fast deadline and an event has already reached every consumer;
+      // retracting it would delete a stroke the learner saw, which is the visible
+      // self-correction ADR 0556 D1 forbids. The settled tier revises DIRECTION,
+      // never existence — so the fast verdict simply stands.
+      if (!settled.suppressed) {
+        settledRevision = StrumRevision(
+          onsetFrame: onsetFrame,
+          timeSec: (onsetFrame + _attackOffsetFrames) * _frameSec,
+          direction: settled.direction,
+          confidence: settled.confidence,
+          pDown: settled.pDown,
+          pUp: settled.pUp,
+          pNoStrum: settled.pNoStrum,
+        );
+      }
+    }
+
     // Classify once enough post-onset evidence has accumulated (chunk 006).
     if (_pendingOnsets.isNotEmpty &&
         _frameIndex - _pendingOnsets.first >= _classifyAfterFrames) {
@@ -179,7 +410,17 @@ class StrumAnalyzer {
       // unchanged (a null direction still yields a StrumEvent — ambiguous
       // strum, not no-strum).
       if (c.suppressed) return null;
+      // Only a strum that was actually REPORTED waits for a settled verdict, so
+      // the suppressed onset above can never come back (ADR 0556, hazard 3) — and
+      // only one whose fast margin was SHORT, because that is the only subset the
+      // settled verdict measurably improves. A classification with no
+      // probabilities (the heuristic) has no margin to judge, and also no settled
+      // tier, so it never reaches here.
+      if (settleAfter != null && _needsSettling(c)) {
+        _pendingSettled.addLast(onsetFrame);
+      }
       return StrumEvent(
+        onsetFrame: onsetFrame,
         timeSec: (onsetFrame + _attackOffsetFrames) * _frameSec,
         direction: c.direction,
         confidence: c.confidence,

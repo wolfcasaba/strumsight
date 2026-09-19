@@ -1,0 +1,8 @@
+{
+  "@@locale": "en",
+  "tutorPlanPreviewEntry": "Preview a practice plan",
+  "tutorPlanOpenPreview": "Open the practice plan preview",
+  "tutorPlanSaved": "Practice plan saved to your tutor memory.",
+  "tutorPlanSaveFailed": "The practice plan could not be saved.",
+  "tutorPlanStartUnavailable": "No practice exercise is available for this plan yet."
+}

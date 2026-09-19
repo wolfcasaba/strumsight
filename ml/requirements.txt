@@ -2,3 +2,7 @@
 numpy>=1.26
 # Model training + TFLite export (train.py) — run in CI/Colab, not on ARM64 dev.
 tensorflow>=2.16   ; platform_machine == "x86_64"
+# Measurement probes only (probe_direction_headroom.py, probe_direction_budget.py,
+# experiment_cross_corpus.py): a logistic-regression FLOOR on what the shipped
+# features carry. Never imported by the data pipeline or by the app.
+scikit-learn>=1.3

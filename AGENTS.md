@@ -99,6 +99,13 @@ A §5 a TERMÉK határait mondja ki; ezek magára a FEJLESZTŐRENDSZERRE érvén
 
 - Ne módosíts DSP-konstanst, feature extractiont, decoder paramétert vagy modell binárist, ha a kijelölt kör nem kéri.
 - Változás esetén kötelező fixture, property, parity és valós audio mérés.
+- A „valós audio mérés" KONKRÉTAN a címkézett ground-truth próbát jelenti:
+  `LIVE_WAV_DIR=... flutter test test/tooling/live_chord_wav_probe_test.dart`
+  (hét címkézett valódi gitárfelvétel). Címke nélküli anyagon a „több megnevezett
+  keret" ugyanúgy jelenthet pontosabb hallást, mint kevesebb óvatosságot — abból
+  nem lehet szállítási döntést hozni. MÉRT ok: az E18-R10/R11 kör két agentje is
+  kizárólag a tíz címkézetlen loopon pontozta magát, és a döntést végül ez a
+  próba fordította meg (ld. L655).
 - Modell assethez checksum, model card, exportverzió és licence-adat tartozik.
 - Training nem fut normál fejlesztési körben, hacsak a fejezet külön nem írja elő.
 - A shipping eredmény az appban futó implementáció mérése, nem csak Python notebook eredmény.
@@ -184,9 +191,18 @@ mérce-láncot futtatja (ugyanaz a `flutter-gates` composite + song-gate-ek +
 coverage job), csak Android-build nélkül. A gyorsítás tehát a *build*
 elhagyása, nem a mércéé — és a döntés gépi, nem ítélet kérdése.
 
-**APK-build MINDIG CI-vel** (user szabály 2026-07-29, ADR 0052): a fejlesztői
-boxon nincs Android SDK — `flutter build apk`-t ne futtass és ne is próbálj
-lokálisan; a build-evidencia a kör-branchre dispatchelt workflow:
+**APK-build MINDIG CI-vel** (user szabály 2026-07-29, ADR 0052): a
+build-evidencia a kör-branchre dispatchelt workflow, nem egy lokális build —
+a PR-en CI-futás linkje kell szerepelnie.
+
+> **A szabály INDOKLÁSA elavult, a szabály maga nem.** Az eredeti szöveg azt
+> írta, hogy „a fejlesztői boxon nincs Android SDK". Ez ezen a gépen **nem
+> igaz**: az SDK telepítve van, az emulátor fut, és egy debug build 89 s alatt
+> lement (E18-R09, a user kifejezett kérésére — ő írta a szabályt, ő is oldotta
+> fel rá). A szabály tehát továbbra is érvényes, de a helyes indok az, hogy a
+> **build-evidencia reprodukálható és auditálható** legyen, nem az, hogy lokálisan
+> lehetetlen. Lokális debug build DIAGNOSZTIKÁRA (emulátoros ellenőrzés,
+> teljesítménymérés) megengedett, ha a kör kéri — **release/evidencia APK sosem**.
 
 ```bash
 gh workflow run build-apk.yml --ref <kör-branch>

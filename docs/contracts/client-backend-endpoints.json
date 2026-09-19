@@ -158,22 +158,19 @@
       "method": "GET",
       "path": "/community/challenges",
       "source": "lib/features/community/data/repositories/challenge_repository_impl.dart:134",
-      "status": "known_gap",
-      "note": "backend/app/community/routers/challenges.py has no GET routes at all (grep-confirmed, 2026-09-03) -- only invite lifecycle (POST/DELETE) and result submission (POST) exist. listChallenges/fetchDefinition/fetchMyParticipation were written client-side (E09-R21/22) ahead of a server-side listing surface that was never built. backend/app/community/routers/** is this round's tilos zona; tracked here for a future round."
+      "status": "mounted"
     },
     {
       "method": "GET",
       "path": "/community/challenges/{challenge_public_id}",
       "source": "lib/features/community/data/repositories/challenge_repository_impl.dart:149",
-      "status": "known_gap",
-      "note": "See the /community/challenges known_gap note -- same missing listing/detail surface."
+      "status": "mounted"
     },
     {
       "method": "GET",
       "path": "/community/challenges/{challenge_public_id}/me",
       "source": "lib/features/community/data/repositories/challenge_repository_impl.dart:163",
-      "status": "known_gap",
-      "note": "See the /community/challenges known_gap note -- same missing listing/detail surface."
+      "status": "mounted"
     },
     {
       "method": "POST",
@@ -209,6 +206,36 @@
       "method": "GET",
       "path": "/community/leaderboards/{challenge_public_id}",
       "source": "lib/features/community/data/repositories/challenge_repository_impl.dart:308",
+      "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/community/notifications",
+      "source": "lib/features/community/data/repositories/notification_repository_impl.dart:135",
+      "status": "mounted"
+    },
+    {
+      "method": "POST",
+      "path": "/community/notifications/{public_id}/read",
+      "source": "lib/features/community/data/repositories/notification_repository_impl.dart:155",
+      "status": "mounted"
+    },
+    {
+      "method": "POST",
+      "path": "/community/notifications/read-all",
+      "source": "lib/features/community/data/repositories/notification_repository_impl.dart:171",
+      "status": "mounted"
+    },
+    {
+      "method": "GET",
+      "path": "/community/notifications/preferences",
+      "source": "lib/features/community/data/repositories/notification_repository_impl.dart:191",
+      "status": "mounted"
+    },
+    {
+      "method": "PUT",
+      "path": "/community/notifications/preferences/{category}",
+      "source": "lib/features/community/data/repositories/notification_repository_impl.dart:212",
       "status": "mounted"
     }
   ]

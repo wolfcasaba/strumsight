@@ -608,6 +608,18 @@
   "songSuggest": "Javaslat",
   "songSuggestTitle": "Menet javaslása",
   "songKeyLabel": "Hangnem",
+  "songChordHear": "{chord} meghallgatása",
+  "@songChordHear": {
+    "description": "Tooltip/semantics of a chord chip in the song builder: tapping it plays that chord (ADR 0535).",
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "Am"
+      }
+    }
+  },
+  "songPreviewPlay": "Előnézet",
+  "songPreviewStop": "Előnézet leállítása",
   "commonCancel": "Mégse",
   "setlistsTitle": "Szettlisták",
   "setlistsEmpty": "Csoportosítsd a dalaidat egy gyakorló-szettbe, és játszd le őket egymás után.",
@@ -3165,6 +3177,11 @@
   "todayHubVisionCardTitle": "Vizuális gyakorlás",
   "todayHubVisionCardMessage": "Használd a kamerát az ujjazat visszajelzéséhez.",
   "todayHubVisionUnavailableReason": "A vizuális gyakorláshoz támogatott eszköz kell, és ebben a buildben még nem érhető el.",
+  "todayHubPrivacyTitle": "Alapból privát",
+  "todayHubPrivacyNoAccount": "Nem kell fiók",
+  "todayHubPrivacyOffline": "Teljesen offline működik",
+  "todayHubPrivacyNoAds": "Nincs reklám, nincs előfizetés",
+  "todayHubPrivacyAudioLocal": "A hangod nem hagyja el a telefont",
 
   "practiceAreaHubRecommendedTitle": "Neked ajánlott",
   "practiceAreaHubRecommendedMessage": "Indíts egy, a jelenlegi szintedhez válogatott gyakorlást.",
@@ -3299,10 +3316,6 @@
         "type": "String"
       }
     }
-  },
-  "analysisHomeImportUnavailable": "A fájl-importálás még nem elérhető — vegyél fel helyette.",
-  "@analysisHomeImportUnavailable": {
-    "description": "Analyze home: the file-import entry is not shippable yet. Restored into the base segment 2026-09-06 — the key existed ONLY in the generated aggregate, so every regeneration dropped it and app_router.dart stopped compiling."
   },
   "profileHubCommunityOpen": "Közösség megnyitása",
   "@profileHubCommunityOpen": {

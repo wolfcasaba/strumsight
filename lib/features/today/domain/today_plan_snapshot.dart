@@ -24,6 +24,7 @@ final class TodayPlanSnapshot {
   const TodayPlanSnapshot({
     required this.availability,
     this.recommendedTaskLabel,
+    this.recommendedMissionId,
     this.completedTaskCount = 0,
     this.totalTaskCount = 0,
   });
@@ -32,6 +33,20 @@ final class TodayPlanSnapshot {
 
   /// The single next recommended task, if the plan names one.
   final String? recommendedTaskLabel;
+
+  /// The curriculum rung this recommendation is, when it comes from the course.
+  ///
+  /// An ID rather than a label, because the NAME a learner reads must be
+  /// localised and this projection has no localisations — a plan source that
+  /// filled in English prose here would put English in front of a Hungarian
+  /// learner, and the l10n parity gate would never notice because nothing would
+  /// be missing from the arb files. The surface resolves it
+  /// (`curriculumMissionName`).
+  ///
+  /// Also what lets the hub's primary button continue THAT rung rather than a
+  /// default: a button labelled "continue" that goes somewhere else is the hub
+  /// lying about what it just offered.
+  final String? recommendedMissionId;
 
   final int completedTaskCount;
   final int totalTaskCount;

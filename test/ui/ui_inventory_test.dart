@@ -23,11 +23,17 @@ void main() {
     // center (`lib/features/settings/screens/privacy_center_screen.dart`) and
     // the offline AI model manager, on a brand-new feature root
     // (`lib/features/offline_ai/screens/model_manager_screen.dart`): 94 -> 96.
-    // 2026-09-06 (repair-plan WP-D review #4) — the population filter now
-    // accepts the `_screen_v2.dart` suffix, so the previously invisible
-    // `lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart`
-    // is counted (it was never measured before, not newly added): 96 -> 97.
-    expect(first.screenPaths, hasLength(97));
+    // E18-R14/R16 — the curriculum ladder and the rhythm practice screen
+    // (`lib/features/curriculum/presentation/screens/`): 96 -> 98. Updated in
+    // E18-R22, late: those rounds ran the gate over their own test paths, so this
+    // pin and two others went stale together (the same way `theme_adoption_test`
+    // did). A pinned count only guards while something runs it.
+    // 2026-09-15 — the 60-second strum challenge
+    // (`lib/features/strum_challenge/presentation/screens/`): 98 -> 99.
+    // 2026-09-19 (E18-vonal integrációja) — `setlist_list_screen_v2.dart`,
+    // which the widened `_screen(_v\d+)?.dart` filter made visible on the
+    // main line, joins the population: 99 -> 100.
+    expect(first.screenPaths, hasLength(100));
     expect(
       first.screenPaths,
       contains(

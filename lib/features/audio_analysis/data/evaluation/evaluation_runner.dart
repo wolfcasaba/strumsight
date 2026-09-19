@@ -5,6 +5,8 @@ library;
 
 import 'dart:math' as math;
 
+import 'package:strumsight/core/music/onset_matching.dart';
+
 import '../../domain/evaluation/evaluation_report.dart';
 import '../../domain/evaluation/ground_truth.dart';
 import 'calibration_fitter.dart';
@@ -213,13 +215,18 @@ final class EvaluationRunner {
   }
 
   /// Deterministic maximum-cardinality one-to-one matching of [expected]
-  /// against [detected] within [toleranceMs], via Kuhn's augmenting-path
-  /// algorithm: an expected event may only claim a still-unclaimed detected
-  /// event inside the tolerance window, and a detected event is reassigned
-  /// to a different expected event (freeing its previous one to seek
-  /// another candidate) whenever that grows the total number of matches.
-  /// Candidate edges are tried closest-gap-first (index as tie-breaker) so
-  /// the result is reproducible across runs.
+  /// against [detected] within [toleranceMs], via the SHARED matcher in
+  /// `core/music/onset_matching.dart`: an expected event may only claim a
+  /// still-unclaimed detected event inside the tolerance window, and a
+  /// detected event is reassigned to a different expected event (freeing its
+  /// previous one to seek another candidate) whenever that grows the total
+  /// number of matches. Candidate edges are tried closest-gap-first (index as
+  /// tie-breaker) so the result is reproducible across runs.
+  ///
+  /// This used to be a local copy of Kuhn's algorithm. `docs/LESSONS.md` L269
+  /// asks for the opposite — ONE maximum-cardinality helper behind every
+  /// time-windowed one-to-one metric, because the matcher is part of the
+  /// contract and a per-path copy is a per-path chance to drift.
   ///
   /// `precision` is `null` when [detected] is empty (there is nothing to
   /// compute a precision over); `recall` is `null` only when [expected] is
@@ -234,31 +241,10 @@ final class EvaluationRunner {
     final sortedDetected = [...detected]
       ..sort((a, b) => a.timeMs.compareTo(b.timeMs));
 
-    final candidatesByExpected = List<List<int>>.generate(
-      sortedExpected.length,
-      (i) {
-        final expectedEvent = sortedExpected[i];
-        final withGap =
-            <MapEntry<int, int>>[
-              for (var j = 0; j < sortedDetected.length; j++)
-                if ((sortedDetected[j].timeMs - expectedEvent.timeMs).abs() <=
-                    toleranceMs)
-                  MapEntry(
-                    j,
-                    (sortedDetected[j].timeMs - expectedEvent.timeMs).abs(),
-                  ),
-            ]..sort((a, b) {
-              final byGap = a.value.compareTo(b.value);
-              return byGap != 0 ? byGap : a.key.compareTo(b.key);
-            });
-        return [for (final entry in withGap) entry.key];
-      },
-    );
-
-    final matchOfDetected = _maxBipartiteMatching(
-      leftCount: sortedExpected.length,
-      candidatesByLeft: candidatesByExpected,
-      rightCount: sortedDetected.length,
+    final matchOfDetected = matchWithinTolerance(
+      expected: [for (final e in sortedExpected) e.timeMs],
+      detected: [for (final d in sortedDetected) d.timeMs],
+      tolerance: toleranceMs,
     );
 
     final matchedPairs = <MatchedEventPair>[];
@@ -293,40 +279,8 @@ final class EvaluationRunner {
     );
   }
 
-  /// Kuhn's algorithm: finds a maximum-cardinality one-to-one matching
-  /// between `leftCount` left nodes and `rightCount` right nodes, given
-  /// each left node's admissible right-node candidates (ordered — ties are
-  /// broken by that order). Returns `matchOfRight`, where
-  /// `matchOfRight[j]` is the matched left index, or `-1` if unmatched.
-  List<int> _maxBipartiteMatching({
-    required int leftCount,
-    required List<List<int>> candidatesByLeft,
-    required int rightCount,
-  }) {
-    final matchOfRight = List<int>.filled(rightCount, -1);
-
-    bool tryAugment(int leftIndex, List<bool> visited) {
-      for (final rightIndex in candidatesByLeft[leftIndex]) {
-        if (visited[rightIndex]) continue;
-        visited[rightIndex] = true;
-        if (matchOfRight[rightIndex] == -1 ||
-            tryAugment(matchOfRight[rightIndex], visited)) {
-          matchOfRight[rightIndex] = leftIndex;
-          return true;
-        }
-      }
-      return false;
-    }
-
-    for (var i = 0; i < leftCount; i++) {
-      tryAugment(i, List<bool>.filled(rightCount, false));
-    }
-    return matchOfRight;
-  }
-
-  /// Same maximum-cardinality one-to-one matching as [matchEvents], for
-  /// plain timestamp lists (beat grids). Returns
-  /// `(matchedCount, unmatchedDetected)`.
+  /// The same shared matching as [matchEvents], for plain timestamp lists
+  /// (beat grids). Returns `(matchedCount, unmatchedDetected)`.
   (int, int) matchTimes(
     List<int> expected,
     List<int> detected,
@@ -335,27 +289,10 @@ final class EvaluationRunner {
     final sortedExpected = [...expected]..sort();
     final sortedDetected = [...detected]..sort();
 
-    final candidatesByExpected = List<List<int>>.generate(
-      sortedExpected.length,
-      (i) {
-        final expectedTime = sortedExpected[i];
-        final withGap =
-            <MapEntry<int, int>>[
-              for (var j = 0; j < sortedDetected.length; j++)
-                if ((sortedDetected[j] - expectedTime).abs() <= toleranceMs)
-                  MapEntry(j, (sortedDetected[j] - expectedTime).abs()),
-            ]..sort((a, b) {
-              final byGap = a.value.compareTo(b.value);
-              return byGap != 0 ? byGap : a.key.compareTo(b.key);
-            });
-        return [for (final entry in withGap) entry.key];
-      },
-    );
-
-    final matchOfDetected = _maxBipartiteMatching(
-      leftCount: sortedExpected.length,
-      candidatesByLeft: candidatesByExpected,
-      rightCount: sortedDetected.length,
+    final matchOfDetected = matchWithinTolerance(
+      expected: sortedExpected,
+      detected: sortedDetected,
+      tolerance: toleranceMs,
     );
 
     final matched = matchOfDetected.where((i) => i != -1).length;
@@ -404,9 +341,15 @@ final class EvaluationRunner {
   /// a detected one when they share a label and their overlap covers at
   /// least [chordSegmentMinOverlapRatio] of the expected segment's
   /// duration. Matching is one-to-one — a detected segment can validate at
-  /// most one expected segment — via the same maximum-cardinality
-  /// bipartite matching as [matchEvents], so a single wide detected
-  /// segment can no longer double-count.
+  /// most one expected segment — so a single wide detected segment can no
+  /// longer double-count.
+  ///
+  /// This path builds its own candidate edges and calls the shared
+  /// [maxCardinalityMatching] directly, because its admissibility relation is
+  /// not a time window at all: a pair is admissible when the labels agree and
+  /// the OVERLAP covers enough of the expected segment, and edges are
+  /// preferred by largest overlap. [matchWithinTolerance] would be the wrong
+  /// tool — what is shared here is the matcher, which is what L269 asks for.
   (int, int) _chordSegmentCounts(
     List<EvalChordSegment> expected,
     List<EvalChordSegment> detected,
@@ -450,7 +393,7 @@ final class EvaluationRunner {
       },
     );
 
-    final matchOfDetected = _maxBipartiteMatching(
+    final matchOfDetected = maxCardinalityMatching(
       leftCount: eligibleExpected.length,
       candidatesByLeft: candidatesByExpected,
       rightCount: detected.length,
@@ -459,9 +402,9 @@ final class EvaluationRunner {
     return (matched, expected.length);
   }
 
-  /// Same maximum-cardinality one-to-one matching as [matchEvents], on
-  /// timestamps only; a matched pair's cents error is the absolute pitch
-  /// distance between its expected and detected frequency.
+  /// The same shared matching as [matchEvents], on timestamps only; a matched
+  /// pair's cents error is the absolute pitch distance between its expected
+  /// and detected frequency.
   List<double> _pitchCentsErrors(
     List<PitchPoint> expected,
     List<PitchPoint> detected,
@@ -471,31 +414,10 @@ final class EvaluationRunner {
     final sortedDetected = [...detected]
       ..sort((a, b) => a.timeMs.compareTo(b.timeMs));
 
-    final candidatesByExpected = List<List<int>>.generate(
-      sortedExpected.length,
-      (i) {
-        final expectedPoint = sortedExpected[i];
-        final withGap =
-            <MapEntry<int, int>>[
-              for (var j = 0; j < sortedDetected.length; j++)
-                if ((sortedDetected[j].timeMs - expectedPoint.timeMs).abs() <=
-                    pitchToleranceMs)
-                  MapEntry(
-                    j,
-                    (sortedDetected[j].timeMs - expectedPoint.timeMs).abs(),
-                  ),
-            ]..sort((a, b) {
-              final byGap = a.value.compareTo(b.value);
-              return byGap != 0 ? byGap : a.key.compareTo(b.key);
-            });
-        return [for (final entry in withGap) entry.key];
-      },
-    );
-
-    final matchOfDetected = _maxBipartiteMatching(
-      leftCount: sortedExpected.length,
-      candidatesByLeft: candidatesByExpected,
-      rightCount: sortedDetected.length,
+    final matchOfDetected = matchWithinTolerance(
+      expected: [for (final e in sortedExpected) e.timeMs],
+      detected: [for (final d in sortedDetected) d.timeMs],
+      tolerance: pitchToleranceMs,
     );
 
     final errors = <double>[];

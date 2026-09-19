@@ -36,6 +36,13 @@ import '../practice_area_hub_categories.dart';
 /// definitions themselves ([practiceAreaHubGroups]); a goal with nothing in
 /// it is not rendered.
 ///
+/// Every navigation here is a `context.push`, never `context.go`: the tool
+/// routes are registered as siblings of this hub inside the Practice branch,
+/// so `go` REPLACED the branch stack with a single page and the Android
+/// system back then closed the app instead of returning here (E18-R01
+/// emulator finding F4, 4/4 reproduced). A push stacks the tool above the
+/// hub, so back — and the in-screen back arrow — pop to it.
+///
 /// Styled with plain Material widgets + [AppColors] (matching
 /// `ProgressScreen`/the legacy `PracticeHubScreen`), not the
 /// `core/design_system` component library — see `today_hub_screen.dart`'s
@@ -169,6 +176,33 @@ class PracticeAreaHubScreen extends ConsumerWidget {
                     icon: Icons.queue_music,
                     label: l10n.songTrainerTitle,
                     onPressed: () => context.push(AppRoutes.songTrainerLibrary),
+                  ),
+                // The curriculum's down/up rhythm pillar. A registered route
+                // with no entry point is a screen nobody can reach.
+                _QuickTool(
+                  icon: Icons.swap_vert,
+                  label: l10n.curriculumRhythmTitle,
+                  onPressed: () => context.push(AppRoutes.curriculumRhythm),
+                ),
+                // The course itself, not just one rung of it. Same rule as the
+                // line above: a registered route with no entry point is a screen
+                // nobody can reach, and until this existed the ladder, its gating
+                // and its ordering were visible only in tests.
+                _QuickTool(
+                  icon: Icons.stairs,
+                  label: l10n.curriculumLadderTitle,
+                  onPressed: () => context.push(AppRoutes.curriculumLadder),
+                ),
+                // E17-R02 (ADR 0521) — the ONLY entry point of the Analysis
+                // V2 capture flow, shown while `audioAnalysisV2Enabled` is
+                // on (the routes it leads to exist only under that gate), so
+                // a production build with the flag off sees no new button.
+                if (ref.watch(appConfigProvider).flags.audioAnalysisV2Enabled)
+                  _QuickTool(
+                    key: const ValueKey('practice-hub-analysis-v2'),
+                    icon: Icons.analytics_outlined,
+                    label: l10n.analysisHomeEntryCta,
+                    onPressed: () => context.push(AppRoutes.analysisHome),
                   ),
               ],
             ),

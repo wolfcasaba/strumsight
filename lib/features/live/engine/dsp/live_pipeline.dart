@@ -18,6 +18,7 @@ import '../quality/live_signal_quality_analyzer.dart';
 import 'chord_dictionary.dart';
 import 'chord_matcher.dart';
 import 'dsp_config.dart';
+import 'input_level_meter.dart';
 import 'nnls_chroma.dart';
 import '../../../../core/audio/dsp/sliding_framer.dart';
 import '../../../chords/public.dart';
@@ -77,6 +78,11 @@ class LivePipeline {
     double? chordConfRise,
     double? chordConfRelease,
     int? chordReleaseHoldFrames,
+    double whiteningMeanCoefficient =
+        NnlsChroma.defaultWhiteningMeanCoefficient,
+    double whiteningSpectralFloor = NnlsChroma.defaultWhiteningSpectralFloor,
+    bool whiteningHammingKernel = NnlsChroma.defaultWhiteningHammingKernel,
+    double? whiteningExponent,
   }) {
     return LivePipeline._(
       sampleRate: sampleRate,
@@ -84,6 +90,10 @@ class LivePipeline {
       chordConfRise: chordConfRise,
       chordConfRelease: chordConfRelease,
       chordReleaseHoldFrames: chordReleaseHoldFrames,
+      whiteningMeanCoefficient: whiteningMeanCoefficient,
+      whiteningSpectralFloor: whiteningSpectralFloor,
+      whiteningHammingKernel: whiteningHammingKernel,
+      whiteningExponent: whiteningExponent,
     );
   }
 
@@ -118,6 +128,11 @@ class LivePipeline {
     double? chordConfRise,
     double? chordConfRelease,
     int? chordReleaseHoldFrames,
+    double whiteningMeanCoefficient =
+        NnlsChroma.defaultWhiteningMeanCoefficient,
+    double whiteningSpectralFloor = NnlsChroma.defaultWhiteningSpectralFloor,
+    bool whiteningHammingKernel = NnlsChroma.defaultWhiteningHammingKernel,
+    double? whiteningExponent,
   }) : _crnnActivation = crnnActivation,
        _chordConfRise = chordConfRise ?? DspConfig.chordConfRise,
        _chordConfRelease = chordConfRelease ?? DspConfig.chordConfRelease,
@@ -126,6 +141,17 @@ class LivePipeline {
        _chroma = NnlsChroma(
          sampleRate: sampleRate,
          window: DspConfig.nnlsWindow,
+         // Injectable so the offline probe can sweep it, the same way the
+         // onset detector's thresholds are (r166). Production passes nothing.
+         whiteningMeanCoefficient: whiteningMeanCoefficient,
+         whiteningSpectralFloor: whiteningSpectralFloor,
+         whiteningHammingKernel: whiteningHammingKernel,
+
+         // Null keeps [NnlsChroma]'s own shipped default — the sweep needs the
+         // exponent on the same axis as the kernel, because E18-R09 measured
+         // the two interacting (only w=1.0 preserved the quiet third at k>0).
+         whiteningExponent:
+             whiteningExponent ?? NnlsChroma.defaultWhiteningExponent,
        ),
        _shape = ShapeInformedStrumClassifier(
          // The live 70 ms model behind the r139 seam (r169): the engine
@@ -189,6 +215,10 @@ class LivePipeline {
   final ShapeInformedStrumClassifier _shape;
   String? _expectedChord;
   List<double?>? _expectedVoicing;
+
+  /// Display-only level meter (dBFS + release ballistics, E18-R01 F10);
+  /// reads the same `lastRms` the onset detector measures, decides nothing.
+  final InputLevelMeter _levelMeter = InputLevelMeter();
 
   /// The Live-side signal-quality analyzer (E14-R05, ADR 0507) — fed the raw
   /// chunk alongside the DSP pipeline, exposed read-only via [signalQuality].
@@ -434,7 +464,7 @@ class LivePipeline {
     if (_latestStrum != null && nowSec - _latestStrumTime > 2.0) {
       _latestStrum = null;
     }
-    final level = (_strums.lastRms * 8).clamp(0.0, 1.0).toDouble();
+    final level = _levelMeter.update(_strums.lastRms);
     // Only surface the chord once the smoothed match confidence clears the
     // musical-presence gate: below it we're almost certainly hearing speech /
     // noise, not a guitar, so show nothing rather than a phantom chord.
@@ -517,6 +547,20 @@ class LivePipeline {
   /// harness (`test/tools/real_audio_probe_test.dart`).
   @visibleForTesting
   double get debugTonalness => _chroma.lastTonalness;
+
+  /// The share of log-frequency bins the last whitened frame's spectral floor
+  /// RESCUED from the hard zero, and the share it still zeroed (E18-R11).
+  /// Both 0 on the shipped divide-only path. Exposed so the floor sweep can
+  /// tell "the floor is a no-op here" apart from "the floor rewrites the
+  /// spectrum and the decoder is unmoved" — the two look identical from the
+  /// decoded labels alone.
+  @visibleForTesting
+  double get debugWhiteningRescuedFraction =>
+      _chroma.lastWhiteningRescuedFraction;
+
+  @visibleForTesting
+  double get debugWhiteningZeroedFraction =>
+      _chroma.lastWhiteningZeroedFraction;
 
   /// The EMA-smoothed chord-match confidence the musical-presence gate tests.
   @visibleForTesting

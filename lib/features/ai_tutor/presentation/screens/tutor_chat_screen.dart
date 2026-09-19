@@ -23,21 +23,45 @@
 /// circle), not a raw [CircularProgressIndicator] — javító kör #1,
 /// §0.0.B/R13: §5.2 names a raw spinner as an unacceptable weakening, and
 /// [SsSkeleton] is this design system's one loading primitive.
+///
+/// Practice-plan preview entry (E17-R04, ADR 0523): the AppBar's
+/// "Preview a practice plan" action and a tap on a plan block inside a
+/// tutor message both push [PracticePlanPreviewScreen] with the LOCAL
+/// deterministic draft (`tutorPracticePlanProposalProvider`, §5.2 — no cloud
+/// call; the local path has no plan store, so a message's `planId` cannot
+/// be resolved and the template IS the draft). The preview's "Start plan"
+/// compiles the draft and hands the resolved catalog entry to the EXISTING
+/// `/practice/setup?id=` route through `context.go` (§5.1) — this screen
+/// owns no session launcher. "Save plan" persists the plan as a
+/// user-inspectable fact through `tutorMemoryRepositoryProvider`, the
+/// same local-first memory the Data screen lists.
 library;
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../app/routing/app_route.dart';
 import '../../../../core/design_system/public.dart';
+import '../../../../core/foundation/app_result.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controller/tutor_state.dart';
+import '../../application/planning/practice_plan_compiler.dart';
+import '../../application/planning/practice_plan_launch.dart';
+import '../../domain/models/practice_plan_draft.dart';
 import '../../domain/models/tutor_content_block.dart';
 import '../../domain/models/tutor_ids.dart';
+import '../../domain/models/tutor_memory_fact.dart';
 import '../../domain/models/tutor_message.dart';
+import '../providers/tutor_practice_plan_providers.dart';
+import '../providers/tutor_privacy_providers.dart';
 import '../providers/tutor_providers.dart';
 import '../widgets/tutor_banners.dart';
 import '../widgets/tutor_composer.dart';
 import '../widgets/tutor_message_bubble.dart';
+import 'practice_plan_preview_screen.dart';
 
 class TutorChatScreen extends ConsumerStatefulWidget {
   const TutorChatScreen({super.key});
@@ -90,6 +114,112 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
     position.jumpTo(position.maxScrollExtent);
   }
 
+  // ---------------------------------------------------------------------
+  // Practice-plan preview (E17-R04, ADR 0523)
+  // ---------------------------------------------------------------------
+
+  /// Pushes the preview for the local deterministic template. The provider
+  /// is READ here, on the tap, never watched in `build` — the pinned chat
+  /// tests build containers without the Practice/profile graph, and the
+  /// preview is a modal step over the chat, not a routed destination.
+  void _openPlanPreview(Duration targetDuration) {
+    final proposal = ref.read(
+      tutorPracticePlanProposalProvider(targetDuration),
+    );
+    unawaited(
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PracticePlanPreviewScreen(
+            draft: proposal.draft,
+            validationContext: proposal.validationContext,
+            onSave: (draft) => unawaited(_savePlan(draft)),
+            onStart: (draft) => _startPlan(draft, proposal),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// A plan block inside a tutor message is the plan proposal surface the
+  /// local path renders; accepting it opens the same preview.
+  void _openPlanFromBlock(TutorPracticePlanBlock block) =>
+      _openPlanPreview(tutorPracticePlanDefaultDuration);
+
+  /// Persists the (possibly edited) plan as one user-inspectable memory fact
+  /// through the existing local-first repository — the Data screen lists,
+  /// edits and deletes it like any other fact. Feedback is a SnackBar in
+  /// both outcomes; a failed write is never swallowed silently.
+  Future<void> _savePlan(PracticePlanDraft draft) async {
+    final l10n = AppLocalizations.of(context);
+    final repository = ref.read(tutorMemoryRepositoryProvider);
+    final now = DateTime.now().toUtc();
+    final result = await repository.saveCandidate(
+      TutorMemoryCandidate(
+        id: 'plan-${draft.id}-${now.microsecondsSinceEpoch}',
+        content: _planMemoryContent(draft),
+        conversationId: TutorConversationId('preview'),
+        messageId: TutorMessageId(draft.id),
+        createdAt: now,
+      ),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.isSuccess ? l10n.tutorPlanSaved : l10n.tutorPlanSaveFailed,
+        ),
+      ),
+    );
+  }
+
+  String _planMemoryContent(PracticePlanDraft draft) {
+    final blocks = draft.blocks
+        .map((block) => '${block.type} ${block.duration.inMinutes} min')
+        .join(', ');
+    return '${draft.title} (${draft.targetDuration.inMinutes} min): $blocks';
+  }
+
+  /// Compiles the plan with [PracticePlanCompiler] and opens the EXISTING
+  /// Practice Setup route for the first launchable block (§5.1). No block
+  /// launchable (Practice Engine V2 off, or the plan holds only reflection
+  /// / rest blocks) is reported, not routed — `/practice/setup` without a
+  /// resolvable id renders only its "definition not found" state.
+  void _startPlan(PracticePlanDraft draft, TutorPracticePlanProposal proposal) {
+    final l10n = AppLocalizations.of(context);
+    final compiled = const PracticePlanCompiler().compile(
+      draft: draft,
+      context: proposal.compilationContext,
+    );
+    final target = switch (compiled) {
+      Success<CompiledPracticePlan>(:final value) =>
+        resolvePracticePlanLaunchTarget(
+          plan: value,
+          catalog: proposal.launchableCatalog,
+        ),
+      Failure<CompiledPracticePlan>() => null,
+    };
+    if (target == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.tutorPlanStartUnavailable)));
+      return;
+    }
+    final uri = Uri(
+      path: AppRoutes.practiceSetup,
+      queryParameters: <String, String>{'id': target.definitionId},
+    );
+    // The confirmation sheet pops itself right after `onConfirm` returns
+    // (`SsToolConfirmationSheet._handleConfirm`). Leaving the preview and
+    // switching routes is deferred one frame so the two pops never race:
+    // by then the sheet is no longer a present route, so the pop below
+    // targets the preview page this screen pushed.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      context.go(uri.toString());
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -103,7 +233,8 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
     final aiMode = tutorAiModeFor(status: status, isOnline: isOnline);
     final visibleMessages = chatState?.messages ?? controller.messages;
     final messages = <_ChatBubble>[
-      for (final message in visibleMessages) _ChatBubble.fromMessage(message),
+      for (final message in visibleMessages)
+        _ChatBubble.fromMessage(message, onPracticePlanTap: _openPlanFromBlock),
       if (status == TutorTurnStatus.streaming)
         _ChatBubble.fromStreamingText(
           responseText,
@@ -122,6 +253,16 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
           ),
           title: Text(l10n.aiTutorChatTitle),
           actions: <Widget>[
+            // E17-R04 — the practice-plan preview entry. The local path
+            // emits no plan-save proposal today, so this is the one entry
+            // that makes the preview reachable for real (A1/A2).
+            IconButton(
+              key: const ValueKey('tutor-plan-preview'),
+              tooltip: l10n.tutorPlanPreviewEntry,
+              icon: const Icon(Icons.playlist_add_check),
+              onPressed: () =>
+                  _openPlanPreview(tutorPracticePlanDefaultDuration),
+            ),
             // Always visible regardless of turn status (ADR 0278 §1,
             // E13-R29 §5.2) — this is the screen-level anchor; the
             // streaming indicator below repeats it at message level.
@@ -256,12 +397,15 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _ChatBubble extends StatelessWidget {
-  const _ChatBubble._(this.message);
+  const _ChatBubble._(this.message, {this.onPracticePlanTap});
 
   final TutorMessage message;
+  final ValueChanged<TutorPracticePlanBlock>? onPracticePlanTap;
 
-  factory _ChatBubble.fromMessage(TutorMessage message) =>
-      _ChatBubble._(message);
+  factory _ChatBubble.fromMessage(
+    TutorMessage message, {
+    ValueChanged<TutorPracticePlanBlock>? onPracticePlanTap,
+  }) => _ChatBubble._(message, onPracticePlanTap: onPracticePlanTap);
 
   factory _ChatBubble.fromStreamingText(
     String text, {
@@ -287,7 +431,10 @@ class _ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TutorMessageBubble(message: message);
+    return TutorMessageBubble(
+      message: message,
+      onPracticePlanTap: onPracticePlanTap,
+    );
   }
 }
 

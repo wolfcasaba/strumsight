@@ -1,5 +1,25 @@
 # Screen migration status
 
+**2026-09-15 update — the total is now 99, not 98.** The 60-second strum
+challenge (`lib/features/strum_challenge/presentation/screens/strum_challenge_screen.dart`,
+E18 lane) added one production screen. It imports `core/design_system/public.dart`
+and reads `SsColorScheme` from the theme, so the A6 pinned count in
+`test/app/theme_adoption_test.dart` moved 98 → 99 in the same change, together
+with the three sibling pins (`ui_inventory_test`, `screen_reachability_test` ×2).
+
+**E18 update (2026-09-12) — the total is now 98, not 96.** The curriculum pillar
+added two production screens: `curriculum_ladder_screen.dart` (the course made
+visible, E18-R12) and `rhythm_practice_screen.dart` (the strumming exercise). Both
+import `core/design_system/public.dart` and read `SsColorScheme` from the theme, so
+the A6 guarantee in `test/app/theme_adoption_test.dart` — every production screen
+resolves tokens from the same `ThemeData` — holds over the new total.
+
+Recorded here plainly because the A6 cell is a **pinned count**, and the count went
+stale for several rounds before anyone ran it: the curriculum rounds ran the gate over
+their own test paths and `test/app/` was not among them. The pin did its job the
+moment it was run; what failed was the choice of paths, not the guard.
+
+
 **E16-R02 update (2026-09-03, ADR 0500) — `progress_v2` is now reachable;
 the E15-R06 "orphaned" correction below is superseded for this pair only.**
 `lib/app/routing/app_router.dart`'s `/profile/progress` route (inside the

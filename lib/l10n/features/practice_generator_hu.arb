@@ -1,0 +1,11 @@
+{
+  "@@locale": "hu",
+  "practiceGeneratorMoreActions": "További tervműveletek",
+  "practiceGeneratorOpenWeeklyPlan": "Heti terv",
+  "practiceGeneratorOpenPlanPreview": "Terv előnézete",
+  "practiceGeneratorOpenChangeReview": "Tervmódosítások áttekintése",
+  "practiceGeneratorOpenPrivacy": "Tervadatok és adatvédelem",
+  "practiceGeneratorPlanLoadFailed": "Az aktív terv nem olvasható. Próbáld újra később.",
+  "practiceGeneratorNoActivePlanForAction": "Előbb készíts és aktiválj egy tervet.",
+  "practiceGeneratorNoChangesToReview": "Mára nincs beütemezve semmi, így nincs áttekintendő módosítás."
+}

@@ -422,6 +422,15 @@ UNTOUCHED. Parity fixture `test/fixtures/crnn_live_3c_parity.json` (32 eval-fold
 windows, 11 down / 11 up / 10 no-strum) locks the Dart 3-col softmax to Keras
 `<=1e-3`.
 
+
+> **E18-R25 frissítés (ADR 0549).** A fenti illesztett küszöb a modell **saját** eval
+> foldján tart 95%-ot; független pengetés-anyagon (GuitarSet, 72 fájl) **59,6%**-ot. A
+> szállított érték ezért **0,85**, az illesztett pedig `fittedNoStrumThreshold` néven
+> marad meg a provenienciájáért. A tanulság nem a szám: **egy korpuszra illesztett kapu
+> korpuszon kívül nem érvényes**, és minden új modellnél újra kell mérni — lehetőleg nem
+> csak a saját foldján. Mérés:
+> [`docs/eval/guitarset-strum-baseline.md`](../../eval/guitarset-strum-baseline.md).
+
 **The suppression gate (measured on the held-out eval fold, n_pos=2013,
 n_neg=1707):** the threshold on P(no-strum) that keeps **95.0 %** of TRUE strums
 is **`no_strum_threshold = 0.43877`**; at that operating point it **rejects
@@ -466,3 +475,1977 @@ precision job is now BACKED by the learned reject (false onsets that slip
 through SuperFlux draw no confident wrong arrow). **Acceptance remains the
 real-guitar APK test** — synthetic/eval green is never "done" (HORIZON). r175 is
 the last dev round before that gate.
+
+## What limits direction accuracy (E18-R27, ADR 0550)
+
+The live 3-class model's direction score on INDEPENDENT real strumming is far below its
+own fold: macro-F1 **0.3876**, up-F1 **0.1905** on GuitarSet's Rock/Funk comping (the
+shipped path, held-out players). Three rounds of scalar tuning are exhausted — the
+no-strum gate moved it (ADR 0549), the down/up boundary did not (prior-matching, L664),
+the margin gate never did (±0.0003).
+
+**The defect is cross-corpus transfer, not missing data.** `ml/probe_direction_headroom.py`
+fits a plain logistic regression on 240 band-pooled features taken with the model's OWN
+geometry (N_FFT 2048 @ 16 kHz, HOP 160, 15 frames) and reaches macro **0.7723**, up-F1
+**0.6294**, AUC **0.8928** on a player- AND tune-disjoint GuitarSet split. A linear model
+is a FLOOR on what is extractable, so the cue is present in the input the CRNN already
+receives and the CRNN is not extracting it.
+
+**The corpus deficit, named.** Klangio GST-MM-2025 is real, labelled, phone-mic data
+(82 recordings, 11767 strums, 38 % up — a BETTER class balance than GuitarSet's 27 %),
+but `guitarist_of(rid) = str(rid)[0]` and the blocks are `1xxx / 2xxx / 4xxx`:
+**three guitarists.** Leave-one-guitarist-out cannot expose player-invariance failure
+when all three share one room, guitar and microphone. GuitarSet's 3038 clean derived
+sweeps add six more players, and those derived labels are now qualified as trainable
+(ADR 0550 D2): a model fitted on them generalises to unseen players AND unseen tunes at
+AUC 0.8928 while a shuffled-label control over 7 seeds sits at 0.41–0.59.
+
+**Two measurement rules this established:**
+
+1. **Score the direction head on a STRICTLY POST-ONSET window.** Audio strictly BEFORE
+   the onset predicts direction at AUC **0.7128**, because comping alternates
+   down-up-down-up — a model with pre-onset context scores by predicting alternation.
+   The app's own patterns do not alternate (`D DU UDU` has two downs in a row,
+   `reggae-skank` is nearly all upstrokes), so that cue is a lie here. A 128 ms window
+   centred on the onset contains the attack in EVERY frame, so a frame-index ablation
+   cannot separate the two — the arms must be cut by sample range. Honest post-onset
+   figure: macro 0.6645, up-F1 0.4545.
+2. **Do NOT raise the input's time resolution.** Measured, with feature count held equal:
+   5.8 ms window / 3.7 ms hop scores macro 0.6435 vs 0.7723 for the model's own 128 ms
+   geometry. On a microphone, direction reads off spectral balance rather than the sweep's
+   string ordering — even though the sweep's median span is 22.2 ms and 40.7 % of sweeps
+   fall inside two 10 ms frames.
+
+### CORRECTION and the real constraint (E18-R28, ADR 0551)
+
+The figure above — "macro 0.7723, up-F1 0.6294 on the model's OWN input" — is **wrong**,
+and the error is instructive. `probe_direction_headroom.centred_starts` CENTRES each
+analysis window on its frame (`onset - PRE_FRAMES*HOP - N_FFT//2`, i.e. onset−94 ms) and
+applies no truncation; the shipped `experiment_deadline.window_truncated` STARTS each
+window at its frame (onset−30 ms) and zeroes everything past onset+70 ms. The probe was
+handed 64 ms of extra lead-in plus the post-deadline audio — and lead-in ALONE predicts
+direction at AUC 0.7128 by alternation, the very cue the same round ruled inadmissible.
+Parameters matched; window POSITION did not. **Measure on the array production eats**
+(`guitarset_live70.npz`), not on a re-derivation with the same parameters.
+
+At the model's real alignment and 70 ms cut, same labels, player- AND tune-disjoint:
+
+```
+  shipped log-mel 128, 70 ms cut  <- the CRNN's input   down 0.7857  up 0.3913  macro 0.5885
+  16 geometric bands, 70 ms cut                         down 0.8817  up 0.3457  macro 0.6137
+  trained CRNN (Klangio+GuitarSet), 70 ms cut           down 0.5835  up 0.4199  macro 0.5017
+```
+
+So the CRNN sits 0.087 below the linear floor of its own input, not 0.39. It is not the
+dominant defect.
+
+**The binding constraint is the 70 ms live deadline** (`ml/probe_direction_budget.py`):
+
+```
+  audio kept after onset    40 ms   70 ms  100 ms  150 ms  250 ms
+  macro                    0.6165  0.6137  0.6200  0.6133  0.7326
+  up-F1                    0.3584  0.3457  0.3506  0.3356  0.5466
+```
+
+Between 150 ms and 250 ms macro gains 0.12 and up-F1 nearly doubles; adding FRAMES without
+audio buys nothing (28 frames scores below 15). **Direction on a microphone is a DECAY
+feature, not an attack transient** — which strings keep ringing and how the pick's travel
+shapes them. That also explains, after the fact, why higher time resolution measured worse
+and why the 128 ms analysis window was never the problem.
+
+Product consequence (ADR 0551 D4): the 70 ms budget exists for the live ARROW. Rhythm
+SCORING has no latency requirement and is where a wrong answer actually costs the learner
+(ADR 0549 D2). The fix is a two-tier decision — provisional at 70 ms for the arrow,
+settled at ~250 ms for scoring — on the existing `StrumDirectionClassifier` /
+`StrumAnalyzer` seam.
+
+**Corpus diversity stands** and is unaffected by the alignment error
+(`ml/experiment_cross_corpus.py` uses `window_truncated` throughout). Shipped
+architecture, three arms, each scored on both held-out corpora:
+
+```
+  arm                     GuitarSet macro   Klangio macro   called-up / truth
+  A Klangio only               0.3552          0.4080        0.76/0.19 · 0.73/0.38
+  B Klangio + GuitarSet        0.5017          0.5979        0.64/0.19 · 0.58/0.38
+  C GuitarSet only             0.5068          0.3832        0.06/0.19 · 0.00/0.38
+```
+
+B improves BOTH corpora, including the original domain. C's macro BEATS B while calling
+nothing up on Klangio — it collapsed onto the majority class of an 81 %-down test set, so
+**macro-F1 alone would have selected the worse model**. Always print the predicted class
+rate beside the true one. Two hypotheses died here as well: shrinking the model (10k and
+4k parameters) collapses it to one class, and per-window energy normalisation hurts both
+the CRNN (0.5017 → 0.4065) and the linear reader (0.5885 → 0.5763).
+
+### The baseline that was missing, and the measured two-tier payoff (E18-R29, ADR 0552)
+
+**Quote this first, always.** Every direction figure above was compared to an earlier
+direction figure, never to the trivial strategy on the same test set:
+
+```
+  majority baseline ("always down")
+    GuitarSet test (n=530,  81% down):  down 0.8935  up 0.0000  macro 0.4468
+    Klangio  test (n=3721, 62% down):  down 0.7673  up 0.0000  macro 0.3836
+
+  SHIPPED 3-class CRNN, end to end, on GuitarSet:                  macro 0.3876
+```
+
+The shipped direction output is **below** a system that ignores the audio. Four rounds
+measured it without that line, so "0.43 -> 0.50" read as progress when both sit around
+guessing. `probe_direction_budget.py` now prints the baseline before any result row.
+
+**AUC is the wrong metric on this corpus.** A predictor that knows nothing about the stroke
+— only which take it came from, ranking by that take's up-rate — reaches **AUC 0.7386**,
+because recognising the recording is enough to order the corpus. Any AUC below ~0.74 here
+is no evidence of direction discrimination, and several figures in ADR 0551 sit at or under
+it. Read macro-F1 (the oracle scores only 0.4468 there, being unable to emit upstrokes).
+
+That same oracle **refuted my own mechanism label**: ADR 0550 D3 measured pre-onset audio
+predicting direction at AUC 0.7128 and called it "alternation". Consecutive strokes share a
+direction 61.4 % of the time in GuitarSet (45.4 % in Klangio) — there is no strong
+alternation to guess. The mechanism is take identification plus that take's class prior.
+The decision to exclude pre-onset context is unchanged and better founded; the argument
+beside it was wrong, including the claim that `D DU UDU` "does not alternate" (it flips
+60 %, i.e. MORE than the corpus). The real argument is that a context prior belongs to the
+corpus's repertoire and misleads on any other.
+
+**The grid.** Three training pools x two deadlines, every cell on both held-out corpora.
+Only the truncation differs: the shipped 15-frame window already reaches 238 ms past the
+onset, so both blocks use the same (15, 128) tensor and the same network — the deadline
+lever costs nothing architecturally.
+
+```
+  GuitarSet (new player AND tune, n=530)            baseline 0.4468
+    A Klangio only          70 ms   macro 0.3552   calledUp 0.76/0.19
+    A Klangio only         238 ms   macro 0.3415   calledUp 0.82/0.19
+    B Klangio + GuitarSet   70 ms   macro 0.5017   calledUp 0.64/0.19
+    B Klangio + GuitarSet  238 ms   macro 0.6446   calledUp 0.29/0.19   <- chosen
+    C GuitarSet only        70 ms   macro 0.5068   calledUp 0.06/0.19
+    C GuitarSet only       238 ms   macro 0.6514   calledUp 0.20/0.19
+
+  Klangio (new player, same rig, n=3721)            baseline 0.3836
+    A Klangio only          70 ms   macro 0.4080     B  70 ms  macro 0.5979
+    A Klangio only         238 ms   macro 0.6213     B 238 ms  macro 0.6321   <- chosen
+    C GuitarSet only        70 ms   macro 0.3832     C 238 ms  macro 0.5525
+```
+
+**The two levers do not substitute for each other.** Extra audio alone lifts the ORIGINAL
+domain hard (Klangio 0.4080 -> 0.6213, +0.2133) and transfers NOTHING (GuitarSet 0.3552 ->
+0.3415, both below baseline). The second corpus alone transfers (+0.1465 on GuitarSet) but
+leaves the audio budget unspent. Together: 0.6446 / 0.6321. More audio improves the model
+on what it already knows; more corpora make it transferable.
+
+C is not the winner despite scoring highest on GuitarSet (0.6514 vs 0.6446): it is 0.08
+worse on Klangio and collapses entirely at 70 ms (calledUp 0.00). Klangio is not dead
+weight. And at 70 ms macro-F1 alone would again have picked C — print the predicted class
+rate beside the true one.
+
+**Alpha gate (Ch14 §7.2, macro-F1 >= 0.80) is NOT met**: 0.6446. The linear floor at 238 ms
+is 0.7326, so the CRNN sits 0.088 under it — the same distance as at 70 ms (0.5017 vs
+0.5885), meaning it converts the extra audio at unchanged efficiency. Real capability, not
+an artefact, and the remaining gap is unchanged.
+
+**Next:** a wiring round under AGENTS.md §9 — a second, delayed classification on the
+existing `StrumDirectionClassifier` / `StrumAnalyzer` seam, the arrow taking the provisional
+call and rhythm SCORING the settled one (scoring has no latency requirement and is where a
+wrong answer costs the learner, ADR 0549 D2). It needs the 3-class asset retrained with the
+chosen configuration; these experiments are deliberately 2-class, because the no-strum head
+is a separate capability with its own calibrated gate and mixing them would make it
+impossible to say which change moved which number.
+
+### The remaining gap is DATA, not the model and not the features (E18-R30, ADR 0553)
+
+The "0.088 gap" conflated two inputs: the 0.7326 floor was measured on 16 geometric
+magnitude bands, the CRNN's 0.6446 on 128 log-mels. Measured separately, at 238 ms, on the
+player- and tune-disjoint split:
+
+```
+  linear floor on the CRNN's OWN input (128 log-mel)   macro 0.6601  95% CI [0.6088, 0.7108]
+  trained CRNN (Klangio + GuitarSet, 238 ms)           macro 0.6446
+```
+
+**The model side is closed.** 0.0155 is well inside the interval: the CRNN already sits at
+the linear ceiling of its own input, so more epochs, more parameters and more regularisation
+have nowhere to work — and shrinking it collapses it (ADR 0551 D5). Treat any further
+capacity/architecture proposal for direction as requiring evidence that headroom exists.
+
+**"Coarser bands are better" did not replicate, and cross-validation is what caught it.** On
+one split the linear floor improved monotonically (128 -> 8 bands: 0.6601 -> 0.7160), with a
+good story attached (1920 features for ~1055 training sweeps; direction is a broad spectral
+cue). Over 14 usable folds — every player held out, crossed with three rotations of the tune
+split, always disjoint in both — it is not even ordered:
+
+```
+  128 log-mel  0.6715 +/- 0.0828     32 bands  0.7090 +/- 0.0802
+   16 bands    0.6731 +/- 0.0897      8 bands  0.6931 +/- 0.1063
+  16 geometric magnitude bands  0.7270 +/- 0.0821  (13 folds)
+```
+
+16 scores below 32, and every value sits inside every other's spread. A monotone trend over
+k points is not k pieces of evidence — it is one sample read k times. Acting on it would have
+bought a change to `ml/features.py` plus its Dart twin `crnn_frontend.dart` under the r134
+parity discipline, for nothing.
+
+**The representation is a CEILING.** Gradient boosting scores WORSE than logistic regression
+on every representation (0.6492 vs 0.6715 on log-mel; 0.6822 vs 0.7270 on geometric bands).
+A stronger reader extracting less means overfitting, i.e. no unexploited non-linear
+structure. ~0.73 is the ceiling, not a floor.
+
+**Geometric vs log-mel is unproven, and the two tests disagreeing IS the result.** Paired
+over 13 folds: mean +0.0636 (sd 0.0981, SE 0.0272), normal 95% CI [+0.0103, +0.1170] which
+excludes zero, sign test p = 0.27 with 4 of 13 folds negative and one fold contributing
++0.3096. The CI is carried by the tail, so normality is the assumption that fails — not the
+distribution-free test. When a paired comparison is reported, print the per-fold signs and
+the largest single contribution; `probe_direction_representation.py` prints both on purpose.
+
+**Where that leaves direction:**
+
+```
+  majority baseline                                   macro 0.4468
+  shipped 3-class CRNN today (end to end)             macro 0.3876
+  trained CRNN, Klangio + GuitarSet, 238 ms           macro 0.6446
+  ceiling of this representation over folds           macro ~0.73
+  Chapter 14 7.2 Alpha gate                           macro 0.80
+```
+
+Quote all five together: with the model at its ceiling and the features exhausted, "we are
+still tuning it" is not an available answer. The gate needs DATA — and corpus diversity is
+the one lever that demonstrably transferred (ADR 0552 D2). There are nine guitarists in
+total (Klangio 3 + GuitarSet 6). Next measurement step is collection, not modelling: the
+user's own phone recording (exact labels, target hardware, no licence question, and it also
+closes L660's open item), plus further direction-labelled or hexaphonic corpora.
+
+**And the single split starves training, so 0.6446 is a LOWER bound.** GuitarSet's crossed
+player/tune cells — 1471 of 3056 sweeps — cannot be added to training: 886 share a player
+with the test set, 585 share a tune, and **zero** share neither. What the check did reveal is
+that the single split withholds three players AND eight tunes at once, while a CV fold
+withholds one player and one tune group:
+
+```
+  18-fold CV training size:  min 1296   median 1635   max 2100
+  the single split:                                   1055
+```
+
+So ADR 0552's 0.6446 describes what the configuration manages from 1055 sweeps, not its
+capability. Report held-out direction performance over FOLDS from now on, not over one
+split; a shipping model trains on everything and takes its estimate from the CV.
+
+The next BUILD step is unchanged: wiring ADR 0552's two-tier decision (+0.1429 measured, no
+architecture cost).
+
+### One asset serves both direction tiers (E18-R31, ADR 0554)
+
+ADR 0552's "no architecture cost" holds for the INPUT (the shipped 15-frame window already
+reaches 238 ms past the onset; the tensor stays (15, 128)) but not for the WEIGHTS: the two
+tiers were models trained on different truncations, which reads as two assets, two
+`tryLoad`s, two parity fixtures and per-call-site model selection in Dart.
+
+Measured over the repo's `honest_eval.STD_SEEDS = [42, 1, 2]`, three arms x two deadlines x
+two held-out corpora (`ml/experiment_deadline_augmentation.py`), macro-F1 mean +/- sd:
+
+```
+  GuitarSet (baseline 0.4468)        @70 ms              @238 ms
+    A trained @70 ms          0.4690 +/- 0.0603   0.4269 +/- 0.0063   <- BELOW baseline
+    B trained @238 ms         0.5865 +/- 0.0358   0.6954 +/- 0.0362
+    C trained @BOTH           0.5934 +/- 0.0127   0.6659 +/- 0.0172
+
+  Klangio (baseline 0.3836)
+    A trained @70 ms          0.4879 +/- 0.0854   0.5205 +/- 0.0248
+    B trained @238 ms         0.4795 +/- 0.0924   0.6593 +/- 0.0193
+    C trained @BOTH           0.5828 +/- 0.0385   0.6675 +/- 0.0195
+```
+
+**Ship ONE asset, trained on both truncations (arm C).** It WINS the 70 ms tier on both
+corpora — beating the dedicated 70 ms specialist — with the smallest seed spread
+(+/- 0.0127 vs A's +/- 0.0603), and ties the specialist at 238 ms. Deadline augmentation
+regularises rather than compromising. The two tiers become two CALL TIMES, not two models.
+
+**The tiers cannot be "today's model called twice."** Both cross cells collapse, stably
+across seeds: B at 70 ms calls up 0.08 of the time against a true 0.38 on Klangio (up-F1
+0.1912) — that is the ARROW's position; and A at 238 ms scores 0.4269 +/- 0.0063 on
+GuitarSet, below the 0.4468 majority baseline with a tiny spread, so the current head gets
+WORSE with more audio because it never learned to use it.
+
+**Order: ASSET FIRST, WIRING SECOND.** With today's asset a "settled" call sits below the
+majority baseline, so wiring the seam early would regress rhythm SCORING — the path where a
+wrong answer is a deduction or a phantom credit (ADR 0549 D2). A seam whose model is worse is
+not neutral infrastructure.
+
+**ADR 0552's "+0.1429" conflated two changes** (tier AND training: A@70 -> B@238). On the
+weights that would actually ship, the tier gain is +0.0725 (GuitarSet) and +0.0847 (Klangio),
+against a seed spread of +/- 0.017-0.020 — real, but not what it looked like. And its
+single-seed figures erred in BOTH directions: A@70 GuitarSet 0.5017 -> 0.4690 +/- 0.0603
+(optimistic), B@238 0.6446 -> 0.6954 +/- 0.0362 (pessimistic). One seed is a sample whose
+direction is not predictable; `STD_SEEDS` existed for this.
+
+`crnn_frontend` needs NO change: its ring is 1 s and `windowAt(onsetFrame, currentFrame)`
+zero-fills whatever has not arrived, so the settled call is the same call made later.
+
+### The two-tier asset, and the gate that was silencing upstrokes (E18-R32, ADR 0555/0556)
+
+`ml/train_live_3c_settled.py` trains the 3-class live model on BOTH corpora at BOTH
+truncations (ADR 0554) and exports `assets/ml/strum_crnn_live_3c_settled.bin` plus
+`test/fixtures/crnn_live_3c_settled_parity.json`. **The shipped `strum_crnn_live_3c.bin` is
+untouched**, and the new binary is deliberately NOT declared in `pubspec.yaml` or
+`model_manifest.json`, so it is in the repo but not in the APK - wiring it is a separate
+round under AGENTS.md 9.
+
+**The gate is now class-conditional.** ADR 0549's rule is the P(no-strum) quantile retaining
+95 % of true strums, class-blind. Measured, that silences upstrokes 1.3-2.8x more often,
+because they carry up to 5x the median P(no-strum):
+
+```
+  per-class fitted threshold:   down 0.041166     up 0.292900     (7x apart)
+
+  gate               threshold   retains  rejects
+  class_blind        0.124528     0.950    0.974     (ADR 0549's rule)
+  class_conditional  0.292900     0.971    0.960     (shipped, = max of per-class quantiles)
+```
+
+Held out, the class-conditional gate is better in ALL four cells - GuitarSet macro
+0.5117 -> 0.5262 @70 ms and 0.6000 -> 0.6061 @238 ms, Klangio 0.4922 -> 0.5055 and
+0.6267 -> 0.6363 - for 1.4 points of false-onset rejection. Upstroke suppression drops from
+0.225 to 0.127 (GuitarSet @70) and 0.098 to 0.078 (@238). The product reason: `reggae-skank`
+is nearly all upstrokes, so a class-blind gate makes the engine's silence the learner's
+deduction - ADR 0549 D2's lie, turned by class.
+
+**This is named prior art, not our idea.** The class-blind rule is textbook Chow (1970),
+whose threshold `t = (C_r - C_c)/(C_e - C_c)` carries no class index because it assumes
+symmetric costs; the fix is Mondrian / label-conditional conformal prediction (Vovk et al.
+2003; Vovk, Gammerman and Shafer 2005) with an exact finite-sample per-class guarantee,
+available because the classes are a FINITE partition (Barber et al. 2021 prove continuous
+conditioning is impossible, finite achievable); and Fumera, Roli and Giacinto (2000) already
+proved per-class reject thresholds Pareto-dominate single-threshold Chow.
+
+**Required check, per that failure mode:** Jones et al. (NeurIPS 2020) and Cresswell et al.
+(ICLR 2025) show equalising RETENTION does not equalise error rate on what is RETAINED and
+can worsen the disadvantaged class. Measured: upstroke retained PRECISION moves
+-0.005..+0.003 (flat) while RECALL moves +0.020..+0.063 - no backfire, but visible in
+miniature. The trainer therefore reports per-class retained precision AND recall under both
+gates; a measurement watching only retention cannot see this trade.
+
+**Still open (ADR 0555 D4):** a retention quantile is the wrong frame when false-silence and
+false-positive costs differ - the classical answer is a cost-ratio-derived threshold
+(Tortorella; Pietraszek 2005; Charoenphakdee et al. 2021), and ADR 0549 D2 named both costs
+in prose before choosing a quantile anyway. Separate round, plus precision/recall reject
+curves (Fischer and Wollstadt 2023) for imbalanced reporting.
+
+**Price of the no-strum capability:** 2-class arm C without a gate scores GuitarSet 0.5934
+@70 / 0.6659 @238 and Klangio 0.5828 / 0.6675; the shippable 3-class path with the gate
+scores 0.5262 / 0.6061 and 0.5055 / 0.6363 - so 0.03-0.07 macro, with 7.8-13.7 % of true
+strums suppressed and counted as errors.
+
+**The number to quote:** on GuitarSet the retained upstroke precision is 0.40 and recall
+0.31 - roughly a third of unseen players' upstrokes are found at all - against 0.857 / 0.865
+for downstrokes. That is ADR 0553's data diagnosis, unchanged.
+
+### Presentation rule: the arrow never flips (ADR 0556)
+
+The two tiers must not surface as a visibly self-correcting arrow. The closest studied
+analogue is live captioning (Du et al., CHI 2023), where visible revision of a fast,
+uncertain output is a MEASURED cost even when the final output is right; trust research adds
+the cry-wolf effect (Hoff and Bashir 2015). But the naive alternative - arrow shows the
+provisional call, scoring uses the settled one, disagreement invisible - grades the learner
+against something they never saw, a third lie on top of ADR 0549 D2's two.
+
+So: the fast call shows a direction ONLY when its margin is adequate; otherwise a
+direction-NEUTRAL stroke mark ("a stroke happened, I am not saying which way"). The settled
+call supplies direction for SCORING and the post-bar review. No flip, and no direction claim
+the grader will contradict. The seam already exists - `StrumPrediction.decision`'s margin
+gate (ADR 0512), and a null direction already emits a StrumEvent.
+
+Honest status (ADR 0556 D5): the guidance-hypothesis literature (Salmoni, Schmidt and Walter
+1984; Winstein and Schmidt 1990) is strong but manipulated frequency at SECOND-scale, not
+70 ms vs 240 ms, so it does not settle this. The decision is a justified choice under
+uncertainty and must be measured on our own learners for RETENTION, not in-session accuracy.
+
+### Next data step: Guitar-TECHS
+
+[Zenodo 14963133](https://zenodo.org/records/14963133) /
+[arXiv:2501.03720](https://arxiv.org/abs/2501.03720) - CC-BY-4.0, 5h12m, THREE professional
+guitarists distinct from ours, explicit alternate chord strumming, and per-string MIDI from a
+Fishman Triple Play pickup, so direction is derivable exactly as for GuitarSet. Takes the
+pool from 9 players to 12.
+
+Ruled out by the same search: `KLANGIO-GST-MM-T` (same players, earlier snapshot);
+arXiv 2508.07973 (it IS the GST-MM-2025 paper, not another corpus); IDMT-SMT-Guitar
+(CC BY-NC-ND, no derivatives); EGDB and EG-IPT (one player each); GAPS (licence conflict,
+classical solo); the Francois Leduc set (restricted, one player); GIHME (empty placeholder);
+Zenodo 6470236 (36 players, CC-BY, but strumming NOT confirmed and no hexaphonic channels).
+
+### The metric channel: position in the beat predicts direction better than the audio does (E18-R33, ADR 0557)
+
+`ml/probe_direction_metric.py` reads GuitarSet's `beat_position` grid next to the
+hexaphonic note annotation - no audio, no model - and the headline feature has NO
+fitted parameter: `score = -|distance from the nearest sixteenth offbeat|`.
+
+```
+  channel                                        held-out AUC
+  METRIC    (position in the beat, 0 params, 0 ms)   0.9797   n=526
+  ACOUSTIC  (CRNN at the 70 ms live deadline)        0.7484   (probe_direction_budget)
+```
+
+Player- AND tune-disjoint split. `P(up | phase)` is legible: ~0.03-0.07 on the eighths
+(phase .0 and .5), ~0.89-0.96 on the sixteenth offbeats (.25 and .75) - textbook
+sixteenth-note strumming, the hand a continuous pendulum.
+
+**Controls.** Label leak through the sweep's own time is ruled out: sweep spread is
+21.8 ms (down) / 23.5 ms (up), differing by 1.7 ms, against a 134 ms sixteenth (~6x).
+Shuffling phase WITHIN each test take (tempo, style and class balance preserved) drops
+0.9797 -> 0.5604 - the residual 0.06 is the control's own ceiling, since shuffling keeps
+each take's phase distribution. Not a binning artefact: the parameter-free continuous
+feature reproduces the 8-bin table (0.9783 vs 0.9797). Per unseen player 0.9044 / 1.0000
+/ 0.9923. Rock<->Funk transfer (0.9888 / 0.9560) measures STYLE, not subdivision - both
+GuitarSet styles are sixteenth-based. **One "control" controlled nothing:** distance from
+the nearest EIGHTH scored identically because it is an affine transform of the same score
+(`d8 = 0.25 - d16`) and AUC is monotone-invariant (LESSONS L671 section 2).
+
+**The subdivision is pattern-specific, so the map comes from the LESSON, not a corpus.**
+A 2-bin (eighth-note) table scores 0.5426, near chance - in a lesson prescribing eighths
+the GuitarSet-fitted table would read BACKWARDS. The app knows its prescribed pattern
+(`strum_patterns.dart`, `D DU UDU`), so the map is notation, not a fitted parameter.
+
+**Timing scatter, the product number** (displacing the grid is the same relative
+displacement as the learner playing off a perfect grid): +-0 ms 0.9797, +-20 ms 0.9804,
++-30 ms 0.9599, +-50 ms 0.8427, +-80 ms 0.6285. So the metric channel on a SLOPPY learner
+still beats the acoustic channel on a professional. GuitarSet's players are professionals
+on a backing track; beginners are NOT measured.
+
+**The binding rule (ADR 0557 D4): the metric channel NEVER decides alone what the learner
+is told they played.** It is strongest from the PRESCRIBED pattern, so letting it settle
+direction would grade the learner against the answer key and confirm a pattern they did
+not play - the forbidden false teaching, worse than a missing signal because it is
+confident. Therefore: the ARROW fuses both channels (low stakes, latency-critical);
+SCORING uses the acoustic channel only, with abstention; the metric channel may raise or
+lower the abstention bar but never flips the call; and channel DISAGREEMENT under a
+confident acoustic call is itself the pedagogical output ("your strumming hand left the
+pendulum here"), reported after the bar per ADR 0556 D4.
+
+**ADR 0551's binding constraint is dissolved, not managed.** The metric channel has NO
+deadline - phase is known at the onset instant, not 70 or 238 ms later.
+
+**The rail already exists in production:** `TempoTracker.bpm` + `_placeInBar` compute the
+phase today and throw it away as a direction cue. Wiring means refining that grid from
+eighths to sixteenths and keeping the phase continuous.
+
+**And the unwelcome half (ADR 0557 D5): the corpus barely contains the error class the app
+exists to detect.** 96 % of strokes obey the pendulum; the TRAIN split holds 41 violations
+in 1037 sweeps (3.95 %), of which 39 are upstrokes played off the grid. Those are exactly
+the strokes where the metric channel is WRONG and the acoustic channel must decide alone.
+So upstroke recall 0.31 is not only "too few players" (ADR 0553) - the corpus's upstrokes
+are METRICALLY STEREOTYPED, and **Guitar-TECHS (9 -> 12 players) cannot fix it, because
+professionals do not make this mistake.** The data needed is LEARNERS breaking the
+pendulum, and the only known source is our own labelled recording.
+
+**Not claimed:** the fusion gain is UNMEASURED. Two AUCs do not combine into one number;
+the joint posterior's held-out performance is a separate round needing the cache rebuilt
+with onset times. Until it runs, the fusion is a justified plan, not a result.
+
+### The fusion rule, measured -- and it differs by tier (E18-R34, ADR 0558)
+
+`ml/probe_direction_fusion.py` supplies the combined number ADR 0557 deliberately did not
+claim. Held-out GuitarSet (unseen player AND tune): 530 rows, metric channel available on
+99.2 %, pendulum-obeying 519, **pendulum-violating 11**.
+
+Alignment is PROVEN, not assumed: `guitarset.build` is deterministic, so onset times are
+replayed from the annotation, and the probe EXITS unless both the row count and the full
+(player, tune) sequence match the cache -- a future change to either loop fails loudly
+instead of silently pairing a stroke with another stroke's phase.
+
+`lam` is the confidence given to the prescribed grid: one swept scalar, not a corpus-fitted
+table (ADR 0557 D3). `lam = 0.5` IS the acoustic-only rule, so the baseline is a point on
+the same curve rather than a separate code path.
+
+```
+  tier     rule                        macro   downF1  upF1    accAll  accObey  accVIOL
+  70 ms    C  acoustic only            0.5262  0.7743  0.2780  0.6377  0.6435   0.3636
+  70 ms    A  full fusion  lam=0.99    0.9168  0.9518  0.8817  0.9000  0.9152   0.1818
+  70 ms    B  ties only    m<0.30      0.6497  0.8409  0.4585  0.7321  0.7418   0.2727
+ 238 ms    C  acoustic only            0.6061  0.8605  0.3516  0.7585  0.7649   0.4545
+ 238 ms    A  full fusion  lam=0.99    0.9226  0.9709  0.8743  0.9377  0.9538   0.1818
+ 238 ms    B  ties only    m<0.30      0.6784  0.8876  0.4693  0.8019  0.8092   0.4545
+```
+
+A suppressed stroke stays suppressed under every rule: the metric channel says WHICH
+direction a stroke had, never WHETHER one happened. Letting it resurrect a suppressed onset
+would decide EXISTENCE from the answer key.
+
+**The headline is inflated, and the corpus does it.** 98 % of held-out strokes obey the
+pendulum, so a rule that trusts the grid is largely asked to predict the grid from the grid.
+A learner complies less, and their expected accuracy is a straight line in compliance c:
+`acc(c) = c*accObey + (1-c)*accViol`. Each rule crosses the acoustic-only baseline once, and
+THAT crossing is the shippability test:
+
+```
+  tier     rule                      break-even c*   acc at c = 0.95 / 0.80 / 0.60 / 0.40
+  70 ms    A  full fusion lam=0.99      0.401        0.8786  0.7685  0.6219  0.4752
+  70 ms    B  ties only   m<0.30        0.481        0.7184  0.6480  0.5542  0.4604
+ 238 ms    A  full fusion lam=0.99      0.591        0.9152  0.7994  0.6450  0.4906
+ 238 ms    B  ties only   m<0.30        0.000        0.7915  0.7383  0.6674  0.5964
+```
+
+**What this selects.** At 238 ms (SCORING) the tie-break rule has `c* = 0.000` -- it never
+loses at any compliance, while gaining +0.0723 macro. Pareto, shippable now, and it
+coincides with ADR 0557 D4's ethical constraint ("the metric channel may move the abstention
+bar but never flips the call") -- **coincidence, not derivation**: D4 was declared BEFORE the
+measurement and would bind either way. At 70 ms (the ARROW) full fusion lifts accuracy
+0.6377 -> 0.9000 and beats acoustic-only above 0.401 compliance, which even a struggling
+beginner exceeds -- but it rests on ELEVEN strokes, so it goes behind a feature gate.
+
+**And the rule designed to be "conservative" was WORSE on the fast tier.** Rule B was the
+design intuition for safety (never override a confident acoustic call). At 238 ms that was
+right (`c* = 0.000`); at 70 ms it inverts -- 0.481 against full fusion's 0.401. The
+mechanism is transparent afterwards: when the acoustic call is confident AND wrong, which at
+70 ms it often is, the "do not override the confident one" guard is exactly what PRESERVES
+the error. The margin does not measure reliability at 70 ms (LESSONS L672 section 2).
+
+**Not claimed:** 0.9168 / 0.9226 are NOT generalisation estimates for a learner -- the
+break-even curve is, and it rests on 11 strokes (every accViol a multiple of 1/11; the
+measured harm 0.3636 -> 0.1818 is TWO strokes). Bounds, not operating points. The linear
+compliance model also assumes a learner's violations look like GuitarSet's; a beginner's
+probably differ in kind (whole-pattern drift, not a stray stroke). `lam` is a swept
+confidence scalar, not a calibrated probability.
+
+### The SHIPPED rule, and the Dart unit that cannot drift from it (E18-R35, ADR 0558 correction)
+
+Every number in ADR 0557/0558 was measured with the MEASUREMENT rule ("up if the distance
+from the nearest sixteenth offbeat is <= 0.09375 beats"). The SHIPPED rule is the nearest
+slot of the lesson's PRESCRIBED pattern, because the offbeat rule encodes one corpus's
+pattern while a lesson's pattern is whatever its notation says (ADR 0557 D3). Measuring one
+rule and shipping another measures a different system (LESSONS L662/L673).
+
+```
+  rule                            accuracy   violating strokes
+  measurement (|d16| <= 0.09375)    0.9791         11
+  SHIPPED     (nearest slot)        0.9848          8
+```
+
+They disagree on 0.95 % of held-out rows (5 / 526). The shipped rule is BETTER -- and that
+SHRINKS the violating subset from 11 to 8, i.e. the only place fusion can do harm now has
+fewer samples. The harm estimate got THINNER, not stronger: every accViol is a multiple of
+1/8 and the measured harm is TWO strokes. (A general trap: when risk is measured on the
+model's own mistakes, every improvement removes the evidence you need to bound the risk.)
+
+Re-measured under the shipped rule: **D1 is unchanged** -- at 238 ms the tie-break rule
+still has `c* = 0.000` and +0.0723 macro, so the shippable rule survived. **D2 got worse**:
+the arrow's full fusion break-even moved 0.401 -> 0.475, materially closer to 0.5, which
+STRENGTHENS the feature-gate decision. D3 holds (0.557 vs 0.475).
+
+`lib/features/live/engine/dsp/strum_metric_channel.dart` is the unit: parameter-free,
+Flutter-independent, and it takes the pattern from OUTSIDE rather than fitting it. Three
+states kept deliberately distinct, because collapsing them is what would make the class a
+lie -- `available == false` (no tempo grid: free play, a normal mode), `available &&
+direction == null` (on the grid but the pattern prescribes a REST there, so no opinion; a
+stroke on a rest is itself a pattern violation for the post-bar review), and `hasOpinion`
+(the prescribed direction). The class doc states loudly what it must NEVER be used for: the
+direction it returns is the ANSWER KEY, so reporting it as the learner's stroke, or letting
+it flip a confident acoustic call, is the forbidden false teaching (ADR 0557 D4).
+
+AGENTS.md 9, item by item: **fixture** `test/fixtures/strum_metric_channel_parity.json`
+(180 cases -- 120 real held-out GuitarSet onset phases plus synthetic edges: slot boundary,
+the wrap at 1.0, NEGATIVE phase, a rest slot, a 3/4 pattern); **parity** -- the fixture is
+generated by the SAME arithmetic the probe measures with, so shipped and measured rule
+cannot diverge; **property** (randomized) -- a slot centre lands on that slot, offsetSlots
+stays in [-0.5, 0.5], a whole-bar shift changes nothing, a one-slot shift advances the slot
+AND flips the arrow (the pendulum itself), a displacement under half a slot keeps the slot;
+**real-audio measurement** -- `probe_direction_metric.py` section 4b over 72 real GuitarSet
+recordings (held-out accuracy 0.9848) plus `probe_direction_fusion.py` running the trained
+model on that audio.
+
+The half-slot property is the geometric twin of the measured timing-scatter row: at 120 bpm
+a sixteenth is 125 ms, so the channel tolerates +-62.5 ms of learner error before reading
+the neighbouring slot -- and measured AUC is 0.8427 at +-50 ms, 0.6285 at +-80 ms. The knee
+sits where the geometry says it should.
+
+12/12 tests green. **Shipped behaviour is unchanged: the unit is NOT wired** -- `LivePipeline`
+does not call it, so this is a clean new surface.
+
+### The settled tier is built, and deliberately DARK (E18-R36, ADR 0559)
+
+`StrumAnalyzer` now has a second, delayed classification (ADR 0556 D3). The instant is
+DERIVED, not written down: `LiveCrnnFrontend.framesUntilComplete` computes it from the
+model geometry (row count, preFrames, modelHop, FFT size) and comes out at 41 analyzer
+frames = 238 ms for the shipped framing -- the same 238 ms the settled tier is measured
+at. The `+ 1` frame absorbs the centre rounding in `_buildWindow`, because arriving EARLY
+would restore exactly the zero-padding the tier exists to remove.
+
+Proven rather than assumed (`test/features/live/dsp/strum_settled_tier_test.dart`): at the
+settled instant the streamed window equals the whole-signal reference to 1e-9, and at the
+fast instant the window's last row is the log-mel of SILENCE -- one constant across all
+128 mels. So the truncation is real and the tier removes it.
+
+`StrumRevision` revises DIRECTION and nothing else. It cannot create a strum, cannot
+retract one, and says nothing about whether a stroke happened. Its identity is an INTEGER
+frame index, not a timestamp: at 200 bpm sixteenths strokes are ~13 frames apart while
+settling takes 41, so up to three are in flight, and an epsilon wide enough for float
+rounding could reach the neighbouring stroke.
+
+The three ADR 0556 hazards, each with a test: a revision never creates a strum (one onset →
+exactly one event plus one revision; the heuristic path emits zero revisions); it never
+overwrites a NEWER stroke (3+ in flight, every revision names its own onsetFrame, strictly
+increasing); a SUPPRESSED onset never comes back (no event, no revision, and the seam is
+consulted once but never twice). Plus the mirror case: a SETTLED suppression does not
+retract an already-reported strum -- the event reached every consumer, deleting it would
+remove a stroke the learner SAW, which is the visible self-correction ADR 0556 D1 forbids.
+
+Queue order matters and is tested, not hoped for: the SETTLED queue is drained BEFORE the
+fast one, because the fast branch returns and one frame can carry a settled verdict for an
+earlier stroke together with a fast verdict for a later one. A stroke's fast verdict is due
+12 frames after its onset and its settled verdict 41 frames after, so the collision needs a
+gap of 29 frames, not 41; the test sweeps 28/29/30 and REQUIRES the collision to occur at
+least once, reporting that the ordering was never exercised otherwise.
+
+**The tier is OFF by default (`settledTier: false`), and that is the point.** With the live
+CRNN behind the seam `settleAfterFrames` is 41, so enabling it means a SECOND model forward
+per strum, and nothing reads `settledRevision` yet -- the cost would buy a learner's phone
+nothing. On this JIT test harness one forward is ~29 ms; that is NOT an on-device figure and
+the two are not comparable (release AOT is substantially faster), so no on-device number is
+claimed. What is claimed: the doubling is not free, its magnitude is unknown, and at 200 bpm
+sixteenths there are ~13 strums a second. The flag is not a user feature toggle -- it is the
+seam that keeps an unconsumed computation from shipping, and it is flipped by the round that
+both consumes the revision (ADR 0558 D1) and measures the cost in a profile build. A test
+guards it: without opting in, the second forward is not merely ignored, it is never issued.
+
+`settleAfterFrames` is a REQUIRED seam member with no default, so eight test doubles had to
+say they have no settled tier. Deliberate: a default would silently opt future classifiers
+into the safe value and hide the decision. For two of them it was not a formality -- the
+recorders in `guitarset_direction_boundary_test.dart` and
+`guitarset_threshold_sweep_test.dart` delegate to the REAL classifier and append every call
+to `calls`, so delegating would have added one extra verdict per strum, at a different
+truncation, to the very pass every threshold in those measurements is rescored from.
+
+`StrumEvent` gained an additive `onsetFrame`. Its only construction site is the analyzer;
+the same-named domain event in `features/audio_analysis` is a DIFFERENT class and is
+untouched.
+
+### The metric channel needs a grid the APP OWNS -- on the pipeline's self-anchored bar it is WORSE than always-down (E18-R37, ADR 0560)
+
+Every number in ADR 0557 stands on GuitarSet's ANNOTATED beat grid: the right tempo AND the
+right phase ORIGIN. The app cannot supply that in free play. `TempoTracker.bpm` is a
+median-IOI estimate, EMA-smoothed and folded into 60-200 by repeated doubling/halving, so
+its OCTAVE is explicitly ambiguous and it carries no phase at all; `_barStartSec` is
+anchored to `event.timeSec` of whichever strum overflowed the previous bar -- an ARBITRARY
+stroke, re-picked about once a bar.
+
+The channel's claim is that POSITION decides direction, so an origin error of half a slot
+does not blur the answer, it INVERTS it.
+
+Held out (unseen player AND tune): 526 strokes, 12 takes, up rate 0.1920, so **ALWAYS-DOWN
+scores 0.8080** and that is the number to beat (LESSONS L667).
+
+```
+  grid                                        accuracy   vs annotated
+  annotated (ADR 0557)                          0.9848       --
+  self-anchored, right tempo (seeds 0-4)   0.7300 / 0.9430 / 0.8555 / 0.7833 / 0.9468
+  re-anchored every bar (_placeInBar)           0.8612      -0.1236
+  tempo x2 (half-time read)                     0.6597      -0.3251
+  tempo /2 (double-time read)                   0.7985      -0.1863
+  re-anchored + tempo x2                        0.6179      -0.3669
+  re-anchored + tempo /2                        0.7662      -0.2186
+```
+
+Against always-down: the re-anchored arm gains only +0.053, three of five single-anchor
+seeds are WORSE than the constant, and every wrong-octave arm is worse. **On a manufactured
+grid the channel is worse than a constant -- and confident while being so.**
+
+The average hides the shape. The anchor stroke would be DOWN 81.2 % of the time and UP
+18.8 %, and an UP anchor shifts the grid by one slot, which FLIPS every call on a strict
+alternation. The 0.73-0.95 spread across seeds is that: a mixture of near-perfect and
+near-inverted takes, not a uniformly degraded signal. So it is not "slightly less accurate
+for everyone", it is "right for some learners and INVERTED for others" -- a structure an
+averaged accuracy cannot show (L675 section 2).
+
+**Decided: passing `TempoTracker.bpm` + `_barStartSec` to the channel is CANCELLED** as the
+next step (ADR 0560 D1). The only legitimate origin is the metronome / lesson timeline the
+app generates itself, whose phase is known by construction -- and that lives in
+`features/curriculum` / `features/learn` and does NOT reach the DSP pipeline today, so
+wiring it is cross-layer work. In free play the channel stays UNAVAILABLE, which is already
+how it is built (`MetricCall.unavailable` for `bpm <= 0`): a clean capability boundary, not
+silent degradation.
+
+**New risk this round found:** the repo already measured that **15 of 16 metronome clicks
+become reported strums** (`metronome_click_pollution_test.dart`), at every level down to a
+gain of 0.1. A click lands exactly ON the beat -- exactly where the grid expects a
+downstroke -- so the metric channel would rubber-stamp clicks as CONFIDENT downstrokes and
+fusion would make the phantom stroke MORE confident. The existing mitigation (a HAPTIC pulse
+while scoring, `CurriculumPulse.haptic`) is therefore not a convenience but a PRECONDITION
+of the channel.
+
+Not claimed: this did not measure whether a real beat-tracker could supply a good enough
+grid -- only that the CURRENT TempoTracker and `_placeInBar` cannot. The 0.8080 baseline is
+this corpus's class balance and differs on upstroke-dominant material. The click interaction
+was not measured with the metric channel; the 15/16 figure is the repo's earlier measurement.
+
+### The grid source is RhythmGrid, and reading it found TWO defects (E18-R38, ADR 0561)
+
+Hunting for the app-owned grid ADR 0560 demands led to
+`lib/features/curriculum/domain/rhythm_grid.dart`, which already held everything the metric
+channel needed, and better: `pendulumDirection` (the same pedagogy sources ADR 0557 rests
+on), `beatsPerBar` and `subdivision`, `RhythmGrid.authored` plus `followsPendulum` for
+patterns that legitimately leave the pendulum (the taught 3/4 oom-pah), `StrokeSound.ghost`,
+`handCrossings`, and **`onsetUs({bar, slotIndex, bpm})` -- a known-phase absolute timeline
+from the exercise start**, which is exactly the grid ADR 0560 requires.
+
+**RhythmGrid is the single authority for the pendulum.** `StrumMetricChannel` takes
+`MetricSlot`s that already carry their direction, so there is no second implementation to
+drift from the first. `features/live/engine/dsp` does not import curriculum (no file in that
+directory imports another feature); the mapping is `StrumMetricChannel.crossings`, called
+from the configuration site with the grid.
+
+**Defect 1 -- a GHOST crossing carries a direction.** The first version treated a `null`
+pattern slot as "no opinion". That is pedagogically wrong, and the repo's own doc says so: the
+strumming hand is a pendulum and does not stop, so a crossing left silent is real hand travel
+with a real direction -- it simply has nothing to hear. If a learner strikes there anyway, the
+pendulum still predicts their direction. So `MetricSlot` carries BOTH `direction` (always
+known) and `expected` (does the pattern ask for a sound here), and
+`MetricCall.expectedHere == false` is not doubt about the direction -- it is a pattern
+violation, a post-bar finding (ADR 0556 D4).
+
+**Defect 2 -- a QUARTER grid must be read at CROSSING resolution or every off-beat stroke
+inverts.** A quarter bar notates four downstrokes; the hand still comes back UP between them,
+which is why `handCrossings` exists, and the class states the distinction as "what is ASKED
+(the slots) versus what the hand DOES". This channel is about what the hand does. Read at slot
+resolution, a stroke between beats lands on the nearest quarter and reads DOWN while the hand
+travelled UP -- a confident inversion on exactly the off-beat strokes a learner adds when they
+start filling a pattern in. `StrumMetricChannel.crossings` expands a quarter grid to eight
+crossings with the returns as ghosts; tests pin both halves, including that the UNEXPANDED
+reading gives DOWN on the same stroke, so the defect is written down in numbers.
+
+**An AUTHORED grid keeps its authored directions.** The taught oom-pah has
+`followsPendulum == false` and the channel does not "correct" it -- a model that called it
+wrong would teach something false about a pattern real teachers teach. Pinned by test.
+
+**The measurement is unaffected:** GuitarSet's implied pattern is a strict sixteenth
+alternation with NO ghost crossings, so `slot_call`'s answer never depended on the rest
+semantics. 0.9797 and the fusion tables stand. The parity fixture was regenerated (180 cases)
+and now carries `expectedHere`, the expanded quarter grid and the 3/4 authored oom-pah.
+
+16/16 tests green. The channel is still NOT wired, and per ADR 0560 it never will be in free
+play.
+
+### The fusion is INADMISSIBLE on the scoring path — it would compare the grid to itself (E18-R39, ADR 0562, supersedes ADR 0558 D1/D2)
+
+Looking for the wiring site found `gradeRhythm` in
+`lib/features/curriculum/domain/rhythm_grading.dart`, which is already the consumer and
+already holds the whole contract: `DetectedStroke {atUs, direction, isConfirmed}`; `startUs`
+plus `grid.onsetUs(...)` as the known-phase grid; `RhythmSlotOutcome.unclear` as abstention;
+`extraConfirmedStrokes` for a stroke played where the pattern ghosts; and its library comment
+states as rule 1 **"Pairing uses TIME only, never direction ... Pair by time, then judge
+direction"** -- the same answer-key protection ADR 0557 D4 derived independently.
+
+**The decisive observation.** `gradeRhythm` compares a stroke's direction against the GRID's
+expected direction to produce `RhythmSlotOutcome.wrongDirection`, which the code itself calls
+"the thing only this app can tell a learner". Fold the metric channel's prescription into
+`DetectedStroke.direction` and the grader compares the grid to ITSELF: `wrongDirection`
+collapses and the app tells every learner their strumming hand is perfect.
+
+Measured, not feared: in ADR 0558's own table, on pendulum-violating strokes the fused rule
+takes accuracy 0.5000 -> 0.2500 at the settled tier. Those violating strokes ARE the
+`wrongDirection` cases, so fusion HALVES detection of the single finding the rhythm pillar
+exists for. The number was in the table, labelled "harm on the violating subset", and not
+connected to the product output.
+
+**ADR 0558 D1 contradicted ADR 0557 D4, and the text claimed they coincided.** D4: the metric
+channel "may move the abstention bar; it may never flip the call". D1's tie-break rule: "the
+metric call decides below t" -- i.e. it flips. The `c* = 0.000` measurement is real, but it
+was taken on direction macro-F1 against truth, a metric that cannot ASK whether the grader
+can still detect a pattern violation. L670 in its strongest form: the axis measured was the
+one to improve, not the one the failure moves cost onto.
+
+**The arrow use falls too (ADR 0558 D2 superseded).** A fused arrow beside an acoustic-only
+grader contradicts itself on exactly the violating strokes: the learner sees the arrow the
+pattern asked for, then reads after the bar that they strummed the other way -- ADR 0556 D2's
+prohibition, in reverse.
+
+**What the channel was going to add, and already exists:** disagreement as pedagogical output
+= `wrongDirection`; abstention = `unclear`; the ghost-slot stroke = `extraConfirmedStrokes`;
+answer-key protection = pairing by time only; known-phase grid = `startUs` + `onsetUs`.
+
+**What survives for `StrumMetricChannel`:** it is a measurement instrument (the Dart twin of
+`ml/probe_direction_metric.py`, pinned by a parity fixture) and a candidate basis for choosing
+which recorded sessions to collect -- sessions where the two channels disagree are where the
+scarce pendulum-violating strokes live. Not a learner-facing feature. It stays in the repo,
+unwired, with the prohibition in its class doc.
+
+**Consequence:** there is nothing left to wire, so `settledTier` stays DARK -- its only
+justification was the D1 fusion. ADR 0558 D3 (my "conservative" rule was worse on the fast
+tier) and D4 (the 11->8 stroke bound) stand as measurements.
+
+Not claimed: the settled tier WITHOUT fusion may still help scoring on its own -- the settled
+acoustic verdict scores macro-F1 0.6061 against the fast 0.5262, with no grid involved. That
+is independent of the fusion and could be a separate round, but its cost (a second model
+forward per strum) still needs a profile-build measurement.
+
+### The settled tier earns its CPU only on SHORT-MARGIN strokes (E18-R40, ADR 0563)
+
+ADR 0562 closed the fusion; the two-TIER decision survives it untouched because it is purely
+acoustic -- same model, same window, just more audio arrived. `ml/probe_settled_tier_value.py`
+measures whether lighting it is worth the second forward, held out on GuitarSet (unseen player
+AND tune, 530 strokes):
+
+```
+  tier                      macro   downF1  upF1    neutral arrows / 2nd forwards
+  fast only (ships today)  0.5262  0.7743  0.2780        0 %
+  settled only             0.5917  0.8481  0.3353      100 %     (not shippable: every
+                                                                  arrow would wait 238 ms)
+  ADR 0556 D3 hybrid -- fast above the margin, settled below it
+    t = 0.10             0.5389                          6.4 %    +0.0127
+    t = 0.30             0.5813                         19.8 %    +0.0551   <- chosen
+    t = 0.50             0.5811                         32.5 %    +0.0550
+    t = 0.70             0.6044                         49.1 %    +0.0783
+    t = 1.01             0.5917                        100.0 %    +0.0655   (= settled only)
+```
+
+t = 0 is fast-only and t > 1 is settled-only: the baseline and the ceiling are points on the
+same curve, not separate code paths. Chosen t = 0.30 buys **84 % of the settled-only gain for
+a fifth of its cost**; higher rows are within a handful of strokes of each other on this
+sample (t = 0.70 even exceeds settled-only, which a 530-stroke up-F1 cannot support) and each
+step costs both CPU and direction-neutral arrows.
+
+Where the gain sits: at t = 0.30 the short-margin strokes (n=105) go 0.3619 -> 0.6762 accuracy
+while the adequate-margin ones (n=425) move 0.7059 -> 0.7459; at t = 0.90 the adequate-margin
+subset moves +0.0000. **And the margin really does predict correctness**, which is what makes
+routing on it legitimate: fast accuracy is 0.4000 in the 0.0-0.2 margin band and 0.8500 in
+0.8-1.0.
+
+**This changes ADR 0559's cost calculus: not double, +20 %.** `StrumAnalyzer` now queues a
+stroke for settling only when the fast verdict's margin is below 0.30, OR when the fast call
+named no direction at all (no arrow claim exists for a later verdict to contradict, and the
+grader would otherwise have nothing). Three tests pin it: a confident fast verdict issues no
+second forward at all; a null-direction verdict always settles; a classifier with no
+probabilities never does.
+
+**And it CORRECTS LESSONS L672 section 2**, which claimed "the margin does not measure
+reliability at 70 ms". It does (0.40 -> 0.85, monotone). The real reason full fusion beat the
+tie-break rule in E18-R34: at lam = 0.99 full fusion effectively replaced the acoustic call
+with the GRID everywhere, and a 96 %-pendulum-compliant corpus rewards that, while the
+tie-break rule leaned on the grid only on short-margin strokes and so harvested less of it.
+The comparison said nothing about the margin. That STRENGTHENS ADR 0562: the "better" fusion
+row was better because it cheated more (L679).
+
+The tier stays DARK: `settledTier = false` is unchanged, and flipping it still needs a
+profile-build cost number -- the ~29 ms JIT forward is not an on-device figure. What changed is
+that the price is now measured as +20 % of the direction model's forwards rather than +100 %,
+and the benefit is measured at +0.0551 macro-F1.
+
+### The direction model costs 45x what its own header claimed: 28 ms per stroke, not ~1 ms (E18-R41, ADR 0564)
+
+ADR 0563 left the settled tier's ABSOLUTE cost in prose ("~29 ms on a JIT harness, not an
+on-device figure") -- an upper bound masquerading as a data point, which is the confusion
+ADR 0474's four `kind`s exist to prevent. `tool/benchmarks/strum_direction_forward_benchmark.dart`
+puts it in the record instead, and resolves a contradiction: `crnn_strum_net.dart`'s header
+claimed "~350k params / ~1 ms per window".
+
+```
+  forward latency   JIT (flutter test)  median 25.8 ms
+                    AOT (dart compile)  median 27-29 ms, p95 33 ms
+```
+
+**AOT is NOT faster**, so the JIT figure was never the pessimistic bound it had been treated
+as. The parameter count was right (363 891); the latency was wrong by 45x, and wrong because
+it was derived from parameters instead of work:
+
+```
+  conv1  15x128x16 outputs x 9        =  0.28 M MAC   (then maxpool W/2)
+  conv2  15x64x32  outputs x 9x16     =  4.42 M
+  conv3  15x32x48  outputs x 9x32     =  6.64 M
+  GRU    15 steps x (768 + 128) x 384 =  5.16 M
+                                        --------
+                                        16.5 M MAC   = 45x the parameters
+```
+
+A conv kernel applies at every spatial position and the GRU matrices at every one of the 15
+timesteps, so parameters and work are different numbers. 16.5 M MAC / 28 ms is about
+0.6 GMAC/s, an ordinary scalar-Dart rate -- the implementation is fine, the work is 45x what
+the header implied.
+
+**Load is linear in stroke density**, so one figure misleads:
+
+```
+  200 bpm sixteenths (stress) 13.3 strokes/s   fast tier 376 ms/s = 37.6 % of one core
+                                               settled   74 ms/s  =  7.4 %
+  80 bpm eighths (beginner)    2.7 strokes/s   fast tier  75 ms/s =  7.5 %
+                                               settled    15 ms/s =  1.5 %
+```
+
+**The settled tier is not the bottleneck; the already-shipping FAST tier is.** The question
+this round opened with -- can we afford a second forward -- was the wrong question: the
+increment is small and the base is large. That base number only surfaced because measuring an
+increment forced measuring the baseline with the same instrument (L680).
+
+Four `measured` records are emitted on `ci_host`, and **none claims a phone `deviceId`** --
+ADR 0474 D2's closed device dictionary makes an invented device a parse failure, which is the
+wanted behaviour. The on-device figure is NOT measured and therefore has no record at all: the
+schema requires a value, so a PENDING target is a document line, not a record.
+
+The header in `crnn_strum_net.dart` now carries the measured numbers, the MAC table, and an
+explicit statement that the earlier claim was wrong by 45x and why -- a correction that hid
+what had been there would not protect the next reader from making the same estimate.
+
+Not claimed: whether the shipped fast path fits the live budget on a phone. 37.6 % of one core
+is an x86 desktop figure, and scalar Dart on a phone is typically slower. What this round
+delivers is that the question is now measurable and the record schema stops a host number from
+reading as a device one. If it ever does pinch, the win is in the trunk, not the tier: 11.3 M
+of the 16.5 M MACs are the three convolutions.
+
+### The conv trunk skips zero inputs and halves the forward, bit-exactly (E18-R42, ADR 0565)
+
+ADR 0564 found the bottleneck: 11.34 M of the 16.5 M MACs are the three convolutions, and the
+already-shipping FAST tier is the expensive one. conv2 and conv3 read POST-ReLU activations, so
+zeros can be skipped EXACTLY -- the trick the shipped GRU already uses.
+
+Measured on 200 REAL GuitarSet windows (sparsity is a property of the data):
+
+```
+  layer   zero inputs   MACs      skippable
+  conv1      0.00 %     0.28 M     0.00 M
+  conv2     46.08 %     4.42 M     2.04 M
+  conv3     71.48 %     6.64 M     4.75 M
+  trunk                11.34 M     6.78 M  (59.8 %)
+```
+
+**The skip has to live outside the output loops.** A naive `if (value == 0) continue` in the
+innermost loop spends one test per single multiply-add. But the packed kernel is `[tap][o][c]`,
+so one input position's channel vector is reused by EVERY output channel: sparsifying the input
+once, CSR-style, costs `inC` tests per input position (one pass) and saves `outC` multiply-adds
+per zero found -- one test for 48 operations in conv3. Exact, not approximate: the skipped terms
+are `0.0 * finite` and the survivors keep their original order. All five parity fixtures stay
+green (crnn_strum_net, crnn_live_parity, crnn_live_3c_parity, chord_crnn_parity,
+live_crnn_3class).
+
+**Measured gain, interleaved A/B on the same real window:**
+
+```
+  dense 32 250-33 030 us  ->  sparse 15 575-16 768 us  ->  2.00x (1.93-2.04), n=5
+```
+
+```
+  load (real window, host AOT)            dense        sparse
+  200 bpm sixteenths, fast tier         42.7 %/core   22.2 %/core
+  200 bpm sixteenths, settled tier       8.5 %/core    4.4 %/core
+  80 bpm eighths, fast tier              8.5 %/core    4.4 %/core
+```
+
+**A measured methodological limit: on this host AOT CODE LAYOUT alone moves latency ~20 %.** Two
+binaries with IDENTICAL conv code, differing only in print statements OUTSIDE the timed loop,
+interleaved: 13 036-13 580 us versus 15 575-16 033 us, reproducibly. So absolute latency cannot
+be quoted to better than 20 % here, an A/B is valid only when the two binaries under comparison
+are run interleaved, and when two such series disagree (2.43x and 2.00x here) the CONSERVATIVE
+end is what ships -- a shipping decision must not rest on the luckiest binary.
+
+**This CORRECTS ADR 0564's numbers**, which were measured on a SYNTHETIC window while the trunk's
+cost is data-dependent: dense forward ~28 ms synthetic versus ~32.5 ms real, fast tier 37.6 %
+versus 42.7 % of a core. The benchmark now reads the parity fixture's real normalised window and
+says so loudly when it falls back. What stands from ADR 0564: the "~1 ms per window" header claim
+was wrong, estimating latency from a parameter count is forbidden, and the settled tier is not
+the bottleneck.
+
+The benchmark's "16.5 M MACs" is now labelled DENSE-EQUIVALENT, with a printed warning not to
+divide it by the latency and call the result a throughput -- the MACs actually executed are
+fewer and data-dependent (~6.2 M on this window).
+
+Not claimed: any on-device figure. The 2.00x is x86 host AOT; a phone's cache hierarchy and
+branch predictor differ, and the CSR gather's non-contiguous kernel reads may behave differently
+there. The sparsity is also this corpus on this model -- a retrained model has different ReLU
+statistics. And the dense synthetic-versus-real difference (28 vs 32.5 ms) is NOT explained by
+MAC counts: measured, the synthetic window does MORE GRU work (1.90 M versus 1.15 M), so dense
+should be slower on it, not faster. That is left explicitly unexplained (L681).
+
+### The gate's cost frame is constrained, not a ratio — and the cost that keeps it tight has almost no consumer (E18-R43, ADR 0566)
+
+ADR 0555 D4 left the frame open and named the textbook fix: state `C_FS / C_FP` and invert
+Chow, plus report precision/recall reject curves (Fischer & Wollstadt 2023). Measured, the
+proposed frame cannot express EITHER cost.
+
+**A suppressed stroke is not a deduction, it is a CLIFF.** `rhythm_grading.dart` decision 3
+says "a missed slot subtracts nothing" — `directionAccuracy` untouched, only `coverage`
+moves. But below `minimumRhythmCoverage` (0.5), `rhythmAttemptEvidence` returns NO evidence
+at all, so the attempt yields no progress. Exact binomial over the measured retention, for a
+learner who played EVERY slot:
+
+```
+  gate    p(heard)   4 slots   8 slots   16 slots
+  0.439     0.596      0.184     0.180     0.150
+  0.850     0.649      0.127     0.107     0.068   <- the shipped gate
+  none      0.941      0.001     0.000     0.000
+```
+
+10.7 % of PERFECTLY PLAYED 8-slot attempts yield nothing on the shipped gate. The figure is
+corpus-dependent and must be quoted as a range: on the 12-file HELD-OUT split the same asset
+retains 0.758, giving 0.024. So 2.4-10.7 %, and BOTH ends are lower bounds because
+independence is optimistic when suppression is bursty. No second gate needs
+folding in: `rhythm_practice_screen.dart` builds every stroke with `isConfirmed: true`, so
+coverage IS retention and `RhythmSlotOutcome.unclear` is unreachable in production.
+
+**A phantom does not credit unconditionally.** `gradeRhythm` matches with MAXIMUM
+CARDINALITY, so a phantom beside a stroke the learner did play becomes an
+`extraConfirmedStrokes` count — "reported, never subtracted". Damage needs an OPEN slot, and
+open slots are what suppression creates. Measured, 8 slots at 80 bpm: 4.7 % of phantoms land
+in an open slot's ±50 ms window. Displacement — a phantom TAKING a slot from the learner's
+real stroke — measured end-to-end at 1.1–1.5 % of phantoms; the mined-negative corpus could
+never have answered it, because `ml/negatives.py` excludes every candidate within 120 ms of
+an annotated onset, so double triggers are absent there BY CONSTRUCTION.
+
+So the frame is Neyman–Pearson, not Chow: minimise false claims subject to
+P(no evidence) ≤ δ (Tong, Feng & Zhao 2016 — the NP oracle's threshold is α-dependent, not
+1/2). Calibration is NOT the obstacle (ECE 0.0249, bins track); the step and the
+conditionality are.
+
+**The pedagogy agrees, from a verified source.** Buekers, Magill & Hall (1992, QJEP 44(1)):
+in anticipation timing, CORRECT KR is redundant with the learner's own sensory feedback —
+yet ERRONEOUS KR still influenced learning, through retention tests at 10 min, 1 week and
+1 month. A false claim's harm does not fade and is not offset by a true one. (A search
+summary's "1:1 and 4:1 ratio" claim could NOT be verified behind the paywall and is not
+used. And our task is less redundant than theirs — a beginner often cannot hear their own
+stroke direction — so `C_FS` is not zero either.)
+
+**The reject curves D4 asked for, and what they show** (held-out GuitarSet, mixed stream):
+
+```
+  gate    reject%   DOWN prec/rec     UP prec/rec      macro-F1
+  0.439     62.3     0.793/0.724      0.221/0.324       0.5100
+  0.850     58.9     0.765/0.729      0.206/0.363       0.5044
+  none       0.0     0.731/0.729      0.043/0.422       0.4038
+```
+
+Ungated, UP PRECISION COLLAPSES 0.206 → 0.043, because 93.8 % of the phantoms a loose gate
+admits are called UP (50.7 % at 0.850). The loose end poisons exactly the differentiator.
+This also CORRECTS the cost model above: that model counts slot-verdict claims only, where
+the matcher protects; precision counts every phantom. Two consumers, two objectives.
+
+**And the consumers were read from the CODE, which reverses the argument.** The shipped
+0.85's justification claimed "a suppressed strum is a deduction" (it is not — it is the
+cliff) and "a phantom credits a slot the learner never played" (only in an OPEN slot, 4.7 %;
+otherwise `extraConfirmedStrokes`, which NO widget displays). The arrow that would show a
+phantom: `RhythmLane` draws the NOTATED grid and is never handed a detected stroke;
+`practice_highway` and `practice_feedback` also render the EXPECTED direction
+(`CompiledTargetEvent`, `expectedDirection`). The only surface showing a DETECTED direction
+is the share card's arrow row, and ADR 0556's live arrow is designed but DARK. So the cost
+keeping the gate tight largely protects a surface that does not exist yet, while the cost it
+pays — 2.4-10.7 % "I cannot judge that" — lands on the grader that ships. The gate is de facto an
+aggregate PRECISION threshold, not a slot-verdict threshold.
+
+**Two tooling defects fixed.** (1) The gate sweep's list held `0.85` as a literal AND as
+`noStrumThreshold` after ADR 0549 moved it; Dart records are value-equal, so the tallies map
+collapsed two entries onto one and the shipped row's COUNTS printed doubled (kept 8558 vs
+4279) since then — while every RATIO stayed correct, so nothing looked wrong. Guarded with
+an `expect` on distinct keys. (2) The asset under test is now overridable
+(`STRUM_3C_ASSET`) and printed, because the tree holds two 3-class models (ADR 0567).
+
+**Measured, and a product finding on its own: quiet players lose more.** Suppression by
+loudness decile, held-out strums: quietest 0.147, loudest 0.020 — a 7× gradient. It does not
+explain total suppression (5.6 % there), but a beginner plays quietly and unevenly, so the
+learner who most needs credit is the one most often told "I could not hear enough".
+
+Not claimed: any user data; the phantom rate of a beginner's own room (swept 0.5–4×, and no
+multiplier makes the two objectives agree because one is linear in it and the other is not);
+displacement at tight gates rests on n=5–9. No shipped constant moved: the frame changed
+this round, and the retention the calibration refers to belongs to a model the next round
+replaces (ADR 0567).
+
+### The unwired settled asset is worth +0.186 direction macro-F1 in the SHIPPED path (E18-R43, ADR 0567)
+
+ADR 0555 D3 left `strum_crnn_live_3c_settled.bin` deliberately unwired and said the
+switch-over belongs to a later round under AGENTS.md §9. That round needed a number nobody
+had: what the asset does IN THE PRODUCTION PATH, on detected onsets, not in Python on
+oracle-centred windows.
+
+Measured through the shipped Dart pipeline, `STRUM_SPLIT=heldout` (players 03-05 x the 4
+untrained tunes, 1772 SuperFlux onsets), at the shipped 0.850 gate with `margin on` --
+exactly what production does:
+
+```
+  asset                       kept  onsetP  onsetF1  strumRecall  downF1  upF1    macro
+  strum_crnn_live_3c           804   0.908   0.6518      0.758     0.5736  0.2007  0.3872
+  strum_crnn_live_3c_settled  1258   0.836   0.7810      0.919     0.7978  0.3478  0.5728
+  delta                             -0.072  +0.1292     +0.161    +0.2242 +0.1471 +0.1856
+```
+
+**Onset precision is the ONLY column that worsens.** UP F1 -- the bottleneck since ADR 0553
+-- goes 0.2007 -> 0.3478. And the coverage cliff of ADR 0566 D1 nearly vanishes: exact
+binomial over these retentions gives P(a perfectly played 8-slot attempt yields NO evidence)
+0.0238 -> 0.0002. The asset swap does not sidestep the gate question, it removes its
+SUBJECT.
+
+**The shippable proposal is the swap PLUS tightening the gate back to the fitted 0.439**, not
+the swap alone:
+
+```
+  asset / gate                       onsetP  strumRecall  macro
+  shipped @ 0.850 (today)             0.908     0.758     0.3872
+  shipped @ 0.439 (its best prec.)    0.925     0.722     0.3753
+  settled @ 0.850                     0.836     0.919     0.5728
+  settled @ 0.439                     0.864     0.875     0.5771
+```
+
+Tightening costs nothing in direction here -- the best macro is at 0.439 -- so precision goes
+0.908 -> 0.864 (-0.044, not -0.072) for +0.117 retention and +0.190 macro. NOTE that ADR
+0566's "strums gained per phantom admitted" exchange rate does NOT apply to a model swap: it
+measures movement along ONE model's gate curve, and a model swap moves direction F1, which no
+gate can.
+
+**Two provenance traps caught on the way, both in this round** (L682 §1). First: every
+`ml/probe_*.py` loads `weights_live_3c_settled.npz` while the sweep loads the SHIPPED
+`strum_crnn_live_3c.bin`, so a Python retention divided by a sweep retention is two
+experiments -- I had named that quotient a "30-point gap" and hunted its mechanism for hours.
+Second: the settled model TRAINED on GuitarSet (ADR 0554), so measuring on all 72 files is
+contaminated -- the contaminated table showed +0.284 macro versus the held-out +0.186,
+inflating the gain by half. The sweep now prints both the asset and the split.
+
+NOT wired this round: AGENTS.md §9 wants fixture + property + parity + real-audio, and this
+round delivers the real-audio leg only. The asset is absent from `pubspec.yaml` (assets are
+declared file by file), so it does not reach the APK today.
+
+Not claimed: any on-device or user figure; the Klangio side in situ; a variance estimate (one
+split, 530 clean sweeps, no cross-validation). UP F1 0.3478 means ADR 0553's data diagnosis
+stands -- the asset loses less, it does not supply the missing upstroke data.
+
+### The settled asset's parity golden was never read, was in the wrong space, and the guard that should have caught it could not fail on Windows (E18-R43, ADR 0568)
+
+Preparing the wiring round meant checking which AGENTS.md §9 legs already existed under the
+settled asset. ADR 0555 D3 says "the parity fixture is in
+`test/fixtures/crnn_live_3c_settled_parity.json`". It is: 1.26 MB, committed, and read by
+NOTHING. Three faults, each invisible because of the other two:
+
+1. **No consumer** for eleven rounds.
+2. **Not in the fixture manifest** — 54 data files on disk, 52 registered. The other
+   unregistered one is `strum_metric_channel_parity.json`, committed in E18-R35.
+3. **The wrong window space.** `CrnnStrumNet.forward` standardises internally with the
+   mean/std it parses from the asset, so it wants RAW log-mel. Measured spaces: the shipped
+   golden is mean -4.906 / std 6.884 (raw, correct); the settled one was +0.126 / 0.960
+   (already normalised). `ml/train_live_3c_settled.py` wrote `Xn[i]` where `X[i]` belonged,
+   so a Dart consumer would have standardised twice. The fixture was internally CONSISTENT
+   (Keras on its normalised rows reproduces `expected` to max|delta| = 0.000000) — it just
+   did not match the Dart entry point. An internally perfect fixture can still be
+   unconsumable, and only a consumer shows it.
+
+Fixed by de-normalising the rows in place with the asset's own mean/std, `expected`
+untouched: the normalise -> de-normalise -> normalise round trip is exact to **2.4e-07** on
+the window and **1.8e-07** on the softmax, four orders inside the 1e-3 tolerance (std is
+5.01-7.56 everywhere, so no amplification). Values ship at full float32 precision rather
+than rounded to 5 decimals, which satisfies the r143 rule (both sides consume literally
+identical input) more strictly than rounding would. The generator is fixed too.
+
+**The guard could not fail here.** `tool/check_fixture_manifest.dart` compared a
+forward-slash-normalised absolute path against an UN-normalised prefix, so on Windows
+`startsWith` never matched, the walk yielded nothing, and the "file on disk with no manifest
+entry" direction could not report at all — making the "real manifest is clean" assertion
+vacuous locally while staying real on Linux CI. What found it was the repo's own self-test,
+the one asserting that the guard CAN fail (L671): that case was red, and it was the only
+signal. After the fix both directions are verified — a dropped file is flagged, a clean tree
+reports `OK (54 fixture(s))`.
+
+**CI consequence, inferred not measured:** CI runs `flutter test --coverage` with no path, so
+`fixture_manifest_test.dart` runs there, and on Linux the real-tree case fails on the two
+unregistered goldens. That implies the full gate has been red on this test since E18-R32. The
+local round gate never caught it because `tools/round-gate.sh` runs NAMED test paths and
+eleven rounds named something else. Rule: a round that drops anything into `test/fixtures/`
+names `fixture_manifest_test.dart` in its own gate run.
+
+**And this validates ADR 0567 after the fact.** That ADR measured the settled asset through
+the shipped Dart pipeline and reported +0.186 direction macro-F1 — a number about the trained
+model only if the Dart port reproduces it. The new parity test's worst deviation over 32
+cases is **1.78e-07**, so it does and the figure stands. The ORDER was wrong: parity is the
+instrument's calibration and +0.186 is the reading, and the reading was published first
+(L683 §4).
+
+The new `test/features/live/ml/crnn_live_3c_settled_parity_test.dart` closes the §9 parity and
+property legs in five cases: a schema guard (a renamed `cases` key would otherwise run every
+assertion over zero rows), parity <=1e-3 with the worst deviation PRINTED, the mined no-strum
+cases landing on the reject class, a seeded 40-trial property that the softmax is a
+distribution on arbitrary input, and a "measured, not wired" guard pinning both that
+`noStrumThreshold` is still 0.85 AND that the two asset files differ — without the second
+check the test would still pass if someone copied the settled weights over the shipped path,
+which is exactly the change it exists to notice.
+
+### The settled asset regresses on the DEPLOYMENT corpus, so the swap is withdrawn (E18-R43, ADR 0569)
+
+ADR 0567 D4 left the Klangio side open, for a stated reason: the shipped asset trained on
+Klangio ALONE and the settled one on Klangio + GuitarSet, so +0.186 on GuitarSet could be a
+trade. The in-situ version is unavailable here (no Klangio corpus on this machine, and the
+Dart path consumes audio), but the question behind it is answerable, because `ml/read_ssml.py`
+can now load BOTH `.bin` assets into one Keras graph -- one instrument, two assets, the same
+cached windows.
+
+**Every Klangio fold is biased, and the bias DIRECTION is the instrument.** The shipped asset
+held out a random 20 % of RECORDINGS (`split_by_recording`, seed 42); the settled asset held
+out guitarist "4" entirely.
+
+```
+  fold                   n     shipped@0.85   settled@0.439   delta    bias
+  A guitarist 4        3721       0.9490         0.5072      -0.4418   for shipped
+  B shipped eval fold  2013       0.7950         0.7428      -0.0521   for SETTLED
+  C neither saw these   824       0.8013         0.5359      -0.2653   still for shipped
+```
+
+Read fold B the other way round: there the SETTLED asset trained on those recordings and is
+the ADVANTAGED one, and it still loses. That settles it without needing an unbiased cell —
+the true held-out gap is at least 0.052, and removing the exposure widens it rather than
+closing it. On fold C the settled asset is worse on BOTH classes (down 0.497 vs 0.810, up
+0.575 vs 0.792) and also retains fewer real strums (0.824 vs 0.964); on false onsets the two
+are near-equal (0.952 vs 0.961 suppressed).
+
+**Fold C is NOT an unbiased cell, and calling it one was this round's own trap.** Neither
+model memorised those windows, but the two splits differ in KIND: the shipped asset saw
+guitarist 4's OTHER recordings, the settled asset saw none of that guitarist. "Neither trained
+on these windows" is not "equally unseen".
+
+**The decision came from the corpora, not the deltas.** Klangio is `recording_*_phone.wav` —
+`ml/klangio.py`'s own words, "our deployment condition". GuitarSet is a mic array in a studio.
+An Android app hears the phone mic. So the gain is on the corpus that is not deployment and
+the loss is on the one that is: **ADR 0567 D3's swap proposal is WITHDRAWN** and the asset is
+not wired. The measurement under it stands; the conclusion fell.
+
+**The structural gap, and the new acceptance criterion.** ADR 0554 correctly showed that
+adding GuitarSet lifted both corpora — against its OWN internal baselines (GuitarSet 0.4468,
+Klangio 0.3836, same harness, same splits). That is an ablation claim. Nobody ever compared a
+candidate asset to the SHIPPED asset with one instrument on every corpus, and it was not
+merely skipped: the shipped weights exist only as a `.bin`, its training artefacts are gone,
+and there was no reader. The comparison was IMPOSSIBLE, which is worse than skipped because
+nothing puts it on a list. From now on: a candidate asset ships only if it beats or matches
+the shipped asset on EVERY corpus, measured with one instrument, with each row's bias
+direction stated. Improvement over an ablation baseline is not an acceptance criterion.
+
+> **WITHDRAWN, E18-R44 (ADR 0573 D6, LESSONS L688).** The last sentence stands. The criterion
+> before it is structurally unsatisfiable, and the reason is measurable: `split_by_recording`
+> is RECORDING-disjoint, not player-disjoint, so the shipped asset has no new-player Klangio
+> number and its split cannot produce one (it trained on 22 of guitarist 4's 27 recordings).
+> Every Klangio cell therefore favours the shipped asset and every GuitarSet cell favours a
+> candidate that trained there - no cell can decide the comparison, so the criterion blocks
+> every candidate forever regardless of merit. What replaces it: recipe-vs-recipe under ONE
+> split (`ml/experiment_recipe_ladder.py`, ADR 0575), with the shipped asset as a row carrying
+> its exposure rather than as the judge; and for an actual shipping decision, a THIRD corpus
+> neither model has seen.
+
+**What this says about the rest of the arc.** `ml/weights_live_3c_settled.npz` is what
+`probe_direction_fusion.py`, `probe_settled_tier_value.py`, `probe_gate_window_jitter.py` and
+`probe_gate_cost_frame.py` all load, so ADR 0563's two-tier value (+0.0551 macro above margin
+0.30), ADR 0566 D2's reject curves (UP precision 0.206 -> 0.043 ungated, macro peaking at
+0.439) and ADR 0557-0562's ACOUSTIC AUCs characterise the SETTLED model, not the shipped one.
+None of them is invalidated — each is true of its own model — but their predictions for the
+shipped path are unverified, and ADR 0563's measurement has to be repeated on the shipped
+asset before the two-tier decision is wired. The metric channel's own 0.9797 AUC is
+model-independent (beat phase) and untouched.
+
+Not claimed: any in-situ Klangio figure; a guitarist-disjoint Klangio number for the shipped
+asset (no such split existed when it was trained, so "0.795 vs 0.507" is NOT a valid model
+comparison — the valid ones are the three same-fold rows); and no mechanism for the
+regression, which is left explicitly unexplained.
+
+### The two-tier routing SIGNAL is asset-specific: on the shipped asset the margin is flat (E18-R43, ADR 0570)
+
+ADR 0569 withdrew the settled asset's swap and named the follow-up: repeat ADR 0563's
+two-tier measurement on the SHIPPED asset. `ml/probe_settled_tier_value.py` now takes
+`--asset=PATH [--gate=X]` (through ADR 0569's `read_ssml.py`) and PRINTS which asset it
+measured. With no argument it reproduces ADR 0563 exactly — fast 0.5262, hybrid@0.30 0.5813,
++0.0551 — which is the regression check on the parameterisation.
+
+On the shipped asset at its own 0.85 gate, same split, same 530 strokes:
+
+```
+  fast margin    n     fast accuracy      settled asset (ADR 0563)
+   0.0-0.2       32       0.2188               0.4000
+   0.2-0.4       22       0.4545               0.4167
+   0.4-0.6       35       0.2286               0.5455
+   0.6-0.8       60       0.3000               0.5588
+   0.8-1.0      381       0.3202               0.8500
+```
+
+Monotone 0.40 -> 0.85 on the settled asset; FLAT and NON-MONOTONE on the shipped one. L672
+§2's criterion — the margin is a legitimate routing signal only if it predicts the error —
+holds for one asset and fails for the other. A routing signal's validity is a property of the
+MODEL, not of the idea.
+
+The consequence is not cosmetic. The settled tier is worth a lot on the shipped asset too —
+fast-only macro 0.3340, settled-only 0.5259, **+0.1919** — but the gain sits on the
+ADEQUATE-margin strokes (+0.3230 at t = 0.30, n=486) rather than the short ones (+0.0909,
+n=44), so `_settleBelowMargin = 0.30` captures **+0.0044** of it. The shipped asset's rule
+would be "settle EVERY stroke".
+
+**And the UX objection that ruled that out does not bind today.** ADR 0556 D1 rejected
+settle-everything on revision cost (Du, CHI 2023) and D3 on the price of direction-neutral
+arrows — but ADR 0566 D3 measured that NO shipped surface renders a detected direction
+(`RhythmLane` draws the notated grid; `practice_highway` and `practice_feedback` draw the
+EXPECTED direction; only the share card shows a detected one; ADR 0556's live arrow is dark).
+So neutralising 100 % of arrows costs nothing, because there is no arrow. And the grader runs
+at the END of the attempt, where a 238 ms direction delay is irrelevant — with one edge case
+stated rather than hidden: the attempt's LAST stroke, whose settled verdict could arrive after
+the attempt closes, so the wiring round must hold the close until onset + 238 ms.
+
+The cost is real and DERIVED, not newly measured: a second forward for every stroke, which per
+ADR 0565's sparse figures doubles the fast tier's load — ~44 % of a core at 200 bpm sixteenths,
+~8.8 % at 80 bpm eighths.
+
+Nothing is lit. Two things are missing: an IN-SITU settled number (the sweep records one
+classification per onset, at 70 ms; the settled instant needs a second recorded call), and §9's
+four legs for changing the grader's direction source. What the round does ship is the
+`_settleBelowMargin` doc comment NAMING the asset its table was measured on, plus the shipped
+asset's counter-table, so the next reader cannot inherit an asset-specific justification as a
+general one.
+
+Not claimed: why the shipped asset is BETTER on the untruncated window it never trained on
+(`train_live_3c.py` loads `live70` only) — an obvious guess exists and is left unwritten
+(L681); n=530 on one split, and the 0.2-0.4 band is n=22, so FLATNESS is the claim, not the
+row order; and up-F1 stays 0.2581 even settled, so ADR 0553's data diagnosis stands.
+
+### The settled tier is worth +0.168 macro IN SITU on the shipped asset, and all of it is downstrokes (E18-R43, ADR 0571)
+
+ADR 0570 predicted +0.1919 from ORACLE windows and said plainly it was not an in-situ number:
+the sweep recorded one classification per onset, at 70 ms. This round records the second one.
+
+**How, without a second implementation.** The sweep's recorder now keeps the ONSET FRAME for
+every call, and after the streaming pass each retained onset's untruncated window is built with
+`LiveCrnnFrontend.referenceWindow` — the function the repo already pins against the streamed
+`windowAt`. Two details make it correct rather than nearly so: (1) a SLICE, not the recording,
+because the frontend's ring is one second long, so a 30-second take would leave only its last
+second addressable and every earlier onset would read zeros — the slice runs from 0.1 s before
+the onset frame to 0.6 s after; (2) `referenceWindow` adds the r144 attack offset itself, so
+what it wants is the onset FRAME's start time, and re-deriving it from the published time would
+double-apply the correction. Existence stays the FAST call's decision (ADR 0559 D2), so the
+measurement isolates what the second forward buys.
+
+```
+  shipped asset, 0.850 gate, margin on, 12 held-out files, 1772 onsets
+  direction F1          fast      settled     change
+  macro                0.3872     0.5551     +0.1679
+  DOWN                 0.5736     0.9032     +0.3296
+  UP                   0.2007     0.2069     +0.0062
+
+  gate      fast      settled    delta
+  0.439    0.3753     0.5670    +0.1917
+  0.650    0.3811     0.5599    +0.1788
+  0.850 *  0.3872     0.5551    +0.1679
+  none     0.4213     0.5380    +0.1168
+```
+
+One onset of 1772 had no buildable settled window (end of take) — excluded and REPORTED.
+
+**The whole gain is the downstroke.** 0.5736 -> 0.9032 on down, 0.2007 -> 0.2069 on up. The
+second forward essentially solves the downstroke on this corpus and adds nothing to the
+upstroke, which CONFIRMS ADR 0553's diagnosis rather than replacing it: what needed more audio
+was the downstroke; the upstroke needs DATA. Product consequence: a `reggae-skank`-style
+upstroke-dominant lesson gains nothing here; a downstroke-dominant beginner lesson gains
+almost everything.
+
+**The two instruments agree on the DELTA and not on the LEVEL** — oracle 0.3340/0.5259
+(+0.1919), in situ 0.3872/0.5551 (+0.1679). Levels differ by ~0.05 (different window builder,
+different onset instants, different gate application); the delta agrees within 0.024. This is
+the arc's first oracle-window figure checked against in situ, and it yields a usable rule: the
+oracle instrument is corroborated for DELTA questions and not for LEVEL ones. Screen on oracle
+windows (fast, no corpus audio needed); measure a shipping claim's level in situ.
+
+Nothing is lit. Changing the grader's direction source is shipped behaviour and wants §9's four
+legs; this round delivers the real-audio one. Still missing: fixture + property for the
+"settled direction on every stroke" path, the edge case ADR 0570 D4 named (the attempt's LAST
+stroke — the close must wait until onset + 238 ms, which showed up here as the one "missing"
+row at a take's end), and the CPU, derived from ADR 0565: a second forward per stroke doubles
+the fast tier, ~44 % of a core at 200 bpm sixteenths, ~8.8 % at 80 bpm eighths.
+
+Not claimed: any on-device number; the Klangio side (no local corpus, ADR 0569 — **WRONG, see
+ADR 0576: the corpus was in `ml/data/klangio/` all along**) so the settled
+tier's effect on the DEPLOYMENT corpus is unmeasured; why the untruncated window helps down so
+much and up not at all (an obvious guess exists, left unwritten per L681); and down-F1 0.9032
+is NOT comparable to arXiv 2508.07973's mic 0.8551 — different corpus, different protocol. The
+0.5551 macro is still below Chapter 14 §7.2's Alpha gate of 0.80, and the remaining gap is now
+almost entirely the upstroke.
+
+### The settled tier needs an asset trained at BOTH truncations: on the shipped one Klangio loses 0.2455 (E18-R43, ADR 0572)
+
+ADR 0571 measured "settle every stroke" IN SITU on GuitarSet at +0.1679 macro. ADR 0569 had
+already shown the two corpora can disagree in SIGN, and that Klangio (phone mic) is the
+deployment condition — so L684 §3's rule applies to my own result: do not act on a
+cross-corpus delta without measuring the deployment corpus. The Klangio audio is not local,
+but both truncation caches are (`klangio_live70.npz`, `klangio_live_full.npz`, row-aligned and
+checked), and ADR 0571 D4 corroborated the oracle instrument for exactly this DELTA question.
+
+```
+  shipped asset (trained on live70 ONLY)      fast      settled    delta
+  GuitarSet, in situ                         0.3872    0.5551    +0.1679
+  Klangio, oracle (its own clean eval fold)  0.7950    0.5495    -0.2455
+     up-F1 on Klangio                        0.7579    0.3118
+```
+
+**Opposite signs.** And the control that decides what that means: the same measurement on the
+asset that DID train at both truncations (ADR 0554), each on its own clean fold:
+
+```
+  settled asset          fast      settled    delta
+  GuitarSet             0.5262    0.5917    +0.0655
+  Klangio (guitarist 4) 0.5055    0.6354    +0.1299
+```
+
+(Instrument check: those two Klangio numbers are 0.5055 and 0.6363 in ADR 0555's own table —
+the second within 0.001.)
+
+So the IDEA is sound and the INPUT was out of distribution. An out-of-distribution input does
+not make a model worse, it makes it UNPREDICTABLE, and unpredictable looks exactly like this:
+two corpora, two signs, and whichever you measure first is what you believe. That is evidence
+generalisation, not a mechanism — why the phone mic's later audio flips the sign is NOT
+explained.
+
+**This fuses the whole arc onto one missing artefact.** ADR 0563's margin routing is valid on
+the settled asset and not the shipped one (the margin is flat there, ADR 0570);
+"settle everything" is valid on the settled asset on BOTH corpora and loses 0.2455 on the
+shipped one; and the settled asset itself cannot ship because it regresses on Klangio overall
+(ADR 0569). All three wait for ONE thing: an asset that (a) trains at both truncations,
+(b) beats or matches the shipped asset on Klangio too, (c) and whose margin predicts its
+errors. One training round unblocks three ADRs — that is a specification, not a wish list.
+
+**And it corrects something from one round earlier.** ADR 0571 D3 said "the upstroke needs
+DATA". That was GuitarSet-only and wrong as a general claim: the same shipped asset scores
+up-F1 **0.7579** on Klangio against 0.2007 on GuitarSet. The model CAN do upstrokes on its own
+corpus; what it cannot do is transfer — ADR 0550's diagnosis, not ADR 0553's. A class weakness
+measured on one corpus is TRANSFER by default until a second corpus says otherwise, because
+"we need more data" is the most expensive diagnosis a single corpus can license: it orders a
+collection round for a fault that is somewhere else.
+
+The probe now takes `--corpus=klangio [--fold=eval|guitarist4]` with no corpus audio, and
+prints which asset and which corpus it measured. Not claimed: the Klangio figures are ORACLE
+windows (delta-corroborated, not level-corroborated); the two rows of the control are on
+DIFFERENT folds by design, each on its own clean one, so they are not to be read against each
+other — that comparison is ADR 0569's.
+
+### The shipped asset has no new-player Klangio number, so ADR 0569's bound and its acceptance criterion were both unavailable (E18-R44, ADR 0573)
+
+ADR 0569 D4 wrote an acceptance criterion with eleven rounds of lesson in it: a candidate
+asset ships when it beats or matches the SHIPPED asset on every corpus, one instrument, the
+fold bias stated per row. D1 reasoned carefully about the DIRECTION of the fold bias. What it
+did not do - and what the repo's own provenance record already contained - was the bias's
+MAGNITUDE and its KIND.
+
+**The split, counted.** `klangio.split_by_recording` holds out 20 % of RECORDINGS, seed 42:
+
+```
+  guitarist   TRAIN recordings   EVAL recordings   TRAIN strums   EVAL strums
+  1                21                  6               3426           643
+  2                23                  5               3431           546
+  4                22                  5               2897           824
+```
+
+All three guitarists sit on BOTH sides. So the shipped asset's "clean held-out eval fold" is
+recording-disjoint and NOT player-disjoint: 0.7950 is a same-player, new-recording number. And
+on fold A (all 3721 of guitarist 4's strums) 78 % of the rows are literally in its training
+set, which is why it scores 0.9490 there. **The shipped asset has no new-player Klangio figure
+and its split cannot produce one.** That is the split's structure, not a measurement.
+
+**The repo had already measured the magnitude, on the same fold.** `ml/model_card.json`, r172,
+leave-one-guitarist-out, live-70 ms - and the guitarist-4 fold's `n_test` is 3721, bit-for-bit
+fold A:
+
+```
+  held-out guitarist   test_acc (2-class direction accuracy)
+  1                      0.6508
+  2                      0.6387
+  4                      0.5289   <- the WORST of the three
+  mean                   0.6061 +/- 0.0548      same-player live-70 ms: ~0.799
+```
+
+This chunk's own r172 section says it in words: *"the worst unseen guitarist is near coin-flip
+on up/down"*, and *"the ~15-point same-player->new-player drop is the real deployment gap"*. So
+the settled split holds out precisely the guitarist the repo measured as hardest, and that
+measurement sat in the model card for eleven rounds unread.
+
+**Measured this round:** `ml/experiment_recipe_ladder.py` arm R0 is the shipped RECIPE
+(Klangio, 70 ms, no regularisation, val_accuracy/40/bs32) transplanted onto the settled split -
+one instrument, one scorer, the same 3721 strums:
+
+```
+  direction macro-F1, COMMON gates 0.439 / 0.650 / 0.850
+  shipped ASSET  (trained on 22/27 of guitarist 4)   0.9481 / 0.9484 / 0.9490
+  R0  shipped RECIPE (guitarist 4 held out)          0.4039 / 0.4132 / 0.4220
+```
+
+Gate-matched, the gap is 0.527 - not a gate artefact.
+
+**But 0.527 is an upper bound, and the control says so.** R0 is not "the shipped asset minus
+the leakage": Klangio has only THREE guitarists, so holding one out removes a third of the
+player diversity - the split is not an independent factor on this corpus. And on the one cell
+that is equally unseen for both models, GuitarSet, R0 is worse too (0.1386 vs 0.3340 at 0.850).
+So R0 is also a weaker run, and the memorisation component cannot be separated from that. What
+pins the level instead is r172's LOGO fold: a different script, a different era, a 2-class
+model, the same 3721 strums, also near coin-flip. The level belongs to the fold and the
+exposure, not to this run.
+
+**Two retractions follow.** ADR 0569 D2's bound ("the real held-out difference is at least
+0.052") treated the shipped asset's fold-B 0.7950 as its honest held-out level; it is a
+same-player level the repo had priced ~15 points above the new-player one, so the bound does
+not hold. And ADR 0569 D4's criterion is structurally unsatisfiable:
+
+```
+  cell                              SHIP           candidate        decidable?
+  Klangio, ANY fold                 same-player    new-player       NO - favours SHIP
+  GuitarSet, Klangio-only candidate never saw it   never saw it     YES
+  GuitarSet, both-corpora candidate never saw it   TRAINED on it    NO - favours candidate
+```
+
+No cell can decide a both-corpora candidate against the shipped asset: every Klangio cell
+favours the shipped asset because its split yields no new-player number, every GuitarSet cell
+favours the candidate because the candidate trained there. A criterion like that blocks every
+candidate forever, regardless of merit. D4's *intent* stands (an improvement over an ablation
+baseline is not an acceptance criterion, L684) - the criterion written in its place was simply
+unmeasurable.
+
+What replaces it: (1) recipe-vs-recipe under ONE split, with the shipped asset as a row in the
+table carrying its exposure rather than as the judge - available today; (2) a THIRD corpus
+neither model has seen, which is the only structural resolution for SHIP-vs-candidate. On the
+HANDOFF that has been a nice-to-have (the user's labelled recording, the Guitar-TECHS
+ingestion); from this round it is a precondition of the shipping decision.
+
+Not claimed: that the shipped asset is bad - its Klangio numbers are same-player numbers, which
+is a statement about the measurement, and rounds 0549-0555 measured it on GuitarSet in situ
+besides. That the 0.527 decomposes. That r172's 0.5289 and R0's 0.4220 are the same quantity -
+they are different metrics (2-class accuracy vs 3-class gated macro-F1) and are not compared;
+r172 corroborates the LEVEL's order of magnitude and the fold's rank, not the value. One seed.
+
+### The settled window's OOD footprint is the DECAY RAMP, not the four dead frames (E18-R44, ADR 0574)
+
+ADR 0572 D3 established that handing the shipped asset an untruncated window is an
+out-of-distribution input, that an OOD input is unpredictable rather than worse (two corpora,
+opposite signs), and declined to explain the mechanism (L681). There is a smaller question that
+IS measurable and had not been asked: **which frames of the tensor carry the damage.** That is
+input geometry, not model behaviour.
+
+**The geometry, from the caches, all 11767 rows.** The window is 15 frames (PRE 3 + POST 12) at
+hop 256. In `live70` the audio is cut at onset + 70 ms, so the tail is the log-mel of silence:
+
+```
+  klangio live70    row std per frame (mean over mels)
+    f0..f9   1.51 .. 2.08      real signal
+    f10      1.736             the cut falls INSIDE this frame
+    f11..f14 0.00153           a CONSTANT (mean -13.81) across all 11767 windows
+  klangio live_full
+    f0..f14  1.655 .. 2.069    every frame carries signal
+```
+
+So 4 of 15 frames - 26.7 % of the tensor - go from dead constant to live signal. That was the
+hypothesis: the damage is there. **It is not.** The difference PROFILE is a ramp, because the
+1024-sample analysis window straddles the cut for several frames:
+
+```
+  |d| per frame  f0 0.12  f1 0.24  f2 0.40  f3 0.59  f4 0.84  f5 1.19  f6 1.73
+                 f7 2.62  f8 4.20  f9 7.38  f10 14.04  f11..f14 ~15.0
+```
+
+Frame 9's mean is already -6.06 in `live70` against +1.32 untruncated - inside the 70 ms
+deadline and already half-silenced.
+
+**Measured** (`ml/probe_settled_window_frames.py`; RESTORE puts the live70 values back from
+frame k on, INJECT takes frames k.. from the untruncated window; swept to k=0, where each edit
+reproduces the opposite baseline exactly - a built-in control that passes in all four blocks):
+
+```
+  shipped asset, gate 0.85        fold A (n=3721)          fold B (n=2013)
+  70 ms                           0.9490                   0.7950
+  untruncated                     0.5712  (-0.3777)        0.5578  (-0.2372)
+  RESTORE f11..14                 0.7826  repairs 56 %     0.6554  repairs 41 %
+  RESTORE f 9..14                 0.8900          84 %     0.7521          82 %
+  RESTORE f 7..14                 0.9339          96 %     0.7828          95 %
+  INJECT  f11..14                 0.7964  repro'd 40 %     0.7372  repro'd 24 %
+  INJECT  f 7..14                 0.5860          96 %     0.6035          81 %
+```
+
+The dead region accounts for only 40-56 % of the collapse on either fold. What accounts for
+~95 % is frames **7..14** - the truncation's whole footprint, ramp included. **The damage is
+localised to 8 of 15 frames, not 4, and is carried mostly by the frames that FADE rather than
+the ones that go flat.** The landmark was not the cause (L689).
+
+**The settled asset is the mirror image in the same frames** - the control that makes the
+shipped number interpretable rather than merely bad: fold A 0.5055 -> 0.6363 untruncated
+(+0.1309), and restoring f7..14 takes it back to 0.6399. The same input region carries the loss
+for the asset trained at one truncation and the gain for the asset trained at both. ADR 0572 D3,
+now local.
+
+**The probe's own limit, stated.** Every edit builds an input neither training distribution
+contains, so single-frame edits are not clean counterfactuals. The sharpest artefact: for the
+SETTLED asset, restoring ONLY frame 14 to the constant is catastrophic (fold A macro 0.3325,
+down-F1 0.1368) while restoring f13..14 is fine (0.6351) - a one-frame cliff at the end of a
+live signal. Not interpreted; it bounds the resolution. Read the 8-frame conclusion, which holds
+on both folds and in both directions, not the per-frame wiggles.
+
+Not claimed: why the model responds to that region as it does - which frames carry the damage is
+geometry, why is behaviour, and that stays unmeasured (L681). Nor the obvious alternative ("give
+it a 70 ms-shaped window taken later, so it stays in distribution"):
+`ml/probe_gate_window_jitter.py` already measured the shipped asset as steeply asymmetric in
+window centring (+15 ms -> 0.802, +30 ms -> 0.454 at gate 0.439), so moving the window is not a
+free substitute for lengthening it. Oracle windows, one corpus (Klangio), no in-situ number. The
+LEVELS in these tables are same-player for the shipped asset (ADR 0573) - the RATIOS are
+within-row and unaffected.
+
+### The recipe ladder: the two recipes differ in SIX ways, and on a matched split the settled recipe wins on BOTH corpora (E18-R44, ADR 0575)
+
+ADR 0569 listed the candidate mechanisms for the settled asset's Klangio regression as "the
+guitarist-disjoint split being harder, the GuitarSet data's dominant effect, the two corpora's
+mic character, or capacity". Reading `train_live_3c.py` against `train_live_3c_settled.py`, that
+list is incomplete - they differ in six ways, and the arc only ever named two:
+
+```
+  1. CORPORA         Klangio only              vs  Klangio + GuitarSet
+  2. TRUNCATIONS     70 ms only                vs  70 ms AND untruncated
+  3. REGULARISATION  none (dropout=0, l2=0)    vs  AUG_REG (dropout .25 / rec .15 / l2 1e-4)
+  4. FIT SCHEDULE    val_accuracy, 40 ep, bs32 vs  val_loss, 60 ep, bs64
+  5. SPLIT           random 20 % of recordings vs  guitarist 4 + GuitarSet player x tune
+  6. VAL PROTOCOL    eval fold IS the early-stop AND gate-calibration fold  vs  group-wise
+                                                   20 % out of TRAIN only
+```
+
+(3) in particular trades in-domain accuracy for generalisation in either direction and was
+never on the list.
+
+**The ladder** (`ml/experiment_recipe_ladder.py`): five arms, each ONE factor from the previous,
+all under the settled split, one instrument, one scorer, one gate rule. Held fixed so they are
+not hidden factors: the split, the val protocol, norm stats and class weights from the fit fold
+only, the class-blind gate rule (ADR 0549's, what ships), the scorer (a suppressed strum is no
+call, not a wrong call), and the eval cells. (5) and (6) cannot be varied here - holding the
+settled split is what makes a clean Klangio held-out fold exist, and reproducing the shipped
+protocol would destroy that fold - so they stay stated, not measured.
+
+```
+  arm  what changed                      Klangio@70   delta      GuitarSet@70   delta
+  R0   the SHIPPED recipe                  0.4354                  0.1623
+  R1   + the fit schedule                  0.4808   +0.0454        0.1506   -0.0117
+  R2   + regularisation                    0.4591   -0.0217        0.2504   +0.0998
+  R3   + GuitarSet                         0.5401   +0.0810        0.5596   +0.3092
+  R4   + the 2nd truncation = SETTLED      0.5405   +0.0004        0.5071   -0.0525
+                                   net:            +0.1051                 +0.3448
+
+  the untruncated tier, which only R4 can legitimately serve (own per-tier gate):
+  Klangio @full    R3 0.4231 [CROSS-TIER]   R4 0.6112
+  GuitarSet @full  R3 0.5674 [CROSS-TIER]   R4 0.5745
+```
+
+**On a matched split the settled recipe beats the shipped recipe on BOTH corpora** - Klangio
++0.1051, GuitarSet +0.3448 - **and the second truncation costs nothing at 70 ms** (+0.0004)
+while buying the 238 ms tier outright (0.4231 -> 0.6112).
+
+> **PARTLY RETRACTED, E18-R45 (ADR 0578).** Repeated over `STD_SEEDS = [42, 1, 2]`: the net
+> on KLANGIO flips sign (+0.1051 / +0.0923 / **-0.0403**, mean +0.0524 +/- 0.0805), so on the
+> deployment corpus it is NOT ESTABLISHED which recipe is better - neither "wins" nor
+> "regresses". The GuitarSet half HOLDS: +0.3448 / +0.4581 / +0.3266, mean **+0.3765 +/-
+> 0.0713**. Also retracted: the "adding GuitarSet lifts Klangio" step (+0.0810 / +0.0642 /
+> **-0.0413**) and the regularisation TRADE below. What replicates instead is ADR 0554 D1's
+> VARIANCE argument: the both-truncation arm has the smallest seed spread on both corpora
+> (Klangio sd 0.0153 against R0's 0.0757; GuitarSet 0.0308 against 0.0705).
+
+**This reverses ADR 0569's conclusion and rules out two of its mechanisms.** "The settled asset
+regresses on the deployment corpus" was produced against the shipped asset's same-player number
+(ADR 0573); on a matched split there is no regression. And "the GuitarSet data's dominant
+effect" is measured FALSE - adding GuitarSet lifts Klangio by +0.0810. "The harder
+guitarist-disjoint split" is true but cancels out, since every arm sits on that split. Mic
+character and capacity stay unmeasured (L681).
+
+**Regularisation is not free, and the trade is now signed:** R1 -> R2 is -0.0217 on Klangio and
++0.0998 on GuitarSet - it pays for cross-corpus transfer with in-domain accuracy, which is
+exactly ADR 0550's diagnosis of the direction defect.
+
+**The noise floor, measured - and it limits what one seed can say.** R4 is the same recipe,
+split and seed (42) that produced the settled ASSET, yet R4 gives Klangio@70 0.5405 where the
+asset's own class-blind report gives 0.4923. The gate does not explain it: sweeping the settled
+asset from its pooled 0.1245 all the way to NO gate buys only +0.030 (0.4923 -> 0.5219 at 70 ms,
+0.6268 -> 0.6568 at full). So most of the 0.048 is run-to-run spread between two scripts at one
+seed (different row order -> different batches under `shuffle=True`). Therefore:
+
+- **robust** (beyond the spread): adding GuitarSet (+0.0810), the net R0 -> R4 (+0.1051 /
+  +0.3448), and buying the untruncated tier (0.4231 -> 0.6112);
+- **not resolvable at one seed**: the fit schedule (+0.0454), regularisation on Klangio
+  (-0.0217), and the second truncation at 70 ms (+0.0004). Next round repeats these over
+  `honest_eval.STD_SEEDS = [42, 1, 2]`.
+
+**No contradiction with ADR 0554, because it measured a different model family.** ADR 0554 D1
+claimed the both-truncation arm BEATS its own 70 ms specialist at 70 ms (GuitarSet 0.5934 vs
+0.4690; Klangio 0.5828 vs 0.4879). My R3 -> R4 is a tie on Klangio and a small loss on
+GuitarSet. But `experiment_deadline_augmentation.py`'s arms are `n_classes=2` - no reject head,
+no gate, plain `argmax`, and its "0.59/0.19" column is `called_up`/`truth_up`, not suppression.
+Different quantity; comparing them would be the L682 error exactly. What this round adds is that
+ADR 0554's central design decision has now been measured on the SHIPPING model family (3 classes,
+reject head, gate), where the 70 ms tier is a TIE rather than a win. The decision stands - the
+238 ms tier comes free - but the argument is weaker: deadline augmentation here does not
+*regularise*, it *costs nothing*.
+
+**A code finding in passing:** `train_live_3c_settled.py` builds the `pool_tier` array, writes a
+comment justifying it (*"the no-strum GATE is a Dart-side scalar ... so it can be calibrated per
+tier for free - and P(no-strum) has no reason to be distributed alike when the model has 70 ms of
+audio versus 238 ms. One asset does not imply one threshold."*), receives it at line 157 and
+never references it again: the class-blind gate is computed over both truncations' val rows
+pooled. Same family as ADR 0568's fixture nobody reads and L685's dark constant - a variable
+computed, justified, and never consumed. Cost bounded small by the sweep above (<= 0.03, and the
+monotone curve's "optimum" is no gate at all, which reopens ADR 0549's phantom trade rather than
+handing over a free win), so: a correctness fix, not a lever.
+
+**What this decides and what it does not.** It decides the RECIPE question. It does NOT decide
+the SHIPPING question - per ADR 0573 D6 no cell can decide the shipped asset against a
+both-corpora candidate, so whether `strum_crnn_live_3c_settled.bin` should replace the shipped
+asset still needs a THIRD corpus neither has seen. `settledTier` stays false; nothing is lit.
+
+Not claimed: one seed (half the step deltas sit under the measured floor); oracle windows, not in
+situ; R0 is not "the shipped asset minus the leakage" (Klangio has three guitarists, so holding
+one out removes a third of the player diversity, and R0 is worse on the clean GuitarSet cell
+too); `full` cells for 70 ms-trained arms are CROSS-TIER, not comparisons; and the GuitarSet cell
+favours R3/R4, so 0.5596 / 0.5071 must not be read against the shipped asset's 0.3340.
+
+### The Klangio corpus was on the machine for nine and a half hours before three ADRs said it was not (E18-R45, ADR 0576)
+
+ADR 0569's Context said the in-situ measurement was "not available in this environment: the
+Klangio corpus is NOT ON THE MACHINE". ADR 0571 and ADR 0572 repeated it, and the HANDOFF
+carried "the Klangio in-situ sweep, IF the corpus lands on the machine" for three rounds.
+
+It was in `ml/data/klangio/` the whole time: **82** `recording_<id>_phone.wav` (44.1 kHz mono
+16-bit, ~60 s) plus **82** `.strums` annotations, gitignored (`git ls-files | grep -c '\.wav$'`
+-> 0, so the no-third-party-audio rule was never at risk). This is the DEPLOYMENT condition -
+phone mic, in `ml/klangio.py`'s own words "our deployment condition".
+
+```
+  12:38-12:42   the 82 wav + 82 .strums land in ml/data/klangio/
+  12:53         ml/klangio_live70.npz       is BUILT from them
+  15:53         ml/klangio_neg_live70.npz   is BUILT from them
+  22:12         ADR 0569 commit (7d72025c): "the Klangio corpus is NOT ON THE MACHINE"
+  22:44         ADR 0572 commit (6d1eefc1): the same claim repeated
+```
+
+`honest_eval.build_live` writes the cache only after READING the corpus, so those middle rows
+are not coincidence - and this is measured, not inferred: rebuilding recording 1001's windows
+from the local audio reproduces the cache **bit for bit** (49/49 rows, max |cached - rebuilt| =
+0.000e+00). Three ADRs measured on a derivative of the thing they said was unavailable.
+
+A third refutation sat in the repo since r164: `test/tools/klangio_real_ab_test.dart` has
+`const dataDir = 'ml/data/klangio';` and "auto-skips when ml/data/klangio is absent", and
+`onset_recall_probe_test.dart` imports the same constant. The repo contained a READY-MADE
+availability probe; running either test would have answered the question.
+
+Corrected in place at all 10 sites across 5 files. The NUMBERS those ADRs produced stand -
+they called themselves oracle-window numbers and they were. What fell is the stated REASON for
+not measuring in situ, and the deferral it licensed (LESSONS L690: a false number gets
+re-measured by the next round, a false "we can't measure that" gets INHERITED, because it
+behaves as an excuse rather than a claim, and each round that accepts it builds a caveat and a
+deferral item on top).
+
+### The deployment corpus, in situ, for the first time (E18-R45, ADR 0577)
+
+`test/tooling/klangio_threshold_sweep_test.dart`, driving the real `LivePipeline` over all 82
+takes through `test/support/live_sweep_harness.dart` - the same instrument
+`guitarset_threshold_sweep_test.dart` uses, extracted this round and verified by reproducing
+ADR 0571 D2's table to every digit (0.3872 -> 0.5551, +0.1679, down 0.9032, up 0.2069,
+missing 1).
+
+```
+  shipped asset, 82 recordings, 11767 annotated strums, 13142 SuperFlux onsets,
+  18 strums excluded as frame-coalesced
+  gate      margin   onsetP  onsetR  onsetF1   dirMacro   down    up      kept
+  0.850 *   on       0.7264  0.7021  0.7141    0.9166     0.9398  0.8934  11374
+  0.439     on       0.7357  0.6994  0.7171    0.9177     0.9406  0.8947  11186
+  none      on       0.6380  0.7078  0.6711    0.9144     0.9380  0.8908  13055
+```
+
+**This is not a generalisation claim.** `split: all`, and the shipped asset trained on ~80 % of
+these recordings (ADR 0573 D1), so 0.9166 is a SAME-PLAYER, largely-in-training number. What it
+does give is what the app does on deployment-condition audio along the path it actually runs.
+
+**The settled tier in situ on the deployment corpus: -0.3355** (0.9166 -> 0.5811; up 0.8934 ->
+0.3429; `settledMissing` = 0, since 60-second takes leave room for every window). ADR 0572 D1
+measured -0.2455 for this on ORACLE windows - same sign, larger magnitude. So ADR 0571 D4's rule
+is vindicated (the oracle instrument is corroborated for a delta's SIGN, not its LEVEL: it was
+0.09 off here, in the right direction), and "do NOT light the settled tier with the shipped
+asset" now rests on an in-situ deployment-corpus number instead of an oracle one.
+
+**Onset retention 0.7021 re-measures a KNOWN figure rather than revealing a regression.** The
+89.6 % in `superflux_onset_detector.dart` is the RAW detector at a +-0.12 s match window on the
+2013-strum eval fold; this is the FULL pipeline's published strums at +-50 ms
+(`onsetToleranceMsPrimary`) over all 11767 - a later stage at 2.4x the strictness. And
+`onset_recall_probe_test.dart`'s first line has asked since r164 "WHY does the live analyzer
+match only 73 % of labeled strums on real takes". 0.7021 reproduces that. One cause is ruled
+out: lifting the gate entirely moves recall 0.7021 -> 0.7078 (+0.006), so the missing ~30 % is
+lost BEFORE the gate, not at it.
+
+**And the gate earns its keep on the deployment corpus, measured end-to-end for the first
+time:** none -> 0.850 buys **+0.0884** onset precision for **-0.0057** recall.
+
+Two in-situ corpora now stand side by side from one instrument: Klangio 0.9166 (phone, ~80 %
+trained on) against GuitarSet 0.3872 (studio, never seen), with up-F1 0.8934 against 0.2007 -
+the same contrast ADR 0572 D5 drew on oracle windows, now in situ on both sides. The difference
+is corpus AND training exposure together and cannot be separated on these two cells
+(ADR 0573 D6).
+
+### Three seeds retract the Klangio half of ADR 0575 (E18-R45, ADR 0578)
+
+ADR 0575 D5's own noise-floor measurement prescribed repeating the ladder over
+`honest_eval.STD_SEEDS = [42, 1, 2]`. Repeated - and it retracts half of that round's headline.
+
+```
+  Klangio@70 (DEPLOYMENT)      s42     s1      s2      mean +/- sd
+  R0  shipped recipe          0.4354  0.4192  0.5577  0.4708 +/- 0.0757
+  R4  settled recipe          0.5405  0.5115  0.5174  0.5231 +/- 0.0153
+  NET R0 -> R4               +0.1051 +0.0923 -0.0403  +0.0524 +/- 0.0805   SIGN FLIPS
+
+  GuitarSet@70                 s42     s1      s2      mean +/- sd
+  NET R0 -> R4               +0.3448 +0.4581 +0.3266  +0.3765 +/- 0.0713   ALL POSITIVE
+```
+
+**Holds:** the GuitarSet net (+0.3765 +/- 0.0713, mean 5x the sd); the GuitarSet-data step on
+GuitarSet (+0.2823 +/- 0.0264); regularisation as a CONSISTENT COST on Klangio (-0.0592 +/-
+0.0348, all three negative); the second truncation as positive on Klangio on all three seeds
+(+0.0467 +/- 0.0508, though one value is +0.0004).
+
+**Retracted:** the Klangio net - so on the deployment corpus it is NOT ESTABLISHED which recipe
+is better, neither "wins" nor "regresses". Also the "adding GuitarSet lifts Klangio" step
+(+0.0810 / +0.0642 / **-0.0413**) and ADR 0575 D4's regularisation TRADE, which was read from
+one seed's two cells: on GuitarSet that step flips sign (+0.0997 / -0.0485 / +0.0458), so
+regularisation is a cost on the deployment corpus and noise on GuitarSet, not a Pareto trade.
+
+**What replicates instead is ADR 0554 D1's VARIANCE argument** - the half that never depended
+on a level. The both-truncation arm has the SMALLEST seed spread on both corpora: Klangio sd
+0.0153 against R0's 0.0757, GuitarSet 0.0308 against 0.0705. ADR 0554 measured that on 2-class
+ungated models; it transfers to the shipped 3-class gated family. A recipe whose output moves
+less between seeds is worth something on its own, which is precisely why ADR 0575's noise floor
+was such a problem.
+
+**The methodological error, stated:** ADR 0575 D5 put the +0.1051 net on the "reliable" side
+because it exceeded the measured 0.048 floor. That was the wrong test. *A one-seed noise floor
+bounds the STEPS, not the NET - the net is the sum of four steps, and if the steps are
+individually seed-sensitive their sum's spread can be larger, not smaller.* No amount of
+staring at the floor number would have caught it; only the seeds did.
+
+So the deployment-corpus recipe question is OPEN, and more seeds on the same instrument are not
+how to close it. The instrument that can is ADR 0577's in-situ sweep, which measures the app's
+actual path end to end; comparing a candidate there needs its weights exported to a `.bin` and
+the sweep run with `STRUM_3C_ASSET`. Not claimed: n=3, so the +/- sd is indicative and not a
+confidence interval; oracle windows throughout this ladder; and the GuitarSet advantage is not a
+shipping claim, since GuitarSet is not the deployment condition and that cell favours the arms
+that trained there.
+
+### The settled tier helps IN SITU on the deployment corpus - +0.1236, with an asset that trained at both truncations (E18-R46, ADR 0579)
+
+ADR 0571 measured the settled tier's in-situ value on GuitarSet (+0.1679); ADR 0572 could only
+measure the deployment corpus on ORACLE windows (+0.1299 settled asset, -0.2455 shipped). Since
+ADR 0577 the deployment corpus runs in situ, so both assets went through the SAME fold, the SAME
+instrument and the SAME gate ladder: guitarist 4's 27 recordings, 3721 annotated strums, 4430
+SuperFlux onsets, 9 strums excluded as frame-coalesced. That fold is player-disjoint for the
+SETTLED asset and NOT for the shipped one (it trained on 22 of those 27 recordings, ADR 0573 D1).
+
+**An internal check first, because it is what makes the rest readable.** The `none / margin off`
+row is identical for both assets - onsetP 0.6582, onsetR 0.7837, 4430 kept - so the onset path is
+asset-independent (SuperFlux, not the CRNN) and every difference below arises after it. Had that
+row differed, the two tables could not be read against each other at all.
+
+**The missing leg.** Settled asset at its own 0.2929 gate, on its own clean fold:
+
+```
+  tier              dirMacro    down     up
+  fast only          0.5389    0.4873   0.5905
+  settled only       0.6625    0.6847   0.6402    (+0.1236)
+```
+
+BOTH directions improve - down by +0.1974, up by +0.0497 - and `settledMissing` = 0, since
+60-second takes leave room for every window. This is what ADR 0571 D5 and ADR 0572 named as the
+two-tier decision's missing REAL-AUDIO leg, previously assertable only on oracle windows.
+
+**The same fold and instrument on the SHIPPED asset: -0.3628** (0.9373 -> 0.5745; up 0.9224 ->
+0.3432). Same corpus, same fold, same rig, opposite sign, and the difference is whether the asset
+trained on the untruncated window - ADR 0572 D3's claim, now in situ on the deployment corpus,
+with ADR 0574 having localised WHERE (frames 7..14, the truncation's whole footprint).
+
+**The oracle instrument is now characterised at three points:**
+
+```
+  case                                              oracle    in situ   |diff|
+  settled asset, Klangio g4 (in-distribution)       +0.1299   +0.1236   0.0063
+  shipped asset, GuitarSet held-out (ADR 0571)      +0.1919   +0.1679   0.0240
+  shipped asset, Klangio, untruncated (OOD)         -0.2455   -0.3355   0.0900
+```
+
+ADR 0571 D4's rule - the oracle is corroborated for DELTAS, not LEVELS - holds and sharpens: **a
+delta is accurate to 0.006-0.024 when the input is IN distribution for that asset, and only
+sign-accurate when it is not.** Which is consistent with what "out of distribution" means: the
+magnitude there is not predictable. Levels sit closer than feared but part systematically - the
+settled asset's fast level is 0.5055 on oracle windows against **0.5389** in situ (+0.033), its
+settled level 0.6354 against **0.6625** (+0.027). In situ is HIGHER; the obvious reading is that
+the detector finds the easier onsets so the matched subset is favourable, but that is unmeasured
+and not claimed (L681).
+
+**Not an asset ranking.** Shipped 0.9373 against settled 0.5250 on this fold is the contaminated
+pair, and the in-situ instrument REPRODUCES the Python oracle's 0.9490 / 0.5055 closely
+(0.9373 / 0.5250) - which validates the instrument, not the ordering. ADR 0573 D6 stands.
+
+**And a price a swap would pay, measured.** The settled asset's direction macro IMPROVES as the
+gate tightens (0.5250 at 0.850 -> 0.5550 at 0.124) while its onset retention COLLAPSES
+(0.7157 -> 0.6095; 3534 -> 2737 kept against the shipped asset's 3950 -> 3783):
+
+```
+  gate      shipped onsetR   settled onsetR     kept, shipped / settled
+  0.850         0.7718           0.7157             3950 / 3534
+  0.293         0.7665           0.6533             3835 / 3009
+  0.124         0.7632           0.6095             3783 / 2737
+```
+
+Per ADR 0566 a suppressed strum is a stroke the rhythm grader never sees - the learner is marked
+down for the engine's silence. So the settled asset's better direction at a tighter gate is
+BOUGHT WITH COVERAGE, and a shipping decision has to weigh that trade rather than the macro
+alone. This also confirms ADR 0569 D2's oracle observation (settled retains 0.824 against the
+shipped 0.964) in situ.
+
+Not claimed: any on-device number; one fold, one corpus, one guitarist - and r172's LOGO measured
+guitarist 4 as the HARDEST of the three (ADR 0573 D2), so this fold is pessimistic for the
+settled asset; not an asset ranking (above); the settled tier's CPU is not measured here, since
+the sweep builds the second window offline rather than on the live deadline; and the level
+discrepancy's cause is unmeasured.
+
+### Removing regularisation is REJECTED, and two agreeing seeds is not a replication (E18-R46, ADR 0580)
+
+ADR 0578 D2 found exactly one stable negative: regularisation (dropout .25 / rec .15 / l2 1e-4)
+cost on the deployment corpus on all three seeds (R1 -> R2: -0.0217 / -0.0905 / -0.0656, mean
+**-0.0592 +/- 0.0348**). That gave a DIRECTED hypothesis rather than a guess - if it costs, take
+it out of the settled recipe. R5 is R4 with `reg={}`, three seeds.
+
+```
+  R4 -> R5 (remove regularisation)   s42       s1        s2      mean +/- sd        verdict
+  Klangio@70                       +0.0533   +0.0440   -0.0244  +0.0243 +/- 0.0424  SIGN FLIPS
+  GuitarSet@70                     +0.0246   -0.0630   -0.0696  -0.0360 +/- 0.0526  SIGN FLIPS
+  Klangio@full                     -0.0186   -0.0141   -0.0243  -0.0190 +/- 0.0051  ALL NEGATIVE
+  GuitarSet@full                   -0.0007   -0.0547   -0.0759  -0.0438 +/- 0.0388  ALL <= 0
+```
+
+Two seeds confirmed the hypothesis; the third reversed it. At the UNTRUNCATED tier, though, the
+delta is the tightest in the whole experiment series - **-0.0190 +/- 0.0051** on Klangio, all
+three seeds - so removing regularisation consistently DAMAGES precisely the tier the two-tier
+decision exists to buy (ADR 0579).
+
+**And regularisation does what regularisation does: it narrows the spread.**
+
+```
+  seed sd, Klangio@70     R0        R4 (reg)    R5 (no reg)
+                        0.0757      0.0153        0.0509
+  levels (mean)         0.4708      0.5231        0.5474
+```
+
+R4's spread is 3.3x tighter on the same cell, so R5's apparently higher mean comes from a three
+times noisier measurement - exactly the trade ADR 0554 D1's variance argument describes and
+ADR 0578 D5 replicated on the 3-class gated family. **R5 is rejected** on four counts: the 70 ms
+gain is not established, the untruncated tier loses consistently, GuitarSet loses at both tiers,
+and the seed spread triples. R4 - the settled recipe WITH regularisation - stands as the candidate.
+
+ADR 0578 D2's regularisation finding is narrowed in SCOPE rather than retracted: it holds for the
+context it was measured in (R1 -> R2, the Klangio-only 70 ms-only recipe, on the 70 ms cell). In
+the both-truncation recipe the same factor behaves differently - unresolved at 70 ms, beneficial
+untruncated. A factor's effect does not transfer between recipe contexts, the same error family
+L685 recorded for the routing signal.
+
+**The methodological finding, with three instances (LESSONS L691):**
+
+```
+  claim                                        s42       s1        s2       outcome
+  ADR 0575 net R0->R4, Klangio               +0.1051   +0.0923   -0.0403  retracted
+  ADR 0578 R2->R3 (GuitarSet data), Klangio  +0.0810   +0.0642   -0.0413  retracted
+  ADR 0580 R4->R5 (drop reg), Klangio        +0.0533   +0.0440   -0.0244  rejected
+```
+
+The same shape three times: s42 and s1 agree, s2 reverses - and each time the two agreeing values
+sat close together (+0.105/+0.092; +0.081/+0.064; +0.053/+0.044), which is what two correlated
+noise draws look like but FEELS like consistency. The Klangio@70 seed sd on R0 is 0.0757, larger
+than any of the three effects, so two agreeing signs arise by luck roughly a quarter of the time
+even at zero true effect.
+
+**The rule from here: no recipe claim on this ladder goes into an ADR from two seeds. All three
+`STD_SEEDS` are mandatory, and a delta whose sign does not agree on all three is NOT ESTABLISHED -
+not "smaller".** Sign agreement rather than a t-test, because at n=3 the sd estimate is itself
+noisy and a confidence interval would be false precision. This does not reject the instrument: on
+the GuitarSet side the same ladder gives three-way agreement with tight spreads (the GuitarSet
+data step +0.2823 +/- 0.0264, the net +0.3765 +/- 0.0713). It says what the instrument can
+RESOLVE - on Klangio@70, roughly effects above the 0.08 spread.

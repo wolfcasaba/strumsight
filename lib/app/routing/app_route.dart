@@ -17,6 +17,13 @@ abstract final class AppRoutes {
   static const String songs = '/songs';
   static const String setlists = '/setlists';
   static const String chords = '/chords';
+  // The curriculum's down/up rhythm pillar (the Yousician differentiator):
+  // the strumming-hand motion plus the notation row.
+  static const String curriculumRhythm = '/curriculum/rhythm';
+
+  /// The course made visible: every rung, its availability, and what a locked
+  /// one needs. Without it the ladder existed only in tests.
+  static const String curriculumLadder = '/curriculum';
   static const String login = '/login';
   static const String librarySession = '/library/session';
   static const String practiceHub = '/practice';
@@ -59,15 +66,23 @@ abstract final class AppRoutes {
   // Audio Analysis V2 (E06-R23) — overview and metric detail screens.
   // Both routes are flag-gated in app_router.dart and are intentionally
   // unreachable while `audioAnalysisV2Enabled == false`.
-  // A felvételi folyamat (2026-09-05). Három lépés, három cím: a
-  // kezdőlap → felvétel → feldolgozás sorrend így mély-linkelhető és
-  // visszalépéskor is értelmes.
-  static const String analysisCapture = '/analysis/capture';
-  static const String analysisRecord = '/analysis/record';
-  static const String analysisProcessing = '/analysis/processing';
+  // A felvételi folyamat címei (2026-09-05). Az integrációs kör (2026-09-19)
+  // a KÉT párhuzamosan megépült felvételi folyamatból az E17-R02-esét tartja
+  // meg (`analysisHome` → `analysisRecording` → `analysisProcessing`, lásd
+  // lent): az validálja a PCM-et és el is menti az eredményt. A `/analysis/
+  // capture` és a `/analysis/record` cím ezért NINCS regisztrálva.
   static const String analysisOverview = '/analysis/overview';
   static const String analysisMetricDetail = '/analysis/metric-detail';
   static const String analysisTimeline = '/analysis/timeline';
+
+  // Audio Analysis V2 capture flow (E17-R02, ADR 0521) — home → recording →
+  // processing, under the SAME `audioAnalysisV2Enabled` gate as the three
+  // result screens above (no fourth flag, §5.1). Top-level routes outside
+  // the shell branches, like [strumChallenge]: the Recording Stage owns the
+  // microphone lease and must unmount — and release it — on navigation away.
+  static const String analysisHome = '/analysis';
+  static const String analysisRecording = '/analysis/recording';
+  static const String analysisProcessing = '/analysis/processing';
 
   // Session comparison and trend (E06-R25, ADR 0246) — flag-gated behind
   // its own `analysisComparisonEnabled` flag, independent of
@@ -134,6 +149,13 @@ abstract final class AppRoutes {
   // Adaptive shell target sub-routes (E13-R08) — each renders the same
   // existing screen the corresponding legacy route rendered; see D6.
   static const String practiceLive = '/practice/live';
+
+  /// The 60-second strum challenge (E18 lane, 2026-09-15). A top-level route
+  /// OUTSIDE the shell branches, exactly like [practiceLive]: it owns the
+  /// microphone stream through `liveFrameProvider`, so it must unmount — and
+  /// release it — on navigation away, which a kept-alive shell branch would
+  /// not do. A Stage route (`isStageRoute`): no primary navigation on top.
+  static const String strumChallenge = '/practice/strum-challenge';
   static const String practiceAnalyze = '/practice/analyze';
   static const String practiceLearn = '/practice/learn';
   static const String practiceTuner = '/practice/tuner';

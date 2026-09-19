@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/config/app_config.dart';
+import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../l10n/app_localizations.dart';
@@ -73,11 +76,24 @@ class SongListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final songs = ref.watch(songsProvider);
+    final flags = ref.watch(appConfigProvider).flags;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.songsTitle),
         actions: [
+          // The V2 Song Trainer (library → editor) had no entry from the
+          // four-tab shell: its only door was the Learn lesson list, which
+          // the shell never reaches (E18-R01 emulator finding F8). The Songs
+          // tab is where a user looks for it, so it opens from here — same
+          // flag gate as the routes themselves, pushed so back returns.
+          if (flags.songTrainerV2Enabled)
+            IconButton(
+              key: const Key('songs-entry-song-trainer'),
+              icon: const Icon(Icons.auto_stories_outlined),
+              tooltip: l10n.songTrainerTitle,
+              onPressed: () => context.push(AppRoutes.songTrainerLibrary),
+            ),
           IconButton(
             icon: const Icon(Icons.queue_music),
             tooltip: l10n.setlistsTitle,

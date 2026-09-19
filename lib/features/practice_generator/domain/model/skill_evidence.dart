@@ -15,6 +15,21 @@ import '../id/planner_ids.dart';
 /// each source are a later round's work (Kör 7-8); this is only the shared
 /// vocabulary they will report through.
 ///
+/// `curriculum` was added in E18-R13: a graded curriculum attempt, where the app
+/// set the exercise — grid, tempo, chord — and the on-device recogniser scored
+/// the learner against it. It is deliberately NOT reported as `learn` even
+/// though both are guided exercises, because this field is persisted
+/// provenance: a record claiming it came from the Learn feature when the Learn
+/// feature never produced it would make any later audit of what contributed to
+/// an estimate wrong. Its reliability is argued in
+/// `EvidenceWeightPolicy.sourceReliability`.
+///
+/// NB for whoever adds the next value: keep the value LIST free of comments.
+/// `tools/tests/test_e07_r25_vision_evidence_scope.py` parses it by splitting on
+/// commas, and a doc comment between two values used to break that parse — it
+/// now tolerates comments, but the values are easier to read in one block and
+/// this doc is where the reasoning belongs anyway.
+///
 /// `vision` was added in E07-R25 (self-heal §0.0.1 — see ADR 0319 and the
 /// `EvidenceSource`/`sourceReliability` paired regression guard
 /// `tools/tests/test_e07_r25_vision_evidence_scope.py`). A vision-sourced
@@ -26,7 +41,8 @@ enum EvidenceSource {
   progress('progress'),
   analyzeV2('analyzeV2'),
   selfReport('selfReport'),
-  vision('vision');
+  vision('vision'),
+  curriculum('curriculum');
 
   const EvidenceSource(this.code);
 

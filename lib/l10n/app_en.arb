@@ -679,6 +679,7 @@
   "@analysisExportSectionWarnings": {},
   "analysisExportTitle": "Export & share",
   "@analysisExportTitle": {},
+  "analysisHomeEntryCta": "Analyze a recording (V2)",
   "analysisHomeImportCta": "Import a file",
   "@analysisHomeImportCta": {},
   "analysisHomeImportDescription": "Analyze an existing recording, up to {limitMb} MB.",
@@ -689,16 +690,14 @@
       }
     }
   },
-  "analysisHomeImportUnavailable": "File import is not available yet — record instead.",
-  "@analysisHomeImportUnavailable": {
-    "description": "Analyze home: the file-import entry is not shippable yet. Restored into the base segment 2026-09-06 — the key existed ONLY in the generated aggregate, so every regeneration dropped it and app_router.dart stopped compiling."
-  },
+  "analysisHomeImportUnavailable": "File import is not available in this build yet — record with the microphone instead.",
   "analysisHomeOpenAnalysisSemantics": "Open analysis: {title}",
   "@analysisHomeOpenAnalysisSemantics": {
     "placeholders": {
       "title": {}
     }
   },
+  "analysisHomeOpenFailed": "Couldn't open that analysis.",
   "analysisHomeRecentEmpty": "No analyses yet — record or import one to get started.",
   "@analysisHomeRecentEmpty": {},
   "analysisHomeRecentSectionTitle": "Recent analyses",
@@ -1824,6 +1823,8 @@
   "@communityNotificationsEmpty": {},
   "communityNotificationsMarkAllRead": "Mark all as read",
   "@communityNotificationsMarkAllRead": {},
+  "communityNotificationsOpenChallenges": "Challenges",
+  "@communityNotificationsOpenChallenges": {},
   "communityNotificationsPreferencesTitle": "Notification categories",
   "@communityNotificationsPreferencesTitle": {},
   "communityNotificationsQuietHours": "Quiet hours",
@@ -1834,6 +1835,7 @@
   "@communityNotificationsRetry": {},
   "communityNotificationsTitle": "Notifications",
   "@communityNotificationsTitle": {},
+  "communityOpenCta": "Open Community",
   "communityPublicConfirmBody": "Everyone will be able to see this, not just people who follow you. You can change the setting again later, but anything already public may already have been seen or shared.",
   "@communityPublicConfirmBody": {},
   "communityPublicConfirmCancel": "Cancel",
@@ -1842,6 +1844,238 @@
   "@communityPublicConfirmCta": {},
   "communityPublicConfirmTitle": "Make this public?",
   "@communityPublicConfirmTitle": {},
+  "curriculumAttemptCounted": "Counted towards your path",
+  "curriculumAttemptDone": "Attempt finished",
+  "curriculumBarOf": "Bar {bar} of {total}",
+  "@curriculumBarOf": {
+    "placeholders": {
+      "bar": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumCalibrateAction": "Calibrate",
+  "curriculumCalibrateInstruction": "Strum DOWN on every beat, with the pick",
+  "curriculumCalibrateSaved": "Calibrated: {ms} ms",
+  "@curriculumCalibrateSaved": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumCalibrateUneven": "Too uneven to trust — try that again",
+  "curriculumCapabilityCamera": "a camera",
+  "curriculumCapabilityChord": "chord scoring",
+  "curriculumCapabilityDirection": "up/down stroke scoring",
+  "curriculumCapabilityMicrophone": "a microphone",
+  "curriculumCapabilityOther": "something this device does not have",
+  "curriculumCapabilityPitch": "pitch scoring",
+  "curriculumCapabilityTempo": "tempo detection",
+  "curriculumChordAccuracy": "Chord held in {percent}% of the bars",
+  "@curriculumChordAccuracy": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumChordHeardInstead": "I heard this instead: {chord}",
+  "@curriculumChordHeardInstead": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumChordOther": "{chord} is sounding",
+  "@curriculumChordOther": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumChordRinging": "ringing clearly",
+  "curriculumChordStays": "stays the same",
+  "curriculumChordTooLittle": "I could not hear the chord well enough yet",
+  "curriculumChordUnclear": "not confirmed",
+  "curriculumClickStopsWhileListening": "The click stops while I listen, so it is not mistaken for your strumming",
+  "curriculumCountInLabel": "Get ready",
+  "curriculumCountInNumber": "{number}",
+  "@curriculumCountInNumber": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumDirectionAccuracy": "{percent}% of the strokes I heard went the right way",
+  "@curriculumDirectionAccuracy": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumHeard": "heard {heard} of {expected} strokes",
+  "@curriculumHeard": {
+    "placeholders": {
+      "heard": {
+        "type": "int"
+      },
+      "expected": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumHoldChord": "hold",
+  "curriculumLadderCannotMeasure": "This device cannot measure this one",
+  "curriculumLadderEvidence": "Measured over {count, plural, =1{1 attempt} other{{count} attempts}}",
+  "@curriculumLadderEvidence": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumLadderMissing": "Missing: {capabilities}",
+  "@curriculumLadderMissing": {
+    "placeholders": {
+      "capabilities": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumLadderNeeds": "Needs first: {skills}",
+  "@curriculumLadderNeeds": {
+    "placeholders": {
+      "skills": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumLadderNextStep": "next up",
+  "curriculumLadderNoRhythm": "Not a strumming exercise yet",
+  "curriculumLadderNotYet": "Not yet reached",
+  "curriculumLadderOpen": "Open",
+  "curriculumLadderRung": "Step {number}",
+  "@curriculumLadderRung": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumLadderTitle": "Your path",
+  "curriculumListenBarOf": "Listen — {bar} of {total}",
+  "@curriculumListenBarOf": {
+    "placeholders": {
+      "bar": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumListenLabel": "Listen",
+  "curriculumMissionAMinor": "A minor",
+  "curriculumMissionAmToD": "Am to D",
+  "curriculumMissionByEar": "The same pattern, by ear",
+  "curriculumMissionCMajor": "C major",
+  "curriculumMissionDDuUdU": "The D-DU-UDU pattern",
+  "curriculumMissionDMajor": "D major",
+  "curriculumMissionDToG": "D to G",
+  "curriculumMissionDownQuarters": "Steady down-strokes",
+  "curriculumMissionDownUpEighths": "Down-up eighths",
+  "curriculumMissionEMinor": "E minor",
+  "curriculumMissionEmToAm": "Em to Am, without stopping",
+  "curriculumMissionGMajor": "G major",
+  "curriculumMissionGToC": "G to C",
+  "curriculumMissionTuneAndSit": "Tune up and settle in",
+  "curriculumMissionTwoChordSong": "A two-chord song",
+  "curriculumModeListenAndRepeat": "Listen and repeat",
+  "curriculumModeMutedStrokes": "Muted strokes",
+  "curriculumModeSilentGrid": "Read and play",
+  "curriculumModeStep": "Step {step} of {total}",
+  "@curriculumModeStep": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumModeWithChord": "With a chord",
+  "curriculumNextChord": "next: {chord}",
+  "@curriculumNextChord": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumNoChord": "No chord — damp the strings, right hand only",
+  "curriculumNowYouLabel": "Now you",
+  "curriculumOutcomeCredited": "counted",
+  "curriculumOutcomeNoEvidence": "nothing heard",
+  "curriculumOutcomeUnclear": "not confirmed",
+  "curriculumOutcomeWrongDirection": "other direction",
+  "curriculumPrepareChange": "the change starts here — keep the strumming hand moving",
+  "curriculumRhythmTitle": "Strumming",
+  "curriculumSkillByEar": "playing a heard pattern back",
+  "curriculumSkillChangeAmToD": "the Am to D change",
+  "curriculumSkillChangeDToG": "the D to G change",
+  "curriculumSkillChangeEmToAm": "the Em to Am change",
+  "curriculumSkillChangeGToC": "the G to C change",
+  "curriculumSkillChordAMinor": "A minor",
+  "curriculumSkillChordCMajor": "C major",
+  "curriculumSkillChordDMajor": "D major",
+  "curriculumSkillChordEMinor": "E minor",
+  "curriculumSkillChordGMajor": "G major",
+  "curriculumSkillConflicted": "Mixed results so far",
+  "curriculumSkillDownQuarters": "steady down-strokes",
+  "curriculumSkillDownUpEighths": "down-up eighths",
+  "curriculumSkillStale": "Worth playing again",
+  "curriculumSkillStrumPattern": "the D-DU-UDU pattern",
+  "curriculumSkillTwoChordSong": "a two-chord song",
+  "curriculumStageFirstSounds": "First sounds",
+  "curriculumStageRhythmAndReach": "Rhythm and reach",
+  "curriculumStrokeDown": "down",
+  "curriculumStrokeGhost": "ghost stroke, the hand passes without touching the strings",
+  "curriculumStrokeSemantic": "Beat {count}, {direction} stroke",
+  "@curriculumStrokeSemantic": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      },
+      "direction": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumStrokeUp": "up",
+  "curriculumTimingEarly": "You are steadily ahead of the beat",
+  "curriculumTimingLate": "You are steadily behind the beat",
+  "curriculumTimingOff": "Timing: {ms} ms off on average",
+  "@curriculumTimingOff": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumTimingScattered": "Evenly spread — not consistently early or late",
+  "curriculumTimingUncalibrated": "Timing is not scored on this device yet",
+  "curriculumTooLittleHeard": "I could not hear enough of that yet",
+  "curriculumUnnamedSkill": "an earlier step",
+  "curriculumUnnamedStep": "This step",
   "ddSuggestEasy": "Tough one — try Easy mode?",
   "ddSuggestFull": "You're nailing it — try the full lesson?",
   "ddSwitch": "Switch",
@@ -2018,6 +2252,8 @@
       }
     }
   },
+  "followingFeedCompose": "New post",
+  "@followingFeedCompose": {},
   "followingFeedEmptyState": "No posts in the feed yet.",
   "@followingFeedEmptyState": {},
   "followingFeedEmptyStateCta": "Start practice",
@@ -2040,6 +2276,8 @@
   "@followingFeedRefresh": {},
   "followingFeedRetry": "Retry",
   "@followingFeedRetry": {},
+  "followingFeedSearch": "Search people",
+  "@followingFeedSearch": {},
   "followingFeedTitle": "Following feed",
   "@followingFeedTitle": {},
   "gamificationHubAchievementsTitle": "Achievements",
@@ -2935,6 +3173,14 @@
   "practiceFreePracticeTempoStabilityTitle": "Tempo stability",
   "practiceFreePracticeUpCount": "Up strums",
   "practiceFreePracticeUpRatio": "Up ratio",
+  "practiceGeneratorMoreActions": "More plan actions",
+  "practiceGeneratorNoActivePlanForAction": "Create and activate a plan first.",
+  "practiceGeneratorNoChangesToReview": "Nothing is scheduled for today, so there is no change to review.",
+  "practiceGeneratorOpenChangeReview": "Review plan changes",
+  "practiceGeneratorOpenPlanPreview": "Plan preview",
+  "practiceGeneratorOpenPrivacy": "Plan data and privacy",
+  "practiceGeneratorOpenWeeklyPlan": "Weekly plan",
+  "practiceGeneratorPlanLoadFailed": "The active plan could not be read. Try again later.",
   "practiceHighwayLabel": "Practice highway",
   "practiceHighwayRestMarker": "Rest",
   "practiceHistoryEmptyAction": "Back",
@@ -3817,7 +4063,9 @@
       }
     }
   },
+  "setlistSessionChooseMode": "How do you want to run this set?",
   "setlistSessionCompleted": "Completed",
+  "setlistSessionEntry": "Run as session",
   "setlistSessionFailed": "Could not finish",
   "setlistSessionPartial": "Stopped partway — your score so far counts.",
   "@setlistSessionPartial": {
@@ -3977,6 +4225,16 @@
   "songCapabilityExportUnavailable": "Export unavailable",
   "songCapabilityTrainerAvailable": "Trainer available",
   "songCapabilityTrainerUnavailable": "Trainer unavailable",
+  "songChordHear": "Hear {chord}",
+  "@songChordHear": {
+    "description": "Tooltip/semantics of a chord chip in the song builder: tapping it plays that chord (ADR 0535).",
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "Am"
+      }
+    }
+  },
   "songDelete": "Delete",
   "songDeleted": "Song deleted",
   "songEditTitle": "Edit song",
@@ -4191,6 +4449,8 @@
   },
   "songOverviewTitle": "Song overview",
   "songOverviewTracks": "Tracks",
+  "songPreviewPlay": "Preview",
+  "songPreviewStop": "Stop preview",
   "songProgression": "Chord progression",
   "songProgressionHint": "Add chords below — one per bar, in play order.",
   "songSave": "Save",
@@ -4505,6 +4765,77 @@
       }
     }
   },
+  "strumChallengeBestToday": "Today's best: {score}",
+  "@strumChallengeBestToday": {
+    "placeholders": {
+      "score": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeCardBody": "Down-down-up-up-down-up for one minute. Beat today's best.",
+  "strumChallengeCountIn": "Get ready — {n}",
+  "@strumChallengeCountIn": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeDirectionAccuracy": "Direction accuracy {percent}%",
+  "@strumChallengeDirectionAccuracy": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeDone": "Done",
+  "strumChallengeHeard": "I heard {heard} of {notated} strums",
+  "@strumChallengeHeard": {
+    "placeholders": {
+      "heard": {
+        "type": "int"
+      },
+      "notated": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeNewBest": "New best today!",
+  "strumChallengeNoAttemptYet": "No attempt yet today",
+  "strumChallengeResult": "Score {score} · {patterns} full patterns",
+  "@strumChallengeResult": {
+    "placeholders": {
+      "score": {
+        "type": "int"
+      },
+      "patterns": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeScore": "Score {score}",
+  "@strumChallengeScore": {
+    "placeholders": {
+      "score": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeSecondsLeft": "{seconds} s left",
+  "@strumChallengeSecondsLeft": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeStart": "Start",
+  "strumChallengeStop": "Stop",
+  "strumChallengeTitle": "60-second strum challenge",
+  "strumChallengeTooLittleHeard": "I couldn't hear enough. Move closer to the mic or play a little louder, then try again.",
+  "strumChallengeTryAgain": "Try again",
   "strumDown": "Down",
   "strumRest": "Rest",
   "strumUp": "Up",
@@ -4528,8 +4859,21 @@
   "todayHubDayCompletedTitle": "Nice work today",
   "todayHubNewUserMessage": "Your first practice session takes just a few minutes.",
   "todayHubNewUserTitle": "Let's get started",
+  "todayHubNextStep": "Next: {step}",
+  "@todayHubNextStep": {
+    "placeholders": {
+      "step": {
+        "type": "String"
+      }
+    }
+  },
   "todayHubNoPlanMessage": "No plan yet — head to Practice to get started.",
   "todayHubPracticeMoreCta": "Practice more",
+  "todayHubPrivacyAudioLocal": "Your audio never leaves the phone",
+  "todayHubPrivacyNoAccount": "No account needed",
+  "todayHubPrivacyNoAds": "No ads, no subscription",
+  "todayHubPrivacyOffline": "Works fully offline",
+  "todayHubPrivacyTitle": "Private by design",
   "todayHubStartFirstPracticeCta": "Start your first practice",
   "todayHubStartPracticeCta": "Start practicing",
   "todayHubTitle": "Today",
@@ -4720,6 +5064,11 @@
   "tutorDataMemoryTitle": "Remembered facts",
   "tutorDataScreenSemantics": "Tutor data screen",
   "tutorDataTitle": "Tutor data",
+  "tutorPlanOpenPreview": "Open the practice plan preview",
+  "tutorPlanPreviewEntry": "Preview a practice plan",
+  "tutorPlanSaveFailed": "The practice plan could not be saved.",
+  "tutorPlanSaved": "Practice plan saved to your tutor memory.",
+  "tutorPlanStartUnavailable": "No practice exercise is available for this plan yet.",
   "tutorPrivacyIntro": "These three switches control what the tutor may do with your data. Toggle them independently.",
   "tutorPrivacyScopeBody": "Delete-all touches exactly these keys (and their corruption quarantines).",
   "tutorPrivacyScopePreserved": "Your consent choices, profile and account sign-in are kept.",

@@ -672,6 +672,7 @@
   "@analysisExportSectionWarnings": {},
   "analysisExportTitle": "Exportálás és megosztás",
   "@analysisExportTitle": {},
+  "analysisHomeEntryCta": "Felvétel elemzése (V2)",
   "analysisHomeImportCta": "Fájl importálása",
   "@analysisHomeImportCta": {},
   "analysisHomeImportDescription": "Meglévő felvétel elemzése, legfeljebb {limitMb} MB.",
@@ -682,16 +683,14 @@
       }
     }
   },
-  "analysisHomeImportUnavailable": "A fájl-importálás még nem elérhető — vegyél fel helyette.",
-  "@analysisHomeImportUnavailable": {
-    "description": "Analyze home: the file-import entry is not shippable yet. Restored into the base segment 2026-09-06 — the key existed ONLY in the generated aggregate, so every regeneration dropped it and app_router.dart stopped compiling."
-  },
+  "analysisHomeImportUnavailable": "A fájlimport ebben a buildben még nem érhető el — vedd fel mikrofonnal helyette.",
   "analysisHomeOpenAnalysisSemantics": "Elemzés megnyitása: {title}",
   "@analysisHomeOpenAnalysisSemantics": {
     "placeholders": {
       "title": {}
     }
   },
+  "analysisHomeOpenFailed": "Nem sikerült megnyitni ezt az elemzést.",
   "analysisHomeRecentEmpty": "Még nincs elemzés — kezdéshez vegyél fel vagy importálj egyet.",
   "@analysisHomeRecentEmpty": {},
   "analysisHomeRecentSectionTitle": "Legutóbbi elemzések",
@@ -1796,6 +1795,8 @@
   "@communityNotificationsEmpty": {},
   "communityNotificationsMarkAllRead": "Összes olvasottnak jelölése",
   "@communityNotificationsMarkAllRead": {},
+  "communityNotificationsOpenChallenges": "Kihívások",
+  "@communityNotificationsOpenChallenges": {},
   "communityNotificationsPreferencesTitle": "Értesítési kategóriák",
   "@communityNotificationsPreferencesTitle": {},
   "communityNotificationsQuietHours": "Csendes időszak",
@@ -1806,6 +1807,7 @@
   "@communityNotificationsRetry": {},
   "communityNotificationsTitle": "Értesítések",
   "@communityNotificationsTitle": {},
+  "communityOpenCta": "Közösség megnyitása",
   "communityPublicConfirmBody": "Ezt bárki látni fogja, nem csak a követőid. A beállítást később megváltoztathatod, de amit már nyilvánossá tettél, azt mások addigra láthatták vagy megoszthatták.",
   "@communityPublicConfirmBody": {},
   "communityPublicConfirmCancel": "Mégse",
@@ -1814,6 +1816,238 @@
   "@communityPublicConfirmCta": {},
   "communityPublicConfirmTitle": "Nyilvánossá teszed?",
   "@communityPublicConfirmTitle": {},
+  "curriculumAttemptCounted": "Beleszámít az utadba",
+  "curriculumAttemptDone": "Kör vége",
+  "curriculumBarOf": "{total} ütem közül a {bar}.",
+  "@curriculumBarOf": {
+    "placeholders": {
+      "bar": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumCalibrateAction": "Kalibrálás",
+  "curriculumCalibrateInstruction": "Pengess LE minden ütésre",
+  "curriculumCalibrateSaved": "Kalibrálva: {ms} ms",
+  "@curriculumCalibrateSaved": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumCalibrateUneven": "Túl egyenetlen ahhoz, hogy megbízható legyen — próbáld újra",
+  "curriculumCapabilityCamera": "kamera",
+  "curriculumCapabilityChord": "akkord-pontozás",
+  "curriculumCapabilityDirection": "le/fel ütés pontozása",
+  "curriculumCapabilityMicrophone": "mikrofon",
+  "curriculumCapabilityOther": "valami, ami ezen a készüléken nincs",
+  "curriculumCapabilityPitch": "hangmagasság-pontozás",
+  "curriculumCapabilityTempo": "tempó-felismerés",
+  "curriculumChordAccuracy": "Az akkord a taktusok {percent}%-ában szólt",
+  "@curriculumChordAccuracy": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumChordHeardInstead": "Helyette ezt hallottam: {chord}",
+  "@curriculumChordHeardInstead": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumChordOther": "{chord} szól",
+  "@curriculumChordOther": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumChordRinging": "szól, tisztán",
+  "curriculumChordStays": "ugyanaz marad",
+  "curriculumChordTooLittle": "Az akkordot még nem hallottam elég jól",
+  "curriculumChordUnclear": "nem tisztázott",
+  "curriculumClickStopsWhileListening": "A klikk elhallgat, amíg hallgatlak — hogy ne a te pengetésednek vegyem",
+  "curriculumCountInLabel": "Felkészülés",
+  "curriculumCountInNumber": "{number}",
+  "@curriculumCountInNumber": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumDirectionAccuracy": "Amit hallottam, annak {percent}%-a jó irányba ment",
+  "@curriculumDirectionAccuracy": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumHeard": "{expected} ütésből {heard} hallatszott",
+  "@curriculumHeard": {
+    "placeholders": {
+      "heard": {
+        "type": "int"
+      },
+      "expected": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumHoldChord": "fogd",
+  "curriculumLadderCannotMeasure": "Ezt ez a készülék nem tudja megmérni",
+  "curriculumLadderEvidence": "{count, plural, =1{1 kísérlet} other{{count} kísérlet}} alapján mérve",
+  "@curriculumLadderEvidence": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumLadderMissing": "Hiányzik: {capabilities}",
+  "@curriculumLadderMissing": {
+    "placeholders": {
+      "capabilities": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumLadderNeeds": "Előbb kell: {skills}",
+  "@curriculumLadderNeeds": {
+    "placeholders": {
+      "skills": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumLadderNextStep": "ez következik",
+  "curriculumLadderNoRhythm": "Ez még nem pengetés-gyakorlat",
+  "curriculumLadderNotYet": "Még nem érted el",
+  "curriculumLadderOpen": "Nyitva",
+  "curriculumLadderRung": "{number}. lépés",
+  "@curriculumLadderRung": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumLadderTitle": "A te utad",
+  "curriculumListenBarOf": "Hallgasd — {total} közül a {bar}.",
+  "@curriculumListenBarOf": {
+    "placeholders": {
+      "bar": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumListenLabel": "Hallgasd",
+  "curriculumMissionAMinor": "A-moll",
+  "curriculumMissionAmToD": "Am → D",
+  "curriculumMissionByEar": "Ugyanaz a ritmus, fülből",
+  "curriculumMissionCMajor": "C-dúr",
+  "curriculumMissionDDuUdU": "A D-DU-UDU ritmus",
+  "curriculumMissionDMajor": "D-dúr",
+  "curriculumMissionDToG": "D → G",
+  "curriculumMissionDownQuarters": "Egyenletes lefelé pengetés",
+  "curriculumMissionDownUpEighths": "Le-fel nyolcadok",
+  "curriculumMissionEMinor": "E-moll",
+  "curriculumMissionEmToAm": "Em → Am megállás nélkül",
+  "curriculumMissionGMajor": "G-dúr",
+  "curriculumMissionGToC": "G → C",
+  "curriculumMissionTuneAndSit": "Hangolás és elhelyezkedés",
+  "curriculumMissionTwoChordSong": "Kétakkordos dal",
+  "curriculumModeListenAndRepeat": "Hallgasd és ismételd",
+  "curriculumModeMutedStrokes": "Tompított ütések",
+  "curriculumModeSilentGrid": "Olvasd és játszd",
+  "curriculumModeStep": "{total} lépésből a {step}.",
+  "@curriculumModeStep": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumModeWithChord": "Akkorddal",
+  "curriculumNextChord": "következik: {chord}",
+  "@curriculumNextChord": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumNoChord": "Nincs akkord — tompítsd a húrokat, csak a jobb kéz",
+  "curriculumNowYouLabel": "Most te",
+  "curriculumOutcomeCredited": "beszámítva",
+  "curriculumOutcomeNoEvidence": "nem hallatszott",
+  "curriculumOutcomeUnclear": "nem tisztázott",
+  "curriculumOutcomeWrongDirection": "másik irány",
+  "curriculumPrepareChange": "itt indul a váltás — a pengető kéz ne álljon meg",
+  "curriculumRhythmTitle": "Pengetés",
+  "curriculumSkillByEar": "hallott ritmus visszajátszása",
+  "curriculumSkillChangeAmToD": "az Am → D váltás",
+  "curriculumSkillChangeDToG": "a D → G váltás",
+  "curriculumSkillChangeEmToAm": "az Em → Am váltás",
+  "curriculumSkillChangeGToC": "a G → C váltás",
+  "curriculumSkillChordAMinor": "A-moll",
+  "curriculumSkillChordCMajor": "C-dúr",
+  "curriculumSkillChordDMajor": "D-dúr",
+  "curriculumSkillChordEMinor": "E-moll",
+  "curriculumSkillChordGMajor": "G-dúr",
+  "curriculumSkillConflicted": "Eddig vegyes eredmények",
+  "curriculumSkillDownQuarters": "egyenletes lefelé pengetés",
+  "curriculumSkillDownUpEighths": "le-fel nyolcadok",
+  "curriculumSkillStale": "Érdemes újra eljátszani",
+  "curriculumSkillStrumPattern": "a D-DU-UDU ritmus",
+  "curriculumSkillTwoChordSong": "egy kétakkordos dal",
+  "curriculumStageFirstSounds": "Első hangok",
+  "curriculumStageRhythmAndReach": "Ritmus és nyújtózás",
+  "curriculumStrokeDown": "lefelé",
+  "curriculumStrokeGhost": "ghost ütés, a kéz átmegy, de nem ér a húrhoz",
+  "curriculumStrokeSemantic": "{count} ütés, {direction}",
+  "@curriculumStrokeSemantic": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      },
+      "direction": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumStrokeUp": "felfelé",
+  "curriculumTimingEarly": "Egyenletesen a beat előtt vagy",
+  "curriculumTimingLate": "Egyenletesen a beat mögött vagy",
+  "curriculumTimingOff": "Időzítés: átlagosan {ms} ms eltérés",
+  "@curriculumTimingOff": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumTimingScattered": "Szórt — nem egyenletesen korán vagy későn",
+  "curriculumTimingUncalibrated": "Az időzítés ezen a készüléken még nincs pontozva",
+  "curriculumTooLittleHeard": "Ebből még nem hallottam eleget",
+  "curriculumUnnamedSkill": "egy korábbi lépés",
+  "curriculumUnnamedStep": "Ez a lépés",
   "ddSuggestEasy": "Nehéz? Próbáld Easy módban!",
   "ddSuggestFull": "Ez megy! Próbáld a teljes leckét!",
   "ddSwitch": "Váltás",
@@ -1990,6 +2224,8 @@
       }
     }
   },
+  "followingFeedCompose": "Új poszt",
+  "@followingFeedCompose": {},
   "followingFeedEmptyState": "Még nincs poszt a feedben.",
   "@followingFeedEmptyState": {},
   "followingFeedEmptyStateCta": "Gyakorlás indítása",
@@ -2012,6 +2248,8 @@
   "@followingFeedRefresh": {},
   "followingFeedRetry": "Újrapróbálkozás",
   "@followingFeedRetry": {},
+  "followingFeedSearch": "Emberek keresése",
+  "@followingFeedSearch": {},
   "followingFeedTitle": "Követési feed",
   "@followingFeedTitle": {},
   "gamificationHubAchievementsTitle": "Eredmények",
@@ -2896,6 +3134,14 @@
   "practiceFreePracticeTempoStabilityTitle": "Tempó-stabilitás",
   "practiceFreePracticeUpCount": "Fel pengetések",
   "practiceFreePracticeUpRatio": "Fel arány",
+  "practiceGeneratorMoreActions": "További tervműveletek",
+  "practiceGeneratorNoActivePlanForAction": "Előbb készíts és aktiválj egy tervet.",
+  "practiceGeneratorNoChangesToReview": "Mára nincs beütemezve semmi, így nincs áttekintendő módosítás.",
+  "practiceGeneratorOpenChangeReview": "Tervmódosítások áttekintése",
+  "practiceGeneratorOpenPlanPreview": "Terv előnézete",
+  "practiceGeneratorOpenPrivacy": "Tervadatok és adatvédelem",
+  "practiceGeneratorOpenWeeklyPlan": "Heti terv",
+  "practiceGeneratorPlanLoadFailed": "Az aktív terv nem olvasható. Próbáld újra később.",
   "practiceHighwayLabel": "Gyakorló sáv",
   "practiceHighwayRestMarker": "Szünet",
   "practiceHistoryEmptyAction": "Vissza",
@@ -3778,7 +4024,9 @@
       }
     }
   },
+  "setlistSessionChooseMode": "Hogyan futtassuk ezt a szettet?",
   "setlistSessionCompleted": "Teljesítve",
+  "setlistSessionEntry": "Futtatás sessionként",
   "setlistSessionFailed": "Nem fejezhető be",
   "setlistSessionPartial": "Félbehagyva — az addigi eredményed számít.",
   "@setlistSessionPartial": {
@@ -3931,6 +4179,16 @@
   "songCapabilityExportUnavailable": "Export nem elérhető",
   "songCapabilityTrainerAvailable": "Trainer elérhető",
   "songCapabilityTrainerUnavailable": "Trainer nem elérhető",
+  "songChordHear": "{chord} meghallgatása",
+  "@songChordHear": {
+    "description": "Tooltip/semantics of a chord chip in the song builder: tapping it plays that chord (ADR 0535).",
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "Am"
+      }
+    }
+  },
   "songDelete": "Törlés",
   "songDeleted": "Dal törölve",
   "songEditTitle": "Dal szerkesztése",
@@ -4145,6 +4403,8 @@
   },
   "songOverviewTitle": "Dal áttekintése",
   "songOverviewTracks": "Sávok",
+  "songPreviewPlay": "Előnézet",
+  "songPreviewStop": "Előnézet leállítása",
   "songProgression": "Akkordmenet",
   "songProgressionHint": "Adj hozzá akkordokat lent — ütemenként egyet, lejátszási sorrendben.",
   "songSave": "Mentés",
@@ -4459,6 +4719,77 @@
       }
     }
   },
+  "strumChallengeBestToday": "Mai legjobb: {score}",
+  "@strumChallengeBestToday": {
+    "placeholders": {
+      "score": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeCardBody": "Le-le-fel-fel-le-fel egy percen át. Döntsd meg a mai legjobbat.",
+  "strumChallengeCountIn": "Készülj — {n}",
+  "@strumChallengeCountIn": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeDirectionAccuracy": "Irány-pontosság {percent}%",
+  "@strumChallengeDirectionAccuracy": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeDone": "Kész",
+  "strumChallengeHeard": "{notated} pengetésből {heard}-at hallottam",
+  "@strumChallengeHeard": {
+    "placeholders": {
+      "heard": {
+        "type": "int"
+      },
+      "notated": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeNewBest": "Új mai rekord!",
+  "strumChallengeNoAttemptYet": "Ma még nem próbáltad",
+  "strumChallengeResult": "{score} pont · {patterns} teljes minta",
+  "@strumChallengeResult": {
+    "placeholders": {
+      "score": {
+        "type": "int"
+      },
+      "patterns": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeScore": "Pont: {score}",
+  "@strumChallengeScore": {
+    "placeholders": {
+      "score": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeSecondsLeft": "{seconds} mp van hátra",
+  "@strumChallengeSecondsLeft": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "strumChallengeStart": "Indítás",
+  "strumChallengeStop": "Leállítás",
+  "strumChallengeTitle": "60 másodperces pengetés-kihívás",
+  "strumChallengeTooLittleHeard": "Nem hallottam eleget. Menj közelebb a mikrofonhoz vagy pengess kicsit hangosabban, és próbáld újra.",
+  "strumChallengeTryAgain": "Újra",
   "strumDown": "Le",
   "strumRest": "Szünet",
   "strumUp": "Fel",
@@ -4482,8 +4813,21 @@
   "todayHubDayCompletedTitle": "Szép munka ma",
   "todayHubNewUserMessage": "Az első gyakorlás csak pár percet vesz igénybe.",
   "todayHubNewUserTitle": "Vágjunk bele",
+  "todayHubNextStep": "Következik: {step}",
+  "@todayHubNextStep": {
+    "placeholders": {
+      "step": {
+        "type": "String"
+      }
+    }
+  },
   "todayHubNoPlanMessage": "Még nincs terved — indulj a Gyakorlásba, hogy elkezdd.",
   "todayHubPracticeMoreCta": "Gyakorolj még",
+  "todayHubPrivacyAudioLocal": "A hangod nem hagyja el a telefont",
+  "todayHubPrivacyNoAccount": "Nem kell fiók",
+  "todayHubPrivacyNoAds": "Nincs reklám, nincs előfizetés",
+  "todayHubPrivacyOffline": "Teljesen offline működik",
+  "todayHubPrivacyTitle": "Alapból privát",
   "todayHubStartFirstPracticeCta": "Első gyakorlás indítása",
   "todayHubStartPracticeCta": "Gyakorlás indítása",
   "todayHubTitle": "Ma",
@@ -4653,6 +4997,11 @@
   "tutorDataMemoryTitle": "Megjegyzett tények",
   "tutorDataScreenSemantics": "Tutor adatok képernyő",
   "tutorDataTitle": "Tutor adatok",
+  "tutorPlanOpenPreview": "A gyakorlási terv előnézetének megnyitása",
+  "tutorPlanPreviewEntry": "Gyakorlási terv előnézete",
+  "tutorPlanSaveFailed": "A gyakorlási tervet nem sikerült menteni.",
+  "tutorPlanSaved": "A gyakorlási terv a tanár memóriájába mentve.",
+  "tutorPlanStartUnavailable": "Ehhez a tervhez még nincs indítható gyakorlat.",
   "tutorPrivacyIntro": "Ez a három kapcsoló szabályozza, hogy a tutor mit tehet az adataiddal. Egymástól függetlenül kapcsolhatod őket.",
   "tutorPrivacyScopeBody": "A törlés pontosan ezeket a kulcsokat (és a karanténjaikat) érinti.",
   "tutorPrivacyScopePreserved": "A beleegyezésed, a profilod és a bejelentkezésed megmarad.",

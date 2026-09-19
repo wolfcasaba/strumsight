@@ -60,6 +60,34 @@ class LiveCrnnFrontend {
     return _buildWindow(onsetSec, availableEnd);
   }
 
+  /// Analyzer frames after an onset frame at which this window has FULLY
+  /// arrived — the SETTLED tier's instant (ADR 0556 D3).
+  ///
+  /// DERIVED from the model geometry, never written down, so it cannot drift from
+  /// [CrnnFrontend]'s constants or from the extractor's FFT size. For the shipped
+  /// framing (44.1 kHz, hop 256, window 1024) it comes out at 41 frames = 238 ms
+  /// past the onset frame — the same 238 ms the settled tier is measured at.
+  ///
+  /// The `+ 1` is the centre rounding: [_buildWindow] rounds the onset to the
+  /// nearest MODEL frame, which can push the segment's end up to half a model hop
+  /// (5 ms, ~0.9 analyzer frames) later than the exact arithmetic below. Paying
+  /// one analyzer frame (5.8 ms) is the cheap side of that trade — arriving early
+  /// would zero-pad the tail, which is precisely the truncation the settled tier
+  /// exists to avoid.
+  int get framesUntilComplete {
+    const modelRate = CrnnFrontend.modelSampleRate;
+    const modelHop = CrnnFrontend.modelHop;
+    final rows = CrnnFrontend.preFrames + CrnnFrontend.postFrames;
+    final segLen = (rows - 1) * modelHop + _logMel.nFft;
+    // Segment samples lying AFTER the onset's centre frame.
+    final afterCentre = segLen - CrnnFrontend.preFrames * modelHop;
+    // [windowAt] puts the attack at (onsetFrame + 2.5) hops, and the audio
+    // available at currentFrame ends at currentFrame * hop + window.
+    final needed =
+        (2.5 * hop + afterCentre * sampleRate / modelRate - window) / hop;
+    return needed.ceil() + 1;
+  }
+
   /// The same window computed from a WHOLE signal (no ring) — the test
   /// reference and the parity anchor for the streamed path.
   static List<List<double>> referenceWindow(
@@ -227,6 +255,12 @@ class LiveCrnnStrumClassifier implements StrumDirectionClassifier {
   }) =>
       classifyProbs(_net.forward(_frontend.windowAt(onsetFrame, currentFrame)));
 
+  /// The instant this model's whole window has arrived, so the verdict runs on
+  /// audio the 70 ms deadline could only zero-pad. Derived, not tuned — see
+  /// [LiveCrnnFrontend.framesUntilComplete].
+  @override
+  int? get settleAfterFrames => _frontend.framesUntilComplete;
+
   /// The r175 decision rule for a raw softmax [probs]. A 3-class vector
   /// `[P(down), P(up), P(no-strum)]` SUPPRESSES the arrow when P(no-strum)
   /// exceeds [noStrumThreshold]; otherwise it emits the winning direction with
@@ -237,16 +271,30 @@ class LiveCrnnStrumClassifier implements StrumDirectionClassifier {
   /// unit-testable without an asset.
   static StrumClassification classifyProbs(List<double> probs) {
     if (probs.length >= 3) {
-      if (probs[2] > noStrumThreshold) {
-        return const StrumClassification(
-          direction: null,
-          confidence: 0,
-          suppressed: true,
-        );
-      }
       final sum = probs[0] + probs[1];
       final pDown = sum > 0 ? probs[0] / sum : 0.5;
       final pUp = sum > 0 ? probs[1] / sum : 0.5;
+      if (probs[2] > noStrumThreshold) {
+        return StrumClassification(
+          direction: null,
+          confidence: 0,
+          suppressed: true,
+          // The probabilities are exported on the SUPPRESSED branch too, and this
+          // changes nothing production does: `strum_analyzer.dart` returns before
+          // building a `StrumEvent` when `suppressed` is set, so no consumer can
+          // read them. What it buys is that [noStrumThreshold] becomes MEASURABLE
+          // — a sweep can ask what a different gate would have kept without
+          // re-running the model per threshold. That matters because the shipped
+          // value was fitted for 95% true-strum retention on this model's own
+          // held-out fold, and on GuitarSet it retains 59.5%
+          // (`docs/eval/guitarset-strum-baseline.md`). A gate whose retention is
+          // corpus-dependent has to be re-measurable, not re-derived by hand.
+          // Additive export in the sense of ADR 0512 D1.
+          pDown: pDown,
+          pUp: pUp,
+          pNoStrum: probs[2],
+        );
+      }
       final up = pUp > pDown;
       return StrumClassification(
         direction: up ? StrumDirection.up : StrumDirection.down,

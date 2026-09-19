@@ -121,7 +121,10 @@ Mirror of `DspConfig` + `ChordDictionary`/`ViterbiChordDecoder` defaults. These
 were tuned against synth signals + a 9-seed randomized property gate; **expect a
 real-guitar retune** (that is the final acceptance).
 
-- **Register split (`NnlsChroma`)**: `trebleMinMidi = 40` (E2) — the treble
+- **Register split (`NnlsChroma`)** — **SUPERSEDED in E18-R07, see the
+  "Register windows" section below.** The bass fold is now DEPTH-WEIGHTED, as
+  the reference does it; the hard cut described here is the fallback path
+  (`referenceRegisterWindows: false`). `trebleMinMidi = 40` (E2) — the treble
   chroma folds the **whole** note range, i.e. the full harmony; `bassMaxMidi =
   52` (E3) — the bass chroma folds only the low sub-register for the root.
   *Learned the hard way:* a HIGH treble floor (first tried C3) drops a guitar
@@ -204,7 +207,7 @@ outvoted the attenuated fundamentals.
 
 Implementation (`NnlsChroma`, flag `spectralWhitening = true`):
 - After sampling (and tuning resample), each log-freq bin is divided by the
-  **RMS of its ±`whiteningHalfWindow` (18-bin = half-octave) neighbourhood**
+  **RMS of its ±`whiteningHalfSemitones` neighbourhood**
   raised to `whiteningExponent`, with an RMS floor of `1e-4·maxS` so true
   silence isn't amplified into structure. O(bins) via prefix sums.
 - **Exponent 0.7, NOT Chordino's ≈1.0**: full whitening (w=1.0) erodes the
@@ -215,6 +218,183 @@ Implementation (`NnlsChroma`, flag `spectralWhitening = true`):
 - Gates: deterministic thin-mic/resonance chord tests + a randomized property
   (random shelf 250–350 Hz, ×0.1–0.3, random triads, ≥16/20) — green across
   seeds 42, 7, 123, 2026, 31337.
+
+## Whitening SPAN — the second thing it decides (E18-R06, real guitar)
+
+Round 70 chose the whitening *exponent* on a timbre probe and left the
+neighbourhood at a half octave without ever measuring it. The span turns out to
+decide something else entirely: **what "loud" is measured against.**
+
+At a WIDE span a bin is normalised against most of an octave, so a quiet tone
+stays quiet relative to its loud neighbours. At a NARROW span each local peak is
+normalised by its OWN neighbourhood, so the peaks are pulled toward a common
+level.
+
+For guitar that decides the chord, because a guitar voicing is not level-flat:
+**the fifth is doubled across two or three strings while the third is fretted
+exactly once**, so the tone that determines the QUALITY is routinely the
+quietest thing in the signal.
+
+MEASURED on the seven labelled reference recordings, through the full
+`LivePipeline` (E18-R01 verification, `docs/reviews/e18-r01-emulator-verify-report.md`):
+
+| | ±6 semitones (as built r70) | ±3 semitones (now) |
+|---|---|---|
+| correct top label | 4/7 | **7/7** |
+| `confirmed` (past the presence gate) | 4/7 | **7/7** |
+| open E (third G#3 at 0.12 vs fifth B2 at 0.97) | `Bsus4` | `E` |
+| open G (`x20033`, no low G2) | `Bm` / `Dsus4` | `G` |
+| D major | `D`, but never confirms | `D`, confirms |
+
+`Bsus4` and `Dsus4` are not random errors: both are profiles built wholly on the
+true chord's loud root and fifth, with its own third invisible. That is the same
+class of failure that got power-5 and sus2 excluded from the vocabulary in round
+26 — a `[root, fifth]` profile has no third to contradict, so it steals any
+triad whose third is quiet — except **sus4 rooted on the fifth re-creates it**,
+because `Xsus4 = {X, X+5, X+7}` with X = the triad's fifth is
+`{fifth, root, second}`, and that second is also exactly where the fifth's own
+3rd harmonic lands. (Confirmed on the E recording: F#4 = 0.19 while **F#3 =
+0.00** — F#4 is 370 Hz, B2's exact 3rd harmonic, with no fundamental of its
+own.)
+
+### The span is bounded from BOTH sides — same mechanism, two registers
+
+The narrowing that lifts a quiet third also **erodes the root's natural level
+dominance**, and the bass chroma has nothing else with which to name the root.
+Round 70 saw the same effect from the exponent side ("full whitening erodes the
+ROOT's natural dominance"); it is reachable from the span side too:
+
+| effective half-window | real 7 correct / confirmed | `dsp_property_test.dart`, seeds 42/7/123/2026/31337 |
+|---|---|---|
+| 7 bins (±2.2, ±2.4) | 7/7 / 7/7 | **FAIL on 4 of 5** |
+| 8 bins (±2.5 … ±2.8) | 7/7 / 7/7 | green |
+| **9 bins (±3.0)** | **7/7 / 7/7** | **green** |
+| 12 bins (±4.0) | 6/7 | green |
+| 15–18 bins (±5, ±6) | 4/7 | green |
+
+The property failures at 7 bins are low-voiced dominant 7ths collapsing onto a
+**diminished triad built on their own third** — `B7` → `D#dim`, `A#7` → `Ddim`,
+i.e. the chord with its root removed, which is precisely what a lost root looks
+like. ±3.0 (9 bins) sits two bins above that cliff and inside the real-audio
+plateau.
+
+**±3 is also exactly what the reference uses** — read off the source in E18-R07,
+and worth recording because it is independent of our measurement:
+
+```c
+// NNLSBase.cpp:368
+// make hamming window of length 1/2 octave
+int hamwinlength = nBPS * 6 + 1;   // = 19 bins = 6 semitones TOTAL, i.e. ±3
+```
+
+Our constant had been `whiteningHalfWindow = 18 // ±half octave at 3
+bins/semitone` — 18 bins as the HALF window. The reference's "half octave" is
+the TOTAL window; reading it as a half-window and doubling it is the whole bug.
+
+**The lower bound was lifted afterwards** by depth-weighted register windows
+(E18-R07, section below): low dom7s survive ±1.5 once the root is named by
+REGISTER rather than by loudness. The span still stays at ±3 — the reference's
+own value, and narrower than that would be overfitting on this evidence.
+
+The round-70 envelope gates (thin mic, body resonance) hold across the ENTIRE
+sweep, so the span was never the knob that fixed the thin mic — the exponent
+was — and the span is free to be chosen on the two criteria above.
+
+### Process notes worth keeping
+
+- The constant used to be stored as a BIN COUNT (`whiteningHalfWindow = 18`,
+  "half octave at 3 bins/semitone"), which silently couples it to
+  `binsPerSemitone`. That produced a wrong diagnosis first: a
+  `binsPerSemitone: 5` experiment took the set 5/7 → 7/7 and looked like a
+  resolution win, when it was only narrowing the span to ±3.6 semitones. The
+  control — bins 5 with the span HELD at ±6 (30 bins) — scored 5/7, so
+  resolution contributes nothing. It is stored in semitones now.
+- **The synthetic model did not reproduce the failure at first**, and that was
+  informative rather than a dead end: a flat 1/h harmonic series decoded the
+  open E correctly at every span. The reproduction needed the real *level*
+  asymmetry — the third swept down against a doubled fifth — which is what
+  identified the mechanism.
+- **The synthetic harness is a non-monotone probe of the span, so it carries
+  only ONE of the shipped cases.** Measured recovery floor (quietest third still
+  correct): open E 0.12 at ±6 → 0.08 at ±3; open G 0.30 at ±6 → 0.30 at ±3 (and
+  correct at NO third level at ±4); open Am 0.12 at ±6 → 0.22 at ±3. An open G
+  that works at 0.30 on both sides of a span where it works nowhere is a signal
+  sitting on a decision boundary, not a smooth measure. `spectral_whitening_test.dart`
+  therefore keeps exactly one audio-free reproduction (open E at a 0.08 third:
+  not `E` at ±6, `E` at ±3) and otherwise asserts non-regression. The evidence
+  for the improvement is the real recordings.
+- **Measured cost:** the synthetic open Am loses the 0.12–0.16 band to `Esus4` —
+  a profile on its own fifth, the same failure class this change fixes elsewhere.
+  Open Em and open Dm are correct at every third level on BOTH spans, so this is
+  not a systematic minor-chord regression, but all seven real recordings are
+  MAJOR — minors are unverified on real audio.
+- **Not measurable here:** the 82-recording / 11 767-event `ml/data/klangio`
+  baseline (chord accuracy 0.6707 at app commit 5ceed22d,
+  `evaluation/recognition/baseline_manifest.json`) lives outside the repo, so
+  that number is UNVERIFIED for the new span and must be re-run before any
+  release claim.
+
+### Exposed, not caused, by this change
+
+The bass chroma folds everything at/below `bassMaxMidi` **without weighting by
+depth**, so it says "these pitch classes are low", never "C is lower than E".
+For the one fully symmetric chord quality (augmented: `{C,E,G#}` is Caug, Eaug
+AND G#aug) the root therefore rests on analysis accidents — the old `Caug`
+fixture voiced C3-E3-G#3 and was decided by **C 0.72 vs E 0.69**. The fixture
+now voices each rotation with its root alone in the bass window and passes
+across ±1…±6.
+
+**Follow-up:** depth-weighted bass chroma. It would give the augmented root a
+firm basis and also open a principled route to inversions / slash chords — an
+inversion-aware bass scorer was measured offline during this round (open G:
+`Bm` 0.7921 → `G` 0.8291, the other six winners unchanged) but is NOT shipped,
+because the span fix made it unnecessary and bundling it would have been scope
+creep.
+
+## Register windows — the reference WEIGHTS, it does not cut (E18-R07)
+
+Read off the reference source this round (`Chordino.cpp:412-413`,
+`chromamethods.h`): the semitone spectrum is MULTIPLIED by smooth
+raised-cosine register windows before folding to 12 bins. Semitone index 0 is
+MIDI 21 (A0). `basswindow` is a hump over MIDI 21–57 (A0–A3) peaking near
+MIDI 39 (E♭2, ~78 Hz) and reaching zero at A3; `treblewindow` spans the whole
+range peaking near MIDI 62 (D4).
+
+On guitar notes the bass window reads **E2 0.995, G2 0.944, B2 0.625, C3 0.542,
+D3 0.375, E3 0.222, G3 0.056** — i.e. **E2 counts ~4.5× what E3 counts**. Our
+fold used a hard `midi <= bassMaxMidi` cut that weighted all of them equally,
+so the bass chroma could say "these pitch classes are low" but never "C is
+lower than E". Two measured consequences, both fixed by adopting the weighting:
+
+| | hard cut | depth-weighted |
+|---|---|---|
+| seven labelled recordings (offline scorer) | 7/7 correct, latch 6/7 | **7/7, latch 7/7** |
+| same through the full `LivePipeline` | 7/7 | **7/7** |
+| `Caug` close voicing C3-E3-G#3 | `Eaug` (bass C 0.68 / E 0.73) | **`Caug`** (bass **C 0.87 / E 0.47**) |
+| low dom7 E2–B2 at a ±2 semitone whitening span | **6/8** (`A#`→`Ddim`, `B`→`D#dim`) | **8/8** |
+| the same at ±1.5 | 8/8 | 8/8 |
+
+The augmented case is the clean demonstration: `{C,E,G#}` is equally Caug, Eaug
+and G#aug, so only the bass can name the root, and a 0.05 chroma difference was
+doing it. The dom7 row is the important one — it is the LOWER bound that
+constrained the whitening span in ADR 0540, and depth weighting lifts it,
+because the root is now named by REGISTER rather than by loudness.
+
+The span nevertheless stays at ±3 (ADR 0541 D4): that is the reference's own
+value, and going below it on this round's evidence would be overfitting.
+
+NOT adopted, deliberately: the reference's **treble** window peaks at D4 and
+tapers at both ends, ours stays flat over E2–E6. Separate measurement, separate
+round.
+
+**Licence boundary:** the reference is **GPL-2+** and StrumSight is a private
+app. Its code and tabulated constants are NOT copied — the published method (a
+raised cosine over a stated semitone span) is reimplemented, and the reference
+table was used only to CHECK the shape (the Hann form reproduces
+`treblewindow` to 5e-07 and `basswindow` to 2e-02). Full comparison, including
+three further divergences we have NOT taken (mean subtraction + half-wave
+rectification in the whitening, the Hamming kernel, the analysis range):
+`docs/research/chordino-reference-parameters-2026-09.md`.
 
 ## Batch Viterbi — AS BUILT (round 71). The chunk-012 pipeline is COMPLETE.
 

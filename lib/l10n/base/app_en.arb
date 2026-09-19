@@ -653,6 +653,18 @@
   "songSuggest": "Suggest",
   "songSuggestTitle": "Suggest a progression",
   "songKeyLabel": "Key",
+  "songChordHear": "Hear {chord}",
+  "@songChordHear": {
+    "description": "Tooltip/semantics of a chord chip in the song builder: tapping it plays that chord (ADR 0535).",
+    "placeholders": {
+      "chord": {
+        "type": "String",
+        "example": "Am"
+      }
+    }
+  },
+  "songPreviewPlay": "Preview",
+  "songPreviewStop": "Stop preview",
   "commonCancel": "Cancel",
   "setlistsTitle": "Setlists",
   "setlistsEmpty": "Group your songs into a practice set and play them back-to-back.",
@@ -3243,6 +3255,11 @@
   "todayHubVisionCardTitle": "Vision practice",
   "todayHubVisionCardMessage": "Use your camera for guided finger-placement feedback.",
   "todayHubVisionUnavailableReason": "Vision practice needs a supported device and isn't available in this build yet.",
+  "todayHubPrivacyTitle": "Private by design",
+  "todayHubPrivacyNoAccount": "No account needed",
+  "todayHubPrivacyOffline": "Works fully offline",
+  "todayHubPrivacyNoAds": "No ads, no subscription",
+  "todayHubPrivacyAudioLocal": "Your audio never leaves the phone",
 
   "practiceAreaHubRecommendedTitle": "Recommended for you",
   "practiceAreaHubRecommendedMessage": "Jump into a practice session picked for where you are right now.",
@@ -3377,10 +3394,6 @@
         "type": "String"
       }
     }
-  },
-  "analysisHomeImportUnavailable": "File import is not available yet — record instead.",
-  "@analysisHomeImportUnavailable": {
-    "description": "Analyze home: the file-import entry is not shippable yet. Restored into the base segment 2026-09-06 — the key existed ONLY in the generated aggregate, so every regeneration dropped it and app_router.dart stopped compiling."
   },
   "profileHubCommunityOpen": "Open Community",
   "@profileHubCommunityOpen": {

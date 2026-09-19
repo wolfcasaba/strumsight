@@ -40,6 +40,11 @@ class ShapeInformedStrumClassifier implements StrumDirectionClassifier {
   final int hop;
   final StringArrivalCue cue;
 
+  /// Delegated: this wrapper adds a direction CUE, never a second deadline —
+  /// the settled tier is entirely the inner classifier's decision (ADR 0556 D3).
+  @override
+  int? get settleAfterFrames => inner.settleAfterFrames;
+
   /// r144 attack estimate: the onset frame's start + 2.5 hops.
   static const double attackOffsetFrames = 2.5;
 

@@ -378,6 +378,9 @@ void main() {
       // navigation available as the post-onboarding entry point; `/today`
       // (a resource-free adapter, D14/1) took over that role instead.
       expect(isStageRoute(AppRoutes.practiceLive), isTrue);
+      // The 60-second strum challenge (2026-09-15): a top-level,
+      // microphone-owning route with `/practice/live`'s reasoning.
+      expect(isStageRoute(AppRoutes.strumChallenge), isTrue);
 
       // Deliberately NOT stage routes this round (brief §0.0 D13) — hiding
       // navigation here would strand the post-onboarding entry point.

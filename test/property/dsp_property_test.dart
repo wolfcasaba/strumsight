@@ -600,4 +600,155 @@ void main() {
       reason: 'seed=$seed: diffuse noise must not accumulate a chord',
     );
   });
+
+  // --- the whitening KERNEL (E18-R10) ------------------------------------
+  //
+  // The deterministic fixtures for the Hamming kernel live in
+  // `test/features/live/dsp/spectral_whitening_test.dart` and are built on ONE
+  // open-E voicing. That is exactly the shape of result that can be accidentally
+  // tuned to its own fixture, so these two re-check the kernel's claims on
+  // randomized input: its arithmetic invariants on random spectra, and its
+  // chord accuracy on random triads at the FULL reference mean subtraction —
+  // the setting the flat box cannot survive.
+
+  test('property: the whitening kernel normalises to 1 and keeps a flat '
+      'spectrum flat, at random levels and random bins', () {
+    for (final hamming in const [false, true]) {
+      for (final meanK in const [0.0, 1.0]) {
+        final nc = NnlsChroma(
+          sampleRate: sr,
+          window: DspConfig.nnlsWindow,
+          whiteningHammingKernel: hamming,
+          whiteningMeanCoefficient: meanK,
+        );
+        final half = nc.whiteningHalfWindow;
+        for (var t = 0; t < 40; t++) {
+          // In-bounds re-normalisation: wherever the neighbourhood is clipped by
+          // the end of the axis, the weights that remain must still sum to 1, or
+          // the local level reads low and that bin comes out inflated.
+          final j = rng.nextInt(nc.debugBinCount);
+          var sum = 0.0;
+          for (var offset = -half; offset <= half; offset++) {
+            sum += nc.debugWhiteningWeight(j, offset);
+          }
+          expect(
+            sum,
+            closeTo(1.0, 1e-12),
+            reason: 'seed=$seed kernel=$hamming k=$meanK bin=$j',
+          );
+        }
+        for (var t = 0; t < 10; t++) {
+          final level = 0.001 + rng.nextDouble() * 2.0;
+          final flat = Float64List(nc.debugBinCount)
+            ..fillRange(0, nc.debugBinCount, level);
+          final out = nc.debugWhitenSpectrum(flat);
+          for (var j = 0; j < out.length; j++) {
+            expect(
+              out[j],
+              closeTo(out[out.length ~/ 2], 1e-9),
+              reason:
+                  'seed=$seed kernel=$hamming k=$meanK level=$level bin=$j: a '
+                  'constant spectrum has no structure at any bin, edge included',
+            );
+          }
+        }
+        for (var t = 0; t < 20; t++) {
+          // Random spectra: the output must stay finite and non-negative. A NaN
+          // or a negative magnitude here would poison NNLS silently.
+          final spectrum = Float64List(nc.debugBinCount);
+          for (var j = 0; j < spectrum.length; j++) {
+            spectrum[j] = rng.nextDouble() < 0.1
+                ? 0.0
+                : rng.nextDouble() * (1 + rng.nextInt(100));
+          }
+          final out = nc.debugWhitenSpectrum(spectrum);
+          for (var j = 0; j < out.length; j++) {
+            expect(
+              out[j].isFinite && out[j] >= 0,
+              isTrue,
+              reason:
+                  'seed=$seed kernel=$hamming k=$meanK bin=$j produced '
+                  '${out[j]}',
+            );
+          }
+        }
+      }
+    }
+  });
+
+  test('property: the Hamming kernel keeps random maj/min triads correct at '
+      'the FULL reference mean subtraction (>=18 of 20)', () {
+    var correct = 0;
+    var majorForMinor = 0;
+    final failures = <String>[];
+    for (var t = 0; t < 20; t++) {
+      final rootMidi = 40 + rng.nextInt(13); // E2..E3
+      final minor = rng.nextBool();
+      // Same guitar-realistic voicing rule as the triad property above: below
+      // ~A2 the third sits an octave up.
+      final thirdOffset = (minor ? 3 : 4) + (rootMidi < 45 ? 12 : 0);
+      // The third is deliberately QUIET relative to root and fifth, which is
+      // how a real guitar voices it (fretted once, while the fifth is doubled)
+      // and which is the case the kernel exists to protect.
+      final voicing = <(double, double)>[
+        (_midiToFreq(rootMidi), 0.9 + rng.nextDouble() * 0.1),
+        (_midiToFreq(rootMidi + thirdOffset), 0.10 + rng.nextDouble() * 0.10),
+        (_midiToFreq(rootMidi + 7), 0.8 + rng.nextDouble() * 0.2),
+      ];
+      final expected = _pitchClasses[rootMidi % 12] + (minor ? 'm' : '');
+      final parallel = _pitchClasses[rootMidi % 12] + (minor ? '' : 'm');
+      final signal = voicedChord(
+        voicing,
+        seconds: 1.5,
+        sampleRate: sr,
+        decayPerSecond: 1.0 + rng.nextDouble() * 1.0,
+      );
+
+      final nc = NnlsChroma(
+        sampleRate: sr,
+        window: DspConfig.nnlsWindow,
+        whiteningHammingKernel: true,
+        whiteningMeanCoefficient: 1.0,
+      );
+      final decoder = ViterbiChordDecoder(
+        selfBonus: DspConfig.chordSelfTransitionBonus,
+        dictionary: ChordDictionary(),
+      );
+      ChordMatch? m;
+      for (final frame in frames(
+        signal,
+        DspConfig.nnlsWindow,
+        DspConfig.nnlsHop,
+      )) {
+        final ch = nc.process(frame);
+        final tonal =
+            ch != null && nc.lastTonalness >= DspConfig.chordMinTonalness;
+        m = tonal
+            ? decoder.process(nc.lastBassChroma, nc.lastTrebleChroma)
+            : decoder.process(Float64List(12), Float64List(12));
+      }
+      final got = m?.chord.label;
+      if (got == expected) {
+        correct++;
+      } else {
+        if (got == parallel) majorForMinor++;
+        failures.add('trial=$t expected=$expected got=$got');
+      }
+    }
+    // Major-for-minor (and its inverse) is the one error class this app cannot
+    // afford, so it is counted separately and held at zero rather than being
+    // absorbed into an accuracy percentage.
+    expect(
+      majorForMinor,
+      0,
+      reason:
+          'seed=$seed the Hamming kernel must never swap a triad for its '
+          'parallel: ${failures.join('; ')}',
+    );
+    expect(
+      correct,
+      greaterThanOrEqualTo(18),
+      reason: 'seed=$seed failures: ${failures.join('; ')}',
+    );
+  });
 }

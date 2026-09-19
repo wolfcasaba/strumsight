@@ -7,8 +7,10 @@ import '../../../app/routing/app_route.dart';
 import '../../../core/design_system/public.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../curriculum/public.dart' show curriculumMissionName;
 import '../../progress/public.dart';
 import '../../streak/public.dart';
+import '../../strum_challenge/public.dart' show strumChallengeBestProvider;
 import '../domain/today_plan_snapshot.dart';
 import '../providers/today_providers.dart';
 
@@ -46,12 +48,33 @@ class TodayHubScreen extends ConsumerWidget {
     final todaySeconds = ref.watch(dailyGoalActiveSecondsProvider(today));
     final flags = ref.watch(appConfigProvider).flags;
 
-    // A8 — "new user" is derived from REAL zero-state signals only (no
-    // session yet, no streak, no plan); never an invented number.
+    // A8 — "new user" is derived from REAL zero-state signals only, never an
+    // invented number.
+    //
+    // `!snapshot.hasPlan` was one of those signals and is no longer a signal at
+    // all: the plan now comes from the SHIPPED course, so everyone has one from
+    // their first launch. Keeping it in the conjunction would have made the
+    // zero-state greeting unreachable — the hub would have told someone who has
+    // never played to "continue".
+    //
+    // What still says "new": the learner's own history, plus whether the PLAN shows
+    // prior activity. Work already counted today is history; so is a plan that
+    // arrived from a sync, which can only exist once something was set up. A plan
+    // that is merely present is not.
+    final planShowsHistory =
+        snapshot.completedTaskCount > 0 ||
+        snapshot.availability == TodayPlanAvailability.offlineCached ||
+        snapshot.availability == TodayPlanAvailability.syncPending;
     final isNewUser =
-        stats.totalSessions == 0 && streak.current == 0 && !snapshot.hasPlan;
+        stats.totalSessions == 0 && streak.current == 0 && !planShowsHistory;
 
     final hero = _heroContent(l10n, snapshot: snapshot, isNewUser: isNewUser);
+    // The primary button continues THAT rung when the plan names one. A button
+    // labelled "continue" that goes somewhere else is the hub lying about what it
+    // just offered.
+    final primaryDestination = snapshot.recommendedMissionId == null
+        ? AppRoutes.practiceHub
+        : AppRoutes.curriculumLadder;
     final todayMinutes = todaySeconds ~/ 60;
     // The daily-goal ring (Ch18 spec §1): fills to today's minutes over the
     // goal; a zero goal is an explicit "not applicable", never a fake 0 %.
@@ -111,7 +134,7 @@ class TodayHubScreen extends ConsumerWidget {
               const SizedBox(height: 16),
               FilledButton(
                 key: const ValueKey('today-hub-primary-cta'),
-                onPressed: () => context.go(AppRoutes.practiceHub),
+                onPressed: () => context.go(primaryDestination),
                 child: Text(hero.ctaLabel),
               ),
             ],
@@ -146,6 +169,12 @@ class TodayHubScreen extends ConsumerWidget {
         onPressed: () => context.push(AppRoutes.profileProgress),
         child: Text(l10n.todayHubViewProgressCta),
       ),
+      const SizedBox(height: 20),
+      // E18-R23 — a 60 másodperces pengetés-kihívás belépője és az
+      // „Alapból privát" ígéret kártyája (a kutatás 2. és 5. ajánlása).
+      const _StrumChallengeCard(),
+      const SizedBox(height: 20),
+      const _PrivacyPromiseCard(),
       // A card whose only content is "not available in this build" is
       // an advertisement for a feature the learner cannot use — it is
       // not rendered at all while the Vision capability is off. The
@@ -191,6 +220,17 @@ class TodayHubScreen extends ConsumerWidget {
         title: l10n.todayHubDayCompletedTitle,
         message: l10n.todayHubDayCompletedMessage,
         ctaLabel: l10n.todayHubPracticeMoreCta,
+      );
+    }
+    final missionId = snapshot.recommendedMissionId;
+    if (missionId != null) {
+      // The rung's NAME, resolved here because this is where the localisations
+      // are: the projection deliberately carries the id, so a plan source can
+      // never put untranslated prose in front of a learner.
+      return _HeroContent(
+        title: l10n.todayHubTitle,
+        message: l10n.todayHubNextStep(curriculumMissionName(l10n, missionId)),
+        ctaLabel: l10n.todayHubContinueCta,
       );
     }
     if (snapshot.hasPlan) {
@@ -272,6 +312,126 @@ class _Metric extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The daily 60-second strum challenge (2026-09-15): the pattern, today's best
+/// (or that there is none yet) and a Start that only NAVIGATES (A4) — the
+/// microphone is acquired on the Stage route it opens, never here. Outlined,
+/// not filled: the hero above keeps the screen's single primary action (A1).
+class _StrumChallengeCard extends ConsumerWidget {
+  const _StrumChallengeCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final best = ref.watch(strumChallengeBestProvider);
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.timer_outlined, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.strumChallengeTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              l10n.strumChallengeCardBody,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              best == null
+                  ? l10n.strumChallengeNoAttemptYet
+                  : l10n.strumChallengeBestToday(best.bestScore),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              key: const ValueKey('today-hub-strum-challenge-cta'),
+              onPressed: () => context.go(AppRoutes.strumChallenge),
+              child: Text(l10n.strumChallengeStart),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The privacy promise (2026-09-15): four plain facts a guitarist can check
+/// against the app — no account, offline, no ads/subscription, audio stays
+/// on the phone. Deliberately quiet (secondary text, no button): it informs,
+/// it does not sell. Every line is a `Row` with a `Flexible` text so the
+/// card wraps instead of overflowing at large text scales.
+class _PrivacyPromiseCard extends StatelessWidget {
+  const _PrivacyPromiseCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final lines = [
+      l10n.todayHubPrivacyNoAccount,
+      l10n.todayHubPrivacyOffline,
+      l10n.todayHubPrivacyNoAds,
+      l10n.todayHubPrivacyAudioLocal,
+    ];
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.lock_outline, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.todayHubPrivacyTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            for (final line in lines)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.check,
+                      size: 16,
+                      color: Theme.of(context).hintColor,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        line,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

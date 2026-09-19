@@ -135,7 +135,7 @@ class _AnalyzeScreenState extends ConsumerState<AnalyzeScreen> {
                   variant: SsButtonVariant.tertiary,
                   icon: Icons.insights_outlined,
                   label: l10n.analyzeOpenDetailedAnalysis,
-                  onPressed: () => context.push(AppRoutes.analysisCapture),
+                  onPressed: () => context.push(AppRoutes.analysisHome),
                 ),
               ),
             ],

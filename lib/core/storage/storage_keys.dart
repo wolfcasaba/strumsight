@@ -19,6 +19,17 @@ abstract final class StorageKeys {
   static const String leftHanded = 'ss.settings.left_handed';
   static const String inputLatencyMs = 'ss.settings.input_latency_ms';
   static const String visualLatencyMs = 'ss.settings.visual_latency_ms';
+
+  /// Pendulum↔strum offset in ms, for the rhythm exercise's timing score.
+  ///
+  /// A THIRD latency key, not a reuse of the two above, because it measures a
+  /// different pair of channels. Both existing keys are TAP-based, so each
+  /// carries touch latency and only their DIFFERENCE is meaningful (the
+  /// audio↔display skew the Learn highway shifts by). The rhythm exercise's
+  /// reference is the pendulum (display) and its response is a strum through
+  /// the microphone — a pair neither key measures, and whose offset cannot be
+  /// derived from them.
+  static const String strumLatencyMs = 'ss.settings.strum_latency_ms';
   static const String labMode = 'ss.settings.lab_mode';
   static const String nudgeEnabled = 'ss.settings.nudge_enabled';
 
@@ -43,6 +54,12 @@ abstract final class StorageKeys {
   static const String practiceLog = 'ss.progress.practice_log';
   static const String dailyGoalMinutes = 'ss.progress.daily_goal_minutes';
   static const String streak = 'ss.streak.state';
+
+  // --- strum challenge -----------------------------------------------------
+  /// Today's best of the 60-second strum challenge: `{dateKey, bestScore,
+  /// bestPatterns, attempts}` as one versioned object document. A new day
+  /// resets it, so the document never grows. Local-only (egress only).
+  static const String strumChallengeBest = 'ss.strum_challenge.best';
 
   // --- practice ------------------------------------------------------------
   /// Versioned Practice History V2 — separate from the V1 `practiceLog`
@@ -131,6 +148,7 @@ abstract final class StorageKeys {
     leftHanded,
     inputLatencyMs,
     visualLatencyMs,
+    strumLatencyMs,
     labMode,
     nudgeEnabled,
     onboardingSeen,
@@ -145,6 +163,7 @@ abstract final class StorageKeys {
     practiceLog,
     dailyGoalMinutes,
     streak,
+    strumChallengeBest,
     practiceHistoryV2,
     visionSetupProfile,
     visionCamera,

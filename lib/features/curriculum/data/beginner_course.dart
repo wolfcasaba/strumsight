@@ -1,0 +1,530 @@
+/// The shipped beginner course.
+///
+/// Design: `docs/superpowers/specs/2026-09-11-gamified-curriculum-design.md` §1.
+/// This is DATA. It says what to practise and when the next rung opens; the
+/// existing adaptive generator produces the actual exercise from the learner's
+/// own evidence, so there is no exercise content here.
+///
+/// ## Why this order
+///
+/// Researched, and the research changed it twice. Sources and the disagreements
+/// between them are in the design doc §1.1; the short version:
+///
+/// - **Em first, then Am.** Em is two fingers with all six strings ringing, the
+///   easiest shape there is, and Em→Am is among the easiest CHANGES — which
+///   matters more, because every source agrees the change is the hard part, not
+///   the shape. This is contested: JustinGuitar, the largest structured beginner
+///   course, starts D-A-E and defers minors to its module 3, and Musicademy
+///   rejects the whole bedrock-chord opening in favour of G/Em7/Cadd9. Em-first
+///   is supported by the National Guitar Academy and Guitar Noise, it is the
+///   easiest physical start, and it agrees with the three built-in lessons this
+///   app already ships (`Lessons.all` opens on Em/G), so the app teaches ONE
+///   order rather than two. That last point decided it.
+/// - **A playable two-chord song at rung 5**, not at the end. Withholding real
+///   music until the whole chord set is learned is a documented attrition risk:
+///   JustinGuitar has a two-chord song in module 1, and Tom Hess's
+///   teacher-training material argues explicitly against strict "master one
+///   skill before the next" sequencing.
+/// - **"Keep the strumming hand moving" belongs to the FIRST change** (rung 4),
+///   not a later milestone. Three independent teaching sources treat it as a
+///   rule applied from the very first chord change. It is also the one thing
+///   here a chord-only recogniser cannot check and this app can.
+/// - **Right-hand rhythm runs in parallel from rung 2.** Isolating the strumming
+///   hand on muted strings is uniformly recommended and no source objects; it
+///   also removes the confound, since with no chord to get right a direction
+///   error cannot be mistaken for a fingering error.
+/// - **C and G last**, which most sources support as the harder shapes.
+///
+/// ## Why there is no simplified stepping-stone chord
+///
+/// Sources that dislike delaying C and G reach for simplified voicings instead —
+/// Cmaj7 for C, the two-finger G6 for G. MEASURED through the real
+/// `LivePipeline`, neither can be scored honestly:
+///
+/// - **G6 is not in the recogniser's vocabulary at all** (`chord_dictionary.dart`
+///   has maj, min, 7, maj7, m7, sus4, dim, aug — no 6), so the two-finger shape
+///   reads as `G`. The app would be scoring a label it cannot distinguish.
+/// - **Cmaj7 does not reliably confirm**: on a clean three-second voicing it sat
+///   below the presence gate for 24 of 32 frames, against 3 for plain C. That is
+///   the documented maj7 Occam handicap doing its job — maj7 must be CLEARLY
+///   present or phantom overtone energy would rename every triad — and plain C
+///   sits right next door taking the margin (RAG chunk 012).
+///
+/// So the course scores **major and minor triads only**, and a simplified shape
+/// can be shown as an unscored hint but never set as a mission target. A
+/// learner must never play something correctly and be told nothing happened.
+///
+/// ## Skill ids
+///
+/// These follow the vocabulary already shipped in
+/// `practice_generator/data/adapter/legacy_mapping_table.dart`
+/// (`chord.gMajor`, `chord.cMajor`, `chord.dMajor`, `chord.gToC`) rather than a
+/// parallel scheme. Four of the ids below are exactly those.
+library;
+
+import '../../practice_generator/public.dart';
+import '../domain/course.dart';
+import '../domain/rhythm_assignment.dart';
+import '../domain/rhythm_grid.dart';
+import '../domain/rhythm_mode.dart';
+import '../domain/unlock_rule.dart';
+
+/// Skill ids this course trains, named once so nothing can typo them apart.
+abstract final class BeginnerSkills {
+  static const rhythmDownQuarters = 'rhythm.downQuarters';
+  static const rhythmDownUpEighths = 'rhythm.downUpEighths';
+  static const strumPattern = 'strumPattern.dDuUdU';
+  static const rhythmByEar = 'rhythm.byEar';
+  static const chordEMinor = 'chord.eMinor';
+  static const chordAMinor = 'chord.aMinor';
+  static const chordDMajor = 'chord.dMajor';
+  static const chordGMajor = 'chord.gMajor';
+  static const chordCMajor = 'chord.cMajor';
+  static const changeEmToAm = 'chord.emToAm';
+  static const changeAmToD = 'chord.amToD';
+  static const changeDToG = 'chord.dToG';
+  static const changeGToC = 'chord.gToC';
+  // No `twoChordSong` skill: the song rung is a completion rung, because this app
+  // has no song-performance measurement. A skill id nothing trains and nothing
+  // measures is a claim with nothing behind it; it returns when the measurement
+  // does.
+}
+
+const _micDirection = <ExerciseCapability>{
+  ExerciseCapability.requiresMicrophone,
+  ExerciseCapability.supportsDirectionScoring,
+  ExerciseCapability.supportsOffline,
+};
+
+// There is deliberately no chord-ONLY capability set any more. Every chord rung
+// runs over a strum grid, because the app can only hear a chord that is being
+// played and something has to say when to play it — so every one of them genuinely
+// needs direction scoring as well, and claiming less would be claiming the
+// exercise does not strum.
+
+const _micChordDirection = <ExerciseCapability>{
+  ExerciseCapability.requiresMicrophone,
+  ExerciseCapability.supportsChordScoring,
+  ExerciseCapability.supportsDirectionScoring,
+  ExerciseCapability.supportsOffline,
+};
+
+/// The tempos the app ALREADY teaches these things at, not new numbers: the
+/// shipped `first-strums` and `first-win` lessons run at 70 bpm and
+/// `eighth-drive` — the first lesson with eighth-note strumming — at 80
+/// (`lib/features/learn/model/lesson.dart`). Inventing a different beginner
+/// tempo here would have the app teaching two answers to the same question.
+const double beginnerQuarterBpm = 70;
+const double beginnerEighthBpm = 80;
+
+/// Four bars per attempt: enough repetitions that one stray stroke does not
+/// decide the outcome, short enough that a beginner can hold the shape.
+const int beginnerBarsPerAttempt = 4;
+
+/// Damped down-strokes on every beat — the right hand alone.
+RhythmAssignment _downQuartersExercise() => RhythmAssignment(
+  mode: RhythmMode.mutedStrokes,
+  grid: RhythmGrid.pendulum(
+    subdivision: RhythmSubdivision.quarter,
+    struck: const [true, true, true, true],
+    muted: true,
+  ),
+  bpm: beginnerQuarterBpm,
+  bars: beginnerBarsPerAttempt,
+);
+
+/// Damped continuous eighths: the pendulum itself, nothing skipped.
+RhythmAssignment _downUpEighthsExercise() => RhythmAssignment(
+  mode: RhythmMode.mutedStrokes,
+  grid: RhythmGrid.pendulum(
+    subdivision: RhythmSubdivision.eighth,
+    struck: const [true, true, true, true, true, true, true, true],
+    muted: true,
+  ),
+  bpm: beginnerEighthBpm,
+  bars: beginnerBarsPerAttempt,
+);
+
+/// `D DU UDU` — the pattern the app already ships as `down-up-groove`, over a
+/// chord. The two silent slots are GHOSTS, not missing strokes: the hand keeps
+/// travelling through them.
+RhythmAssignment _dDuUdUExercise() => RhythmAssignment(
+  mode: RhythmMode.withChord,
+  grid: RhythmGrid.pendulum(
+    subdivision: RhythmSubdivision.eighth,
+    struck: const [true, false, true, true, false, true, true, true],
+  ),
+  bpm: beginnerEighthBpm,
+  bars: beginnerBarsPerAttempt,
+);
+
+/// The SAME pattern as `_dDuUdUExercise`, with the notation withdrawn — the rhythm
+/// pillar's last rung.
+///
+/// Nothing about the playing is new here, which is the point: the only thing removed
+/// is the crutch. `listenAndRepeat` hides the arrow row and plays the pattern instead
+/// (`rhythm_demonstration.dart`), so what the learner must now supply themselves is
+/// WHEN the strokes fall; the pendulum rule still supplies which way the hand travels,
+/// which is why a click can demonstrate this honestly at all.
+///
+/// **Damped, and back to muted strings on purpose.** The course's ordering principle
+/// is one new thing to get wrong per rung, and the new thing here is the ear. Damping
+/// removes the chord as a confound, and it also matches the demonstration
+/// acoustically: a damped stroke is percussive, which is what a click is. A ringing
+/// chord would ask the learner to reproduce a click with a sound that does not
+/// resemble it.
+RhythmAssignment _byEarExercise() => RhythmAssignment(
+  mode: RhythmMode.listenAndRepeat,
+  grid: RhythmGrid.pendulum(
+    subdivision: RhythmSubdivision.eighth,
+    struck: const [true, false, true, true, false, true, true, true],
+    muted: true,
+  ),
+  bpm: beginnerEighthBpm,
+  bars: beginnerBarsPerAttempt,
+);
+
+/// Down-strokes on every beat over a held shape — the chord rungs' exercise.
+///
+/// Why a grid at all for a rung whose skill is the SHAPE: the app can only hear a
+/// chord that is being played, so something has to say when to play it. The
+/// simplest thing that does is the exercise the learner already passed at rung 2,
+/// which means a chord rung adds exactly one new thing to get wrong (the course's
+/// own ordering principle). It also makes the rung playable and therefore
+/// measurable — without an exercise these rungs existed on the ladder and could
+/// never be earned, which left every rung above them permanently out of reach.
+///
+/// `withChord` and NOT muted: a damped string has no chord to name.
+RhythmAssignment _heldChordExercise() => RhythmAssignment(
+  mode: RhythmMode.withChord,
+  grid: RhythmGrid.pendulum(
+    subdivision: RhythmSubdivision.quarter,
+    struck: const [true, true, true, true],
+  ),
+  bpm: beginnerQuarterBpm,
+  bars: beginnerBarsPerAttempt,
+);
+
+UnlockRule _after(Set<String> skills) => UnlockRule.skillConfidence(
+  prerequisiteSkillIds: skills,
+  minimumState: SkillEstimateState.emerging,
+  minimumLevel: 0.6,
+);
+
+CurriculumMission _scored({
+  required String id,
+  required PracticeGoalType goal,
+  required Set<String> trains,
+  required UnlockRule unlock,
+  required String description,
+  required Set<ExerciseCapability> capabilities,
+  double minimumAccuracy = 0.7,
+  RhythmAssignment? rhythm,
+}) => CurriculumMission(
+  missionId: id,
+  goalType: goal,
+  trainedSkillIds: trains,
+  unlock: unlock,
+  successCriteria: SuccessCriteria(
+    kind: SuccessCriterionKind.accuracyThreshold,
+    description: description,
+    requiredCapabilities: capabilities,
+    minimumAccuracy: minimumAccuracy,
+  ),
+  isOutcomeMeasured: true,
+  rhythm: rhythm,
+);
+
+CurriculumLevel _level({
+  required String id,
+  required PracticeGoalType goal,
+  required List<CurriculumMission> missions,
+}) => CurriculumLevel(levelId: id, goalType: goal, missions: missions);
+
+/// The first stage of the shipped beginner course.
+Course beginnerCourse() => Course(
+  courseId: 'course.beginner',
+  version: 1,
+  stages: [
+    CurriculumStage(
+      stageId: 'stage.firstSounds',
+      levels: [
+        // 1 — setup. Measured by nothing, and says so (design §2 rule 7).
+        _level(
+          id: 'level.setup',
+          goal: PracticeGoalType.technique,
+          missions: [
+            CurriculumMission(
+              missionId: 'mission.tuneAndSit',
+              goalType: PracticeGoalType.technique,
+              trainedSkillIds: const {},
+              unlock: UnlockRule.always,
+              successCriteria: SuccessCriteria(
+                kind: SuccessCriterionKind.completion,
+                description: 'tune the guitar and settle into playing position',
+                requiredCapabilities: const [
+                  ExerciseCapability.supportsOffline,
+                ],
+              ),
+              isOutcomeMeasured: false,
+            ),
+          ],
+        ),
+
+        // 2 — the right hand alone, on muted strings. No chord to get wrong, so
+        // a direction error cannot be confused with a fingering error.
+        _level(
+          id: 'level.downQuarters',
+          goal: PracticeGoalType.rhythm,
+          missions: [
+            _scored(
+              id: 'mission.downQuarters',
+              goal: PracticeGoalType.rhythm,
+              trains: const {BeginnerSkills.rhythmDownQuarters},
+              unlock: UnlockRule.always,
+              description:
+                  'damp the strings and play steady down-strokes on every beat',
+              capabilities: _micDirection,
+              rhythm: _downQuartersExercise(),
+            ),
+          ],
+        ),
+
+        // 3 — the first shape, one strum per chord. No pattern yet: every source
+        // agrees a rhythm pattern comes after the shape is findable.
+        _level(
+          id: 'level.firstShape',
+          goal: PracticeGoalType.chordChanges,
+          missions: [
+            _scored(
+              id: 'mission.eMinor',
+              goal: PracticeGoalType.chordChanges,
+              trains: const {BeginnerSkills.chordEMinor},
+              unlock: _after(const {BeginnerSkills.rhythmDownQuarters}),
+              description:
+                  'play E minor, one strum at a time, every string '
+                  'ringing',
+              capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
+            ),
+          ],
+        ),
+
+        // 4 — the first CHANGE, which is the hard part, and the rung where
+        // "keep the strumming hand moving" is taught.
+        _level(
+          id: 'level.firstChange',
+          goal: PracticeGoalType.chordChanges,
+          missions: [
+            _scored(
+              id: 'mission.aMinor',
+              goal: PracticeGoalType.chordChanges,
+              trains: const {BeginnerSkills.chordAMinor},
+              unlock: _after(const {BeginnerSkills.chordEMinor}),
+              description: 'play A minor cleanly',
+              capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
+            ),
+            _scored(
+              id: 'mission.emToAm',
+              goal: PracticeGoalType.chordChanges,
+              trains: const {BeginnerSkills.changeEmToAm},
+              unlock: _after(const {BeginnerSkills.chordAMinor}),
+              description:
+                  'change between E minor and A minor WITHOUT stopping '
+                  'the strumming hand',
+              capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
+            ),
+          ],
+        ),
+
+        // 5 — music, early. Withholding a real song until the end is a measured
+        // attrition risk, so the song arrives as soon as two chords exist.
+        _level(
+          id: 'level.firstSong',
+          goal: PracticeGoalType.songPerformance,
+          missions: [
+            // A COMPLETION rung, and deliberately not a scored one.
+            //
+            // It used to declare `accuracyThreshold` with a 0.6 target, which was
+            // a claim nothing could honour: this app has no song-performance
+            // measurement, so the rung said "I will score you on this" and then
+            // scored nothing. `skill_metrics_test.dart` is what found it — a
+            // measured rung whose own exercise cannot produce the measurement its
+            // skill is made of.
+            //
+            // The course's own rule 7 prescribes the fix rather than the
+            // alternative of inventing a score: a rung with nothing to measure is
+            // HONEST about that. So it trains no skill, claims no measurement, and
+            // needs no microphone — nothing is being listened to. It keeps its
+            // place in the ladder because its purpose was never the score: real
+            // music as soon as two chords exist is a documented attrition remedy,
+            // and it works whether or not a machine grades it.
+            CurriculumMission(
+              missionId: 'mission.twoChordSong',
+              goalType: PracticeGoalType.songPerformance,
+              trainedSkillIds: const {},
+              unlock: _after(const {BeginnerSkills.changeEmToAm}),
+              successCriteria: SuccessCriteria(
+                kind: SuccessCriterionKind.completion,
+                description: 'play a two-chord song all the way through',
+                requiredCapabilities: const [
+                  ExerciseCapability.supportsOffline,
+                ],
+              ),
+              isOutcomeMeasured: false,
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    CurriculumStage(
+      stageId: 'stage.rhythmAndReach',
+      levels: [
+        // 6 — up-strokes, still isolated on muted strings.
+        _level(
+          id: 'level.downUpEighths',
+          goal: PracticeGoalType.rhythm,
+          missions: [
+            _scored(
+              id: 'mission.downUpEighths',
+              goal: PracticeGoalType.rhythm,
+              trains: const {BeginnerSkills.rhythmDownUpEighths},
+              unlock: _after(const {BeginnerSkills.rhythmDownQuarters}),
+              description: 'damped down-up eighths, even and relaxed',
+              capabilities: _micDirection,
+              rhythm: _downUpEighthsExercise(),
+            ),
+          ],
+        ),
+
+        // 7 — the pattern, on the two chords already known rather than gated
+        // behind the whole chord set.
+        _level(
+          id: 'level.firstPattern',
+          goal: PracticeGoalType.strummingPattern,
+          missions: [
+            _scored(
+              id: 'mission.dDuUdU',
+              goal: PracticeGoalType.strummingPattern,
+              trains: const {BeginnerSkills.strumPattern},
+              unlock: _after(const {
+                BeginnerSkills.rhythmDownUpEighths,
+                BeginnerSkills.changeEmToAm,
+              }),
+              description: 'down, down-up, up-down-up over E minor and A minor',
+              capabilities: _micChordDirection,
+              rhythm: _dDuUdUExercise(),
+            ),
+          ],
+        ),
+
+        // 8 — the ear. The rhythm pillar's capstone: the pattern from rung 7 with
+        // the arrow row taken away, so a learner cannot pass the whole pillar by
+        // reading alone. Its own skill rather than more evidence for
+        // `strumPattern`, because reproducing a heard pattern is a different
+        // ability from playing a notated one — the METRIC is the same (direction
+        // accuracy), the task is not.
+        _level(
+          id: 'level.byEar',
+          goal: PracticeGoalType.rhythm,
+          missions: [
+            _scored(
+              id: 'mission.byEar',
+              goal: PracticeGoalType.rhythm,
+              trains: const {BeginnerSkills.rhythmByEar},
+              unlock: _after(const {BeginnerSkills.strumPattern}),
+              description:
+                  'hear the pattern, then play it back without the arrows',
+              capabilities: _micDirection,
+              rhythm: _byEarExercise(),
+            ),
+          ],
+        ),
+
+        // 9-11 — the remaining open chords, hardest last.
+        _level(
+          id: 'level.dMajor',
+          goal: PracticeGoalType.chordChanges,
+          missions: [
+            _scored(
+              id: 'mission.dMajor',
+              goal: PracticeGoalType.chordChanges,
+              trains: const {BeginnerSkills.chordDMajor},
+              unlock: _after(const {BeginnerSkills.changeEmToAm}),
+              description: 'play D major with the top three strings clean',
+              capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
+            ),
+            _scored(
+              id: 'mission.amToD',
+              goal: PracticeGoalType.chordChanges,
+              trains: const {BeginnerSkills.changeAmToD},
+              unlock: _after(const {BeginnerSkills.chordDMajor}),
+              description: 'change A minor to D without stopping the strum',
+              capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
+            ),
+          ],
+        ),
+        _level(
+          id: 'level.gMajor',
+          goal: PracticeGoalType.chordChanges,
+          missions: [
+            _scored(
+              id: 'mission.gMajor',
+              goal: PracticeGoalType.chordChanges,
+              trains: const {BeginnerSkills.chordGMajor},
+              unlock: _after(const {BeginnerSkills.chordDMajor}),
+              description: 'play G major, reaching without squeezing',
+              capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
+            ),
+            _scored(
+              id: 'mission.dToG',
+              goal: PracticeGoalType.chordChanges,
+              trains: const {BeginnerSkills.changeDToG},
+              unlock: _after(const {BeginnerSkills.chordGMajor}),
+              description: 'change D to G without stopping the strum',
+              capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
+            ),
+          ],
+        ),
+        _level(
+          id: 'level.cMajor',
+          goal: PracticeGoalType.chordChanges,
+          missions: [
+            _scored(
+              id: 'mission.cMajor',
+              goal: PracticeGoalType.chordChanges,
+              trains: const {BeginnerSkills.chordCMajor},
+              unlock: _after(const {BeginnerSkills.chordGMajor}),
+              description: 'play C major across three frets',
+              capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
+            ),
+            _scored(
+              id: 'mission.gToC',
+              goal: PracticeGoalType.chordChanges,
+              trains: const {BeginnerSkills.changeGToC},
+              unlock: _after(const {BeginnerSkills.chordCMajor}),
+              description: 'change G to C without stopping the strum',
+              capabilities: _micChordDirection,
+              rhythm: _heldChordExercise(),
+            ),
+          ],
+        ),
+      ],
+    ),
+  ],
+);
+
+/// The chords the course SCORES, in the order they are introduced.
+///
+/// Exposed so a test can check every one against the recogniser's vocabulary —
+/// the course must never set a target the engine cannot name (see the
+/// stepping-stone note above).
+const List<String> beginnerScoredChords = <String>['Em', 'Am', 'D', 'G', 'C'];

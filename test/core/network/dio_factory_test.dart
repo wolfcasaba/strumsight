@@ -277,6 +277,79 @@ void main() {
     expect(adapter.requests, hasLength(1));
   });
 
+  test('PATCH carries the bearer, method and JSON body, and decodes the '
+      'object response (patchJson mirrors postJson)', () async {
+    final adapter = _RecordingAdapter(body: '{"ok":true}');
+    final client = _factory(adapter).createAccountClient(
+      accountEnabled: true,
+      readToken: () async => const Success('jwt-secret'),
+      readSessionGeneration: () => 7,
+      onUnauthorized: (_) {},
+    );
+
+    final result = await client.patchJson<bool>(
+      '/community/posts/p-1',
+      data: const {'body': 'edited', 'resource_version': '2026-08-23'},
+      decode: (json) => json['ok'] as bool,
+    );
+
+    expect(result.valueOrNull, isTrue);
+    final request = adapter.requests.single;
+    expect(request.method, 'PATCH');
+    expect(request.path, '/community/posts/p-1');
+    expect(request.data, const {
+      'body': 'edited',
+      'resource_version': '2026-08-23',
+    });
+    expect(request.contentType, Headers.jsonContentType);
+    expect(request.headers['Authorization'], 'Bearer jwt-secret');
+  });
+
+  test('PATCH 409 maps to the caller-supplied conflictCode', () async {
+    final adapter = _RecordingAdapter(
+      status: 409,
+      body: '{"detail":{"error":"stale_resource_version"}}',
+    );
+    final client = _factory(adapter).createAccountClient(
+      accountEnabled: true,
+      readToken: () async => const Success('test-token'),
+      readSessionGeneration: () => 7,
+      onUnauthorized: (_) {},
+    );
+
+    final result = await client.patchJson<bool>(
+      '/community/clubs/c-1',
+      data: const {'description': 'd'},
+      decode: (json) => json['ok'] as bool,
+      conflictCode: FailureCode.communityConflict,
+    );
+
+    expect(result.failureOrNull, isA<ValidationFailure>());
+    expect(result.failureOrNull?.code, FailureCode.communityConflict);
+    expect(adapter.requests, hasLength(1));
+  });
+
+  test('PATCH transport failure is attempted exactly once', () async {
+    final adapter = _RecordingAdapter(
+      errorType: DioExceptionType.connectionError,
+    );
+    final client = _factory(adapter).createAccountClient(
+      accountEnabled: true,
+      readToken: () async => const Success('test-token'),
+      readSessionGeneration: () => 7,
+      onUnauthorized: (_) {},
+    );
+
+    final result = await client.patchJson<bool>(
+      '/community/posts/p-1',
+      data: const {'body': 'edited'},
+      decode: (json) => json['ok'] as bool,
+    );
+
+    expect(result.failureOrNull, isA<NetworkFailure>());
+    expect(adapter.requests, hasLength(1));
+  });
+
   test('malformed JSON is a controlled bad-response failure', () async {
     final adapter = _RecordingAdapter(body: '{"broken":');
     final client = _factory(adapter).createAccountClient(

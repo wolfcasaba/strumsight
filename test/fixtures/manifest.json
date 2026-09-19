@@ -50,6 +50,14 @@
       "containsUserData": false
     },
     {
+      "path": "test/fixtures/crnn_live_3c_settled_parity.json",
+      "bytes": 1246206,
+      "sha256": "59e29aa94136db1588fe18b6dfa7b9dcb3cc97d0c475c714c3fac2a1ce77e9f6",
+      "license": "Project-authored test fixture: derived log-mel features and model outputs, no audio.",
+      "source": "Project-authored parity golden for the UNWIRED live 3-class settled strum model (assets/ml/strum_crnn_live_3c_settled.bin), written by ml/train_live_3c_settled.py (E18-R32): 32 cases, each a (15,128) RAW log-mel window plus the Keras 3-class softmax and the window's label. RAW because CrnnStrumNet.forward standardises internally; E18-R32 shipped normalised rows, which no Dart consumer could have passed, and E18-R43 de-normalised them in place with the asset's own mean/std (round trip exact to 2.4e-07) and wrote the first test that reads this fixture (ADR 0568). The windows are spectral features computed by the project's own reference implementation over the Klangio + GuitarSet training pool - a lossy measurement, not audio, and not invertible to audio. The four older CRNN parity goldens describe the same class of artefact with the shorter phrase 'no third-party audio'.",
+      "containsUserData": false
+    },
+    {
       "path": "test/fixtures/crnn_live_parity.json",
       "bytes": 1256148,
       "sha256": "4b9f93f68fbb83873e5302e1346627944112fecd3d0bfeb1c77b5c62882a3923",
@@ -399,6 +407,14 @@
       "sha256": "6cfd985e9604454e0b94d7b30dcfbde74ff104076c7d66b53da4aff7fd3b68b5",
       "license": "Project-authored synthetic test fixture.",
       "source": "project-authored synthetic test fixture, no third-party musical content",
+      "containsUserData": false
+    },
+    {
+      "path": "test/fixtures/strum_metric_channel_parity.json",
+      "bytes": 221569,
+      "sha256": "40626565d97910833043798debbd2b62c69ccdbf24df357278e3208be3da852d",
+      "license": "Project-authored test fixture: beat-phase measurements and synthetic edge cases, no audio.",
+      "source": "Project-authored parity golden for StrumMetricChannel, written by ml/make_metric_channel_fixture.py (E18-R35, rewritten R38): 180 cases of (pattern name, slot list, beatsPerBar, phaseInBar) with the expected slot, direction, expectedHere flag and offset. The first 120 phases are onset beat-phases measured from GuitarSet's JAMS annotations on held-out takes - one scalar per case, no audio and no spectral data; the remaining 60 are synthetic edge cases (slot boundary, wrap at 1.0, negative phase, ghost crossing, 3/4 authored oom-pah). The file does NOT tag which case is which, and ten synthetic cases share the measured cases' pattern name, so the split is only recoverable from the generator. Registered in E18-R43.",
       "containsUserData": false
     },
     {

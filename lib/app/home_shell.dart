@@ -131,7 +131,15 @@ class AdaptiveHomeShell extends StatelessWidget {
     return SsAdaptiveScaffold(
       showPrimaryNavigation: !isStageRoute(location),
       selectedIndex: navigationShell.currentIndex,
-      onDestinationSelected: navigationShell.goBranch,
+      // Re-tapping the SELECTED destination returns its branch to the root
+      // (the go_router idiom); a different destination restores that
+      // branch's own sub-route (tab_state_restoration_test). Without the
+      // flag a re-tap restored the current sub-route, i.e. did nothing —
+      // the "bottom tab doesn't take me back" half of E18-R01 F4.
+      onDestinationSelected: (index) => navigationShell.goBranch(
+        index,
+        initialLocation: index == navigationShell.currentIndex,
+      ),
       body: navigationShell,
       destinations: [
         SsAdaptiveDestination(

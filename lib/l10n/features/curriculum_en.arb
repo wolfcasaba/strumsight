@@ -1,0 +1,243 @@
+{
+  "@@locale": "en",
+  "curriculumRhythmTitle": "Strumming",
+  "curriculumHoldChord": "hold",
+  "curriculumNoChord": "No chord — damp the strings, right hand only",
+  "curriculumNextChord": "next: {chord}",
+  "@curriculumNextChord": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumChordStays": "stays the same",
+  "curriculumChordRinging": "ringing clearly",
+  "curriculumChordUnclear": "not confirmed",
+  "curriculumChordOther": "{chord} is sounding",
+  "@curriculumChordOther": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumStrokeDown": "down",
+  "curriculumStrokeUp": "up",
+  "curriculumStrokeGhost": "ghost stroke, the hand passes without touching the strings",
+  "curriculumStrokeSemantic": "Beat {count}, {direction} stroke",
+  "@curriculumStrokeSemantic": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      },
+      "direction": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumPrepareChange": "the change starts here — keep the strumming hand moving",
+  "curriculumHeard": "heard {heard} of {expected} strokes",
+  "@curriculumHeard": {
+    "placeholders": {
+      "heard": {
+        "type": "int"
+      },
+      "expected": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumTooLittleHeard": "I could not hear enough of that yet",
+  "curriculumDirectionAccuracy": "{percent}% of the strokes I heard went the right way",
+  "@curriculumDirectionAccuracy": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumOutcomeCredited": "counted",
+  "curriculumOutcomeWrongDirection": "other direction",
+  "curriculumOutcomeUnclear": "not confirmed",
+  "curriculumOutcomeNoEvidence": "nothing heard",
+  "curriculumModeMutedStrokes": "Muted strokes",
+  "curriculumModeSilentGrid": "Read and play",
+  "curriculumModeWithChord": "With a chord",
+  "curriculumModeListenAndRepeat": "Listen and repeat",
+  "curriculumModeStep": "Step {step} of {total}",
+  "@curriculumModeStep": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumCountInLabel": "Get ready",
+  "curriculumListenLabel": "Listen",
+  "curriculumListenBarOf": "Listen — {bar} of {total}",
+  "@curriculumListenBarOf": {
+    "placeholders": {
+      "bar": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumNowYouLabel": "Now you",
+  "curriculumCountInNumber": "{number}",
+  "@curriculumCountInNumber": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumBarOf": "Bar {bar} of {total}",
+  "@curriculumBarOf": {
+    "placeholders": {
+      "bar": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumAttemptDone": "Attempt finished",
+  "curriculumTimingOff": "Timing: {ms} ms off on average",
+  "@curriculumTimingOff": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumTimingLate": "You are steadily behind the beat",
+  "curriculumTimingEarly": "You are steadily ahead of the beat",
+  "curriculumTimingScattered": "Evenly spread — not consistently early or late",
+  "curriculumTimingUncalibrated": "Timing is not scored on this device yet",
+  "curriculumCalibrateAction": "Calibrate",
+  "curriculumCalibrateInstruction": "Strum DOWN on every beat, with the pick",
+  "curriculumCalibrateSaved": "Calibrated: {ms} ms",
+  "@curriculumCalibrateSaved": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumCalibrateUneven": "Too uneven to trust — try that again",
+  "curriculumLadderTitle": "Your path",
+  "curriculumLadderOpen": "Open",
+  "curriculumLadderNotYet": "Not yet reached",
+  "curriculumLadderNeeds": "Needs first: {skills}",
+  "@curriculumLadderNeeds": {
+    "placeholders": {
+      "skills": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumLadderCannotMeasure": "This device cannot measure this one",
+  "curriculumLadderMissing": "Missing: {capabilities}",
+  "@curriculumLadderMissing": {
+    "placeholders": {
+      "capabilities": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumLadderNoRhythm": "Not a strumming exercise yet",
+  "curriculumAttemptCounted": "Counted towards your path",
+  "curriculumLadderEvidence": "Measured over {count, plural, =1{1 attempt} other{{count} attempts}}",
+  "@curriculumLadderEvidence": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumSkillStale": "Worth playing again",
+  "curriculumSkillConflicted": "Mixed results so far",
+  "curriculumMissionTuneAndSit": "Tune up and settle in",
+  "curriculumMissionDownQuarters": "Steady down-strokes",
+  "curriculumMissionEMinor": "E minor",
+  "curriculumMissionAMinor": "A minor",
+  "curriculumMissionEmToAm": "Em to Am, without stopping",
+  "curriculumMissionTwoChordSong": "A two-chord song",
+  "curriculumMissionDownUpEighths": "Down-up eighths",
+  "curriculumMissionDDuUdU": "The D-DU-UDU pattern",
+  "curriculumMissionByEar": "The same pattern, by ear",
+  "curriculumMissionDMajor": "D major",
+  "curriculumMissionAmToD": "Am to D",
+  "curriculumMissionGMajor": "G major",
+  "curriculumMissionDToG": "D to G",
+  "curriculumMissionCMajor": "C major",
+  "curriculumMissionGToC": "G to C",
+  "curriculumStageFirstSounds": "First sounds",
+  "curriculumStageRhythmAndReach": "Rhythm and reach",
+  "curriculumSkillDownQuarters": "steady down-strokes",
+  "curriculumSkillDownUpEighths": "down-up eighths",
+  "curriculumSkillStrumPattern": "the D-DU-UDU pattern",
+  "curriculumSkillByEar": "playing a heard pattern back",
+  "curriculumSkillChordEMinor": "E minor",
+  "curriculumSkillChordAMinor": "A minor",
+  "curriculumSkillChordDMajor": "D major",
+  "curriculumSkillChordGMajor": "G major",
+  "curriculumSkillChordCMajor": "C major",
+  "curriculumSkillChangeEmToAm": "the Em to Am change",
+  "curriculumSkillChangeAmToD": "the Am to D change",
+  "curriculumSkillChangeDToG": "the D to G change",
+  "curriculumSkillChangeGToC": "the G to C change",
+  "curriculumSkillTwoChordSong": "a two-chord song",
+  "curriculumUnnamedStep": "This step",
+  "curriculumUnnamedSkill": "an earlier step",
+  "curriculumLadderRung": "Step {number}",
+  "@curriculumLadderRung": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumChordAccuracy": "Chord held in {percent}% of the bars",
+  "@curriculumChordAccuracy": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "curriculumChordTooLittle": "I could not hear the chord well enough yet",
+  "curriculumChordHeardInstead": "I heard this instead: {chord}",
+  "@curriculumChordHeardInstead": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumClickStopsWhileListening": "The click stops while I listen, so it is not mistaken for your strumming",
+  "todayHubNextStep": "Next: {step}",
+  "@todayHubNextStep": {
+    "placeholders": {
+      "step": {
+        "type": "String"
+      }
+    }
+  },
+  "curriculumLadderNextStep": "next up",
+  "curriculumCapabilityMicrophone": "a microphone",
+  "curriculumCapabilityCamera": "a camera",
+  "curriculumCapabilityDirection": "up/down stroke scoring",
+  "curriculumCapabilityChord": "chord scoring",
+  "curriculumCapabilityPitch": "pitch scoring",
+  "curriculumCapabilityTempo": "tempo detection",
+  "curriculumCapabilityOther": "something this device does not have"
+}

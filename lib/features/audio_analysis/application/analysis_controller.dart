@@ -25,6 +25,13 @@ abstract interface class AnalysisPracticeCreditRecorder {
 
 /// Coordinates one analysis run. It owns the authoritative active run ID;
 /// runner- and pipeline-local counters are never used for stale-event checks.
+///
+/// The three collaborators are injectable for tests; when a caller omits one
+/// (the composition root's `analysisControllerProvider`, E17-R02) it is
+/// resolved lazily from the feature's own providers — the same
+/// "injected-or-`ref`" shape the legacy `AnalyzeController` uses for its
+/// recorder, so a test-built controller never touches a provider it did not
+/// ask for.
 final class AnalysisController extends Notifier<AnalysisState> {
   /// A három függőség OPCIONÁLIS (2026-09-05).
   ///

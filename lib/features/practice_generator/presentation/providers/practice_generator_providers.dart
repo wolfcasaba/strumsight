@@ -7,9 +7,14 @@
 /// with kézzel written Riverpod 3 providers (CLAUDE.md: no codegen).
 ///
 /// This file wires **route-less** composition only: it opens no route, sets
-/// no feature flag, and creates no screen (ADR 0482 / D7 — the 6 screens
-/// stay `unreachable` after this round). Wiring a screen into navigation is
-/// `E15-R07 / F1`'s job.
+/// no feature flag, and creates no screen (ADR 0482 / D7). Wiring a screen
+/// into navigation is the router's (`PlanSetup`, `TodayPlan`) and
+/// `TodayPlanScreen`'s (the four plan sub-screens, E17-R06) job.
+///
+/// E17-R05 closed the two production seams this root used to leave open:
+/// [exerciseCandidateResolverProvider] reads the shipped Practice Engine
+/// catalog, and [generationPlanInputBuilderProvider] assembles the draft
+/// from that catalog plus the persistent practice-evidence history.
 library;
 
 import 'dart:async';
@@ -18,27 +23,30 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:path_provider/path_provider.dart';
+import 'package:strumsight/features/practice/public.dart'
+    show practiceCatalogProvider;
 
 import '../../../../core/foundation/app_result.dart';
 import '../../../../core/i18n/locale_provider.dart';
 import '../../../../core/storage/storage_providers.dart';
+import '../../application/controller/active_plan_controller.dart';
 import '../../application/controller/today_plan_controller.dart';
 import '../../application/service/generation_orchestrator.dart';
+import '../../application/service/generation_plan_input_assembler.dart';
 import '../../application/usecase/delete_practice_planning_data.dart';
 import '../../application/usecase/export_practice_planning_data.dart';
+import '../../application/usecase/propose_today_plan_change.dart';
 import '../../application/usecase/revise_practice_plan.dart';
 import '../../application/usecase/start_plan_generation.dart';
+import '../../data/adapter/practice_engine_catalog_reader.dart';
 import '../../data/local/generation_draft_repository.dart';
 import '../../data/local/local_practice_evidence_repository.dart';
 import '../../data/local/local_practice_plan_repository.dart';
+import '../../domain/id/planner_ids.dart' show RevisionId;
 import '../../domain/model/adaptive_practice_plan.dart';
 import '../../domain/model/practice_block.dart' show ExerciseCandidateResolver;
-import '../../domain/model/weekly_availability.dart' show LocalDate;
-import '../../application/port/practice_catalog_reader.dart';
-import '../../data/catalog/builtin_catalog_reader.dart';
-import '../../data/generation/generation_plan_input_assembler.dart';
-import '../../domain/model/exercise_candidate.dart';
 import '../../domain/model/practice_catalog_snapshot.dart';
+import '../../domain/model/weekly_availability.dart' show LocalDate;
 import '../../domain/repository/practice_evidence_repository.dart';
 import '../../domain/service/plan_validator.dart' show PlanValidationContext;
 import '../controller/plan_preview_controller.dart';
@@ -80,41 +88,39 @@ final generationDraftRepositoryProvider = Provider<GenerationDraftRepository>(
   ),
 );
 
-/// A gyakorlat-katalógus pillanatképe (2026-09-05).
-///
-/// Eddig NEM volt éles `PracticeCatalogReader` a fában — csak tesztekben —,
-/// ezért az alábbi feloldó dobott, és a tervező négy képernyője
-/// elérhetetlen maradt.
-final practiceCatalogReaderProvider = Provider<PracticeCatalogReader>(
-  (ref) => const BuiltinPracticeCatalogReader(),
-);
-
+/// The live exercise catalog as the planner's revisioned snapshot
+/// (E17-R05, ADR 0524 / §5.1). Reads the Practice feature's ONE shipped
+/// catalog through its public barrel (`practiceCatalogProvider`) — never a
+/// generator-specific second list — so overriding the Practice catalog
+/// repository (an empty catalog in a test, say) flows straight into every
+/// consumer below.
 final practiceCatalogSnapshotProvider = Provider<PracticeCatalogSnapshot>(
-  (ref) => ref.watch(practiceCatalogReaderProvider).read(),
+  (ref) => PracticeEngineCatalogReader(
+    definitions: ref.watch(practiceCatalogProvider),
+  ).read(),
 );
 
-/// Feloldja a megőrzött előírás `exerciseId`-ját a katalógus jelöltjére.
-///
-/// **Ismeretlen azonosítóra DOB, nem ad helyettesítőt.** Egy kitalált vagy
-/// „üres" jelölt azt jelentené, hogy a terv egy olyan gyakorlatot ír elő,
-/// ami nincs — a felhasználó egy nem létező feladatot kapna. A hiba itt
-/// hangos, mert egy elavult mentett terv valódi hiba, nem szépíthető
-/// állapot.
+/// Production seam, now closed (E17-R05 / A1): a persisted prescription's
+/// `exerciseId` resolves back into the full `ExerciseCandidate` the live
+/// catalog snapshot carries for it. An id the shipped catalog no longer
+/// contains is a controlled failure of the read that asked for it
+/// (`LocalPracticePlanRepository.readActivePlan` surfaces it as a
+/// `Failure`, never as a silently substituted exercise). Tests may still
+/// override this provider with a fixture resolver.
 final exerciseCandidateResolverProvider = Provider<ExerciseCandidateResolver>((
   ref,
 ) {
   final snapshot = ref.watch(practiceCatalogSnapshotProvider);
-  final byId = <String, ExerciseCandidate>{
+  final byExerciseId = {
     for (final candidate in snapshot.candidates)
       candidate.exerciseId: candidate,
   };
-  return (String exerciseId) {
-    final candidate = byId[exerciseId];
+  return (exerciseId) {
+    final candidate = byExerciseId[exerciseId];
     if (candidate == null) {
       throw StateError(
-        'A(z) "$exerciseId" gyakorlat nincs a katalógusban '
-        '($builtinCatalogRevision). Egy mentett terv elavult előírásra '
-        'hivatkozik.',
+        'No exercise "$exerciseId" in the shipped practice catalog '
+        '(${snapshot.catalogRevision})',
       );
     }
     return candidate;
@@ -169,23 +175,28 @@ final generationOrchestratorProvider =
       return orchestrator;
     });
 
-/// A Setup-kérésből generálási bemenetet állító seam (2026-09-05 óta bekötve).
-///
-/// Korábban dobott („wires it once the candidate catalog + evidence pipeline
-/// lands"), és emiatt a generálási ág — a tervező LÉNYEGE — élesben
-/// használhatatlan volt. Az összeállítás a
-/// `GenerationPlanInputAssembler`-ben él, és kizárólag MÁR MEGLÉVŐ
-/// szolgáltatásokat hív; a két dokumentált leképezését (domináns terhelési
-/// szint, `newMaterial` besorolás) az ottani docstring indokolja.
-final generationPlanInputBuilderProvider = Provider<GenerationPlanInputBuilder>(
-  (ref) {
-    final assembler = GenerationPlanInputAssembler(
-      catalog: ref.watch(practiceCatalogSnapshotProvider),
-      today: ref.watch(practiceGeneratorTodayProvider),
-      generateId: ref.watch(practiceGeneratorIdGeneratorProvider),
+/// The deterministic catalog + evidence + scheduling pipeline behind
+/// [generationPlanInputBuilderProvider] (E17-R05, ADR 0524 / §5.2). Its
+/// evidence source is the PERSISTENT [practiceEvidenceRepositoryProvider]
+/// — the learner's real practice history — never a constant.
+final generationPlanInputAssemblerProvider =
+    Provider<GenerationPlanInputAssembler>(
+      (ref) => GenerationPlanInputAssembler(
+        catalogReader: PracticeEngineCatalogReader(
+          definitions: ref.watch(practiceCatalogProvider),
+        ),
+        evidenceRepository: ref.watch(practiceEvidenceRepositoryProvider),
+        clock: ref.watch(practiceGeneratorClockProvider),
+        generateId: ref.watch(practiceGeneratorIdGeneratorProvider),
+      ),
     );
-    return assembler.call;
-  },
+
+/// Production seam, now closed (E17-R05 / A1, A3): a Setup-wizard draft
+/// becomes a `GenerationPlanInput` through
+/// [generationPlanInputAssemblerProvider]. Tests may still override this
+/// provider with a fixture builder.
+final generationPlanInputBuilderProvider = Provider<GenerationPlanInputBuilder>(
+  (ref) => ref.watch(generationPlanInputAssemblerProvider).assemble,
 );
 
 /// `autoDispose` because it watches [generationOrchestratorProvider] (M5):
@@ -250,6 +261,16 @@ final planPreviewControllerFactoryProvider =
           );
     });
 
+/// The [PlanValidationContext] an already-compiled plan is previewed
+/// against from Today (E17-R06): the live catalog snapshot plus the
+/// availability reconstructed from the plan's own persisted day budgets.
+final planValidationContextForPlanProvider =
+    Provider<PlanValidationContext Function(AdaptivePracticePlan plan)>(
+      (ref) => ref
+          .watch(generationPlanInputAssemblerProvider)
+          .validationContextForPlan,
+    );
+
 // ---------------------------------------------------------------------------
 // Screen 3/6 — PlanPrivacyScreen
 // ---------------------------------------------------------------------------
@@ -278,6 +299,56 @@ final exportPracticePlanningDataProvider = Provider<ExportPracticePlanningData>(
 final revisePracticePlanProvider = Provider<RevisePracticePlan>(
   (ref) => RevisePracticePlan(clock: ref.watch(practiceGeneratorClockProvider)),
 );
+
+/// Learner-initiated rewrites of the active plan (shorten / skip / pause)
+/// — revision ids come from the shared id generator, candidates from the
+/// catalog resolver keyed by the block's persisted exercise id (a
+/// prescription carries the id and provenance, never the candidate).
+final activePlanControllerProvider = Provider<ActivePlanController>((ref) {
+  final generateId = ref.watch(practiceGeneratorIdGeneratorProvider);
+  final resolveCandidate = ref.watch(exerciseCandidateResolverProvider);
+  return ActivePlanController(
+    generateRevisionId: () => RevisionId.generate(generateId),
+    resolveCandidate: (block) =>
+        resolveCandidate(block.prescription.exerciseId),
+  );
+});
+
+final proposeTodayPlanChangeProvider = Provider<ProposeTodayPlanChange>(
+  (ref) => ProposeTodayPlanChange(
+    activePlanController: ref.watch(activePlanControllerProvider),
+    revisePracticePlan: ref.watch(revisePracticePlanProvider),
+  ),
+);
+
+/// The proposal `PlanChangeReviewScreen` shows when opened from Today
+/// (E17-R06 / §5.2): today's first pending block of the ACTIVE plan,
+/// shortened to its catalog minimum. `null` when there is no active plan
+/// or nothing is scheduled today. `autoDispose` so a review re-reads the
+/// plan every time it opens; a read failure of the active plan surfaces as
+/// this provider's own `AsyncError` (M4 discipline, never reclassified).
+final todayPlanChangeProposalProvider =
+    FutureProvider.autoDispose<TodayPlanChangeProposal?>((ref) async {
+      // Every dependency is read synchronously, before the first `await`
+      // — the same discipline as [activePracticePlanProvider].
+      final repository = ref.watch(localPracticePlanRepositoryProvider);
+      final propose = ref.watch(proposeTodayPlanChangeProvider);
+      final today = ref.watch(practiceGeneratorTodayProvider);
+      final planFuture = ref.watch(activePracticePlanProvider.future);
+
+      final plan = await planFuture;
+      if (plan == null) return null;
+      final archive = await repository.readArchive(plan.id);
+      final revisionCount = switch (archive) {
+        Success<ArchivedPracticeLog>(:final value) => value.revisions.length,
+        Failure<ArchivedPracticeLog>() => 0,
+      };
+      return propose(
+        plan: plan,
+        today: today(),
+        currentRevisionNumber: revisionCount < 1 ? 1 : revisionCount,
+      );
+    }, retry: (retryCount, error) => null);
 
 // ---------------------------------------------------------------------------
 // Screen 5/6 — TodayPlanScreen

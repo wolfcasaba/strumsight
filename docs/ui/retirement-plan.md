@@ -41,10 +41,14 @@ door today, not dead code.
 - **Static text matching only.** No reflective or data-driven navigation
   (a class looked up by a runtime string key) is visible to this tool.
 - **One hop only.** The imperative channel finds "constructed somewhere in
-  `lib/`", not "constructed somewhere reachable from an entry point". Two
-  Community screens below (`EditProfileScreen`, `ClubMemberManagementScreen`)
-  are measured `reachable` this way while their only construction site is
-  itself unreachable — see §3.3.
+  `lib/`", not "constructed somewhere reachable from an entry point". At the
+  E15-R03 baseline two Community screens (`EditProfileScreen`,
+  `ClubMemberManagementScreen`) were measured `reachable` this way while
+  their only construction site was itself unreachable — see §3.3. Measured
+  2026-09-15 that artifact is gone: both construction sites
+  (`CommunityGateScreen`, routed E18-R19; `ClubDetailScreen`, pushed from
+  the routed club list since E17-R10) are reachable themselves. The limit
+  stays real for any future one-hop chain.
 - A `retire` or `unreachable` verdict is a proposal for the next round to
   weigh, never grounds to delete anything in this round or silently in a
   future one.
@@ -75,6 +79,22 @@ behind `practiceGeneratorEnabled`, already design-system migrated) — see the
 per-screen table in §6. The other 4 Practice Generator screens are
 unaffected (§3.2 below, revised).
 
+**E17 lane update (2026-09-15):** the table in §6 is current; the §2 counts
+above stay the dated E15-R03 baseline. Measured on this tree with
+`tool/check_screen_reachability.dart`'s rules: **99 screens, 99 reachable,
+0 unreachable, 30 flag-gated** — thirteen screens that were still
+`unreachable` on 2026-09-04 (86 / 13 / 28) are now pushed or routed:
+`E17-R02` routed the Analysis V2 capture wizard (3) under
+`audioAnalysisV2Enabled`, `E17-R03` pushes the setlist session from the
+setlist detail, `E17-R04` pushes the plan preview from the Tutor chat,
+`E17-R05`/`R06` push the four remaining Practice Generator screens from
+Today Plan's menu, and `E17-R07`…`R11` push the composer, the search, the
+club detail and the challenge list from the feed, the club list and the
+inbox. Every one of the thirteen is design-system native, so each is
+`keep` — no new E15 round is owed (ADR 0471 D6). Flag-gated 28 → 30: +3
+capture screens, −1 `SongTrainerScreen`, which the setlist detail now also
+constructs unconditionally (ADR 0471 D4 counts that as an open door).
+
 The 35 `migrate` + 6 `retire` = 41 reachable-and-legacy screens are grouped
 into eight named rounds, `E15-R04`…`E15-R11` (§4) — every one of them, per
 ADR 0471 D6. The 28 `unreachable` rows carry NO round assignment: assigning a
@@ -99,7 +119,20 @@ favor of yet. Wiring `progress_v2` into a route is a prerequisite for a future
 round to revisit this as a `retire` candidate — this round does not do that
 wiring (`lib/**` is out of scope, brief §3).
 
-### 3.2 Practice Generator (partially wired, E15-R07) and the Audio Analysis capture wizard (still unwired)
+### 3.2 Practice Generator (fully wired since E17-R06) and the Audio Analysis capture wizard (routed E17-R02)
+
+**Superseded (2026-09-15, E17-R02 / E17-R05 / E17-R06):** everything below
+this note was true on 2026-09-02 and is kept as the dated record. Measured
+now: the two seams are real (`E17-R05`), `PlanPreviewScreen`,
+`PlanChangeReviewScreen`, `PlanPrivacyScreen` and `WeeklyPlanScreen` open
+from Today Plan's own AppBar menu (`today_plan_screen.dart`, `Navigator.push`
+— imperative channel, `E17-R06`, measured by
+`test/features/practice_generator/screen_wiring_test.dart`), and the capture
+wizard's three screens are routed at `/analysis`, `/analysis/recording` and
+`/analysis/processing` inside the `if (audioAnalysisV2Enabled)` block with
+the Practice Area Hub as entry point (`E17-R02`, measured by
+`test/features/audio_analysis/capture_wiring_test.dart`). All seven are
+`keep` in §6.
 
 **Revised (E15-R07 F1, ADR 0491, 2026-09-02).** The Practice Generator's
 composition root (`E15-R14`, ADR 0482) left two production seams
@@ -110,7 +143,8 @@ transitively depend on either seam are MEASURABLY constructible:
 - **Wired this round:** `PlanSetupScreen`, `TodayPlanScreen` — reachable,
   flag-gated behind `practiceGeneratorEnabled`, via the practice hub's one
   entry point (§6 table, verdict `keep`).
-- **Still unreachable — real seam, not oversight:** `PlanPreviewScreen`,
+- **Still unreachable on 2026-09-02 — real seam, not oversight (wired
+  since, see the note above):** `PlanPreviewScreen`,
   `PlanChangeReviewScreen`, `PlanPrivacyScreen`, `WeeklyPlanScreen` — each
   needs a concrete `ExerciseCandidateResolver` (and, for generation itself,
   a `GenerationPlanInputBuilder`), which is `data/`+`application/` work this
@@ -121,10 +155,11 @@ transitively depend on either seam are MEASURABLY constructible:
 **Audio Analysis V2 capture wizard**
 (`lib/features/audio_analysis/presentation/capture/`, 3 screens:
 `AnalysisHomeScreen`, `AnalysisProcessingScreen`, `AnalysisRecordingScreen`)
-— unaffected by this round, still no route, no construction site anywhere in
-`lib/`. The rest of `audio_analysis` (overview, timeline, compare, metric
-detail, export) IS wired behind `audioAnalysisV2Enabled` — only the capture
-entry point is missing.
+— unaffected by this round, and on 2026-09-02 still no route, no construction
+site anywhere in `lib/` (routed since E17-R02, see the note above). The rest
+of `audio_analysis` (overview, timeline, compare, metric detail, export) was
+already wired behind `audioAnalysisV2Enabled` — only the capture entry point
+was missing.
 
 The capture wizard is not a Chapter 15 design-migration concern (design
 tokens are moot on a screen nobody can open); it needs a product/navigation
@@ -133,7 +168,19 @@ not make (D5/D7). Owner: a future scoped round, unscheduled. The remaining
 4 Practice Generator screens have a named next step instead (wire the two
 seams, ADR 0491 D5) — not an open product decision.
 
-### 3.3 Community: 15 screens, one flag, zero routes
+### 3.3 Community: 15 screens, one flag, zero routes (superseded)
+
+**Superseded (E18-R19, then E17-R07…R11, 2026-09-15):** the paragraph below
+is the dated E15-R03 finding. Measured now all 15 community screens are
+reachable: nine are routed inside `if (communityEnabled)` behind the
+`CommunityGateScreen` gate (E18-R19), and the remaining six are pushed from
+those — `EditProfileScreen` from the gate, `CommunitySearchScreen` and
+`PostComposerScreen` from the following feed (E17-R09 / E17-R07…R09),
+`ClubDetailScreen` from the club list (E17-R10), `ClubMemberManagementScreen`
+from the club detail, and `CommunityChallengesScreen` from the notifications
+inbox (E17-R11; the router still deliberately mounts no route for it, see
+the E18-R22 note on its §6 row). The one-hop caveat on the two screens
+named below no longer applies: their construction sites are reachable.
 
 `lib/app/config/feature_flags.dart` defines `communityEnabled` and four
 narrower community flags, but **no `community/**` class name appears
@@ -142,9 +189,11 @@ screens have no measured reference outside their own file at all. The
 remaining two are a one-hop artifact, not a real path in (D7 §1, §3.1 above):
 
 - `EditProfileScreen` is constructed only from `CommunityGateScreen`
-  (`community_gate_screen.dart:127,237`) — itself unreachable.
+  (`community_gate_screen.dart:127,237`) — itself unreachable at the E15-R03
+  baseline (routed since E18-R19).
 - `ClubMemberManagementScreen` is constructed only from `ClubDetailScreen`
-  (`club_detail_screen.dart:434`) — itself unreachable.
+  (`club_detail_screen.dart:434`) — itself unreachable at the E15-R03
+  baseline (pushed from the routed club list since E17-R10).
 
 14 of the 15 are already design-system migrated (`migration-status.md`'s
 "community 14/15" row) — this is not a migration backlog, it is an entirely
@@ -159,7 +208,9 @@ round, unscheduled.
 - `lib/features/gamification/presentation/screens/level_detail_screen.dart`
   (`LevelDetailScreen`, legacy) — no measured reference anywhere in `lib/`.
 - `lib/features/song_trainer/presentation/screens/setlist_session_screen.dart`
-  (`SetlistSessionScreen`, legacy) — same.
+  (`SetlistSessionScreen`, legacy at the baseline; design-system native
+  since) — same on 2026-09-02; pushed from the setlist detail since E17-R03
+  (`keep` in §6).
 - `lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart`
   (`SetlistListScreenV2`, legacy) — same. It was INVISIBLE to the tool until
   2026-09-06: `tool/ui_inventory.dart`'s population filter matched only
@@ -167,7 +218,8 @@ round, unscheduled.
   at all. Widening the filter is what made this row honest — the screen did
   not become unreachable, it had simply never been counted.
 - `lib/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart`
-  (`PracticePlanPreviewScreen`, already migrated) — same.
+  (`PracticePlanPreviewScreen`, already migrated) — same on 2026-09-02;
+  pushed from the Tutor chat since E17-R04 (`keep` in §6).
 - `lib/features/onboarding/screens/first_win_stage_screen.dart`
   (`FirstWinStageScreen`, already migrated) — same.
 
@@ -212,7 +264,7 @@ catch.
 
 | Screen | Class | Reachable | Flag-gated | Verdict | Owner round | Successor | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `lib/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart` | `PracticePlanPreviewScreen` | no | no | unreachable | — | — | Already design-system migrated but no measured construction site anywhere in lib/. |
+| `lib/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart` | `PracticePlanPreviewScreen` | yes | no | keep | — | — | Pushed from `TutorChatScreen` since E17-R04 (`tutor_chat_screen.dart`, AppBar action and tapped plan block; imperative channel, so not flag-gated even though the chat route sits under `aiTutorEnabled`). Design-system native, so no migration round is owed. Measured 2026-09-15. |
 | `lib/features/ai_tutor/presentation/screens/tutor_chat_screen.dart` | `TutorChatScreen` | yes | yes | migrate | E15-R05 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/ai_tutor/presentation/screens/tutor_data_screen.dart` | `TutorDataScreen` | yes | yes | migrate | E15-R05 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/ai_tutor/presentation/screens/tutor_home_screen.dart` | `TutorHomeScreen` | yes | yes | migrate | E15-R05 | — | Legacy, reachable — Ch15 design-system migration. |
@@ -224,26 +276,29 @@ catch.
 | `lib/features/audio_analysis/presentation/analysis_metric_detail_screen.dart` | `AnalysisMetricDetailScreen` | yes | yes | migrate | E15-R10 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/audio_analysis/presentation/analysis_overview_screen.dart` | `AnalysisOverviewScreen` | yes | yes | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
 | `lib/features/audio_analysis/presentation/analysis_timeline_screen.dart` | `AnalysisTimelineScreen` | yes | yes | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
-| `lib/features/audio_analysis/presentation/capture/analysis_home_screen.dart` | `AnalysisHomeScreen` | no | no | unreachable | — | — | Audio Analysis V2 capture wizard entry point is unwired; no route, no construction site. |
-| `lib/features/audio_analysis/presentation/capture/analysis_processing_screen.dart` | `AnalysisProcessingScreen` | no | no | unreachable | — | — | Audio Analysis V2 capture wizard entry point is unwired; no route, no construction site. |
-| `lib/features/audio_analysis/presentation/capture/analysis_recording_screen.dart` | `AnalysisRecordingScreen` | no | no | unreachable | — | — | Audio Analysis V2 capture wizard entry point is unwired; no route, no construction site. |
+| `lib/features/audio_analysis/presentation/capture/analysis_home_screen.dart` | `AnalysisHomeScreen` | yes | yes | keep | — | — | Routed in E17-R02 at `/analysis` inside the `if (audioAnalysisV2Enabled)` block; entry point is the Practice Area Hub's V2 analysis card. Design-system native, so no migration round is owed. Measured 2026-09-15. |
+| `lib/features/audio_analysis/presentation/capture/analysis_processing_screen.dart` | `AnalysisProcessingScreen` | yes | yes | keep | — | — | Routed in E17-R02 at `/analysis/processing` inside the `if (audioAnalysisV2Enabled)` block; entry point is the Practice Area Hub's V2 analysis card. Design-system native, so no migration round is owed. Measured 2026-09-15. |
+| `lib/features/audio_analysis/presentation/capture/analysis_recording_screen.dart` | `AnalysisRecordingScreen` | yes | yes | keep | — | — | Routed in E17-R02 at `/analysis/recording` inside the `if (audioAnalysisV2Enabled)` block; entry point is the Practice Area Hub's V2 analysis card. Design-system native, so no migration round is owed. Measured 2026-09-15. |
 | `lib/features/auth/screens/login_screen.dart` | `LoginScreen` | yes | no | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
 | `lib/features/chords/screens/chord_library_screen.dart` | `ChordLibraryScreen` | yes | no | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
-| `lib/features/community/presentation/screens/bookmarks_screen.dart` | `BookmarksScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
-| `lib/features/community/presentation/screens/clubs/club_detail_screen.dart` | `ClubDetailScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
-| `lib/features/community/presentation/screens/clubs/club_list_screen.dart` | `ClubListScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
-| `lib/features/community/presentation/screens/clubs/club_member_management_screen.dart` | `ClubMemberManagementScreen` | yes | no | keep | — | — | Already design-system migrated. Only constructed from `ClubDetailScreen` (itself unreachable) — a one-hop-only measurement (ADR 0471 D7) marks this reachable, but the entry point into it is dead. |
-| `lib/features/community/presentation/screens/comments_screen.dart` | `CommentsScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
-| `lib/features/community/presentation/screens/community_challenges_screen.dart` | `CommunityChallengesScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
-| `lib/features/community/presentation/screens/community_gate_screen.dart` | `CommunityGateScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
-| `lib/features/community/presentation/screens/community_notifications_screen.dart` | `CommunityNotificationsScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
-| `lib/features/community/presentation/screens/community_search_screen.dart` | `CommunitySearchScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
-| `lib/features/community/presentation/screens/edit_profile_screen.dart` | `EditProfileScreen` | yes | no | keep | — | — | Already design-system migrated. Only constructed from `CommunityGateScreen` (itself unreachable) — a one-hop-only measurement (ADR 0471 D7) marks this reachable, but the entry point into it is dead. |
-| `lib/features/community/presentation/screens/followers_screen.dart` | `FollowersScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
-| `lib/features/community/presentation/screens/following_feed_screen.dart` | `FollowingFeedScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
-| `lib/features/community/presentation/screens/leaderboard_screen.dart` | `LeaderboardScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
-| `lib/features/community/presentation/screens/post_composer_screen.dart` | `PostComposerScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
-| `lib/features/community/presentation/screens/safety_relationships_screen.dart` | `SafetyRelationshipsScreen` | no | no | unreachable | — | — | Community feature (`communityEnabled`) has no route registered in lib/app/routing/** at all, gated or not; unreachable by any measured path. |
+| `lib/features/community/presentation/screens/bookmarks_screen.dart` | `BookmarksScreen` | yes | yes | keep | — | — | Routed in E18-R19 behind `communityEnabled`; the hosted backend at `casaba.app/strumsight` serves it (`docs/operations/casaba-backend.md`). Design-system native, so no migration round is owed. |
+| `lib/features/community/presentation/screens/clubs/club_detail_screen.dart` | `ClubDetailScreen` | yes | no | keep | — | — | Pushed from a `ClubListScreen` row since E17-R10 (`club_list_screen.dart`, `_openDetail`); the list itself is routed behind `communityClubsEnabled`. Design-system native, so no migration round is owed. Measured 2026-09-15. |
+| `lib/features/community/presentation/screens/clubs/club_list_screen.dart` | `ClubListScreen` | yes | yes | keep | — | — | Routed in E18-R19 behind `communityClubsEnabled`; the hosted backend at `casaba.app/strumsight` serves it (`docs/operations/casaba-backend.md`). Design-system native, so no migration round is owed. |
+| `lib/features/community/presentation/screens/clubs/club_member_management_screen.dart` | `ClubMemberManagementScreen` | yes | no | keep | — | — | Constructed from `ClubDetailScreen` (`club_detail_screen.dart:434`), which is itself pushed from the routed club list since E17-R10 — no longer a one-hop artifact. Design-system native, so no migration round is owed. Measured 2026-09-15. |
+| `lib/features/community/presentation/screens/comments_screen.dart` | `CommentsScreen` | yes | yes | keep | — | — | Routed in E18-R19 behind `communityEnabled`; the hosted backend at `casaba.app/strumsight` serves it (`docs/operations/casaba-backend.md`). Design-system native, so no migration round is owed. |
+| `lib/features/community/presentation/screens/community_challenges_screen.dart` | `CommunityChallengesScreen` | yes | no | keep | — | — | Pushed from `CommunityNotificationsScreen` since E17-R11 (`community_notifications_screen.dart`, `_openChallenges`: the AppBar action and the challenge-invite row). Still NOT routed, and that is a measurement: the router's comment says the hosted instance serves no challenge list, so it opens only from the inbox; the declarative channel stays empty. It was previously reported reachable because the scan matched its class name inside that comment (E18-R22) — the imperative reference is real code. Design-system native, so no migration round is owed. |
+| `lib/features/community/presentation/screens/community_gate_screen.dart` | `CommunityGateScreen` | yes | yes | keep | — | — | Routed in E18-R19 behind `communityEnabled`; the hosted backend at `casaba.app/strumsight` serves it (`docs/operations/casaba-backend.md`). Design-system native, so no migration round is owed. |
+| `lib/features/community/presentation/screens/community_notifications_screen.dart` | `CommunityNotificationsScreen` | yes | yes | keep | — | — | Routed in E18-R19 behind `communityEnabled`; the hosted backend at `casaba.app/strumsight` serves it (`docs/operations/casaba-backend.md`). Design-system native, so no migration round is owed. |
+| `lib/features/community/presentation/screens/community_search_screen.dart` | `CommunitySearchScreen` | yes | no | keep | — | — | Pushed from `FollowingFeedScreen` since E17-R09 (`following_feed_screen.dart`, `_openSearch`); the feed is routed behind `communityEnabled`. Design-system native, so no migration round is owed. Measured 2026-09-15. |
+| `lib/features/community/presentation/screens/edit_profile_screen.dart` | `EditProfileScreen` | yes | no | keep | — | — | Constructed from `CommunityGateScreen` (`community_gate_screen.dart:127,249`), which is routed at `/community` since E18-R19 — no longer a one-hop artifact. Design-system native, so no migration round is owed. Measured 2026-09-15. |
+| `lib/features/community/presentation/screens/followers_screen.dart` | `FollowersScreen` | yes | yes | keep | — | — | Routed in E18-R19 behind `communityEnabled`; the hosted backend at `casaba.app/strumsight` serves it (`docs/operations/casaba-backend.md`). Design-system native, so no migration round is owed. |
+| `lib/features/community/presentation/screens/following_feed_screen.dart` | `FollowingFeedScreen` | yes | yes | keep | — | — | Routed in E18-R19 behind `communityEnabled`; the hosted backend at `casaba.app/strumsight` serves it (`docs/operations/casaba-backend.md`). Design-system native, so no migration round is owed. |
+| `lib/features/community/presentation/screens/leaderboard_screen.dart` | `LeaderboardScreen` | yes | yes | keep | — | — | Routed in E18-R19 behind `communityEnabled`; the hosted backend at `casaba.app/strumsight` serves it (`docs/operations/casaba-backend.md`). Design-system native, so no migration round is owed. |
+| `lib/features/community/presentation/screens/post_composer_screen.dart` | `PostComposerScreen` | yes | no | keep | — | — | Pushed from `FollowingFeedScreen` since E17-R07…R09 (`following_feed_screen.dart`, `_openComposer`), backed by the HTTP post repository in the production overrides; the feed is routed behind `communityEnabled`. Design-system native, so no migration round is owed. Measured 2026-09-15. |
+| `lib/features/community/presentation/screens/safety_relationships_screen.dart` | `SafetyRelationshipsScreen` | yes | yes | keep | — | — | Routed in E18-R19 behind `communityEnabled`; the hosted backend at `casaba.app/strumsight` serves it (`docs/operations/casaba-backend.md`). Design-system native, so no migration round is owed. |
+| `lib/features/curriculum/presentation/screens/curriculum_ladder_screen.dart` | `CurriculumLadderScreen` | yes | no | keep | — | — | Routed at `/curriculum`; design-system native from its first round (E18-R14), so no migration is owed. Added here in E18-R22 — the plan had gone stale against the measurement by two rows. |
+| `lib/features/curriculum/presentation/screens/rhythm_practice_screen.dart` | `RhythmPracticeScreen` | yes | no | keep | — | — | Routed at `/curriculum/rhythm` and opened from the ladder; design-system native, so no migration is owed. Added here in E18-R22 alongside the ladder. |
+| `lib/features/strum_challenge/presentation/screens/strum_challenge_screen.dart` | `StrumChallengeScreen` | yes | no | keep | — | — | Routed at `/practice/strum-challenge` (top-level Stage route) and opened from the Today hub's challenge card; design-system native from its first round (2026-09-15, E18 lane), so no migration is owed. |
 | `lib/features/gamification/presentation/screens/achievement_detail_screen.dart` | `AchievementDetailScreen` | yes | no | migrate | E15-R06 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/gamification/presentation/screens/achievements_screen.dart` | `AchievementsScreen` | yes | no | migrate | E15-R06 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/gamification/presentation/screens/gamification_hub_screen.dart` | `GamificationHubScreen` | yes | no | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
@@ -271,12 +326,12 @@ catch.
 | `lib/features/practice/presentation/screens/practice_session_screen.dart` | `PracticeSessionScreen` | yes | yes | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
 | `lib/features/practice/presentation/screens/practice_setup_screen.dart` | `PracticeSetupScreen` | yes | no | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
 | `lib/features/practice/presentation/screens/speed_builder_screen.dart` | `SpeedBuilderScreen` | yes | no | migrate | E15-R08 | — | Legacy, reachable — Ch15 design-system migration. |
-| `lib/features/practice_generator/presentation/screens/plan_change_review_screen.dart` | `PlanChangeReviewScreen` | no | no | unreachable | — | — | Practice Generator has no route and no measured construction site anywhere in lib/. |
-| `lib/features/practice_generator/presentation/screens/plan_preview_screen.dart` | `PlanPreviewScreen` | no | no | unreachable | — | — | Practice Generator has no route and no measured construction site anywhere in lib/. |
-| `lib/features/practice_generator/presentation/screens/plan_privacy_screen.dart` | `PlanPrivacyScreen` | no | no | unreachable | — | — | Practice Generator has no route and no measured construction site anywhere in lib/. |
+| `lib/features/practice_generator/presentation/screens/plan_change_review_screen.dart` | `PlanChangeReviewScreen` | yes | no | keep | — | — | Pushed from `TodayPlanScreen`'s own AppBar menu since E17-R06 (`today_plan_screen.dart`, `today-plan-open-change-review`), after E17-R05 made both seams real; Today Plan is routed behind `practiceGeneratorEnabled`, but the push is imperative, so ADR 0471 D4 does not count it as gated. Design-system native, so no migration round is owed. Measured 2026-09-15. |
+| `lib/features/practice_generator/presentation/screens/plan_preview_screen.dart` | `PlanPreviewScreen` | yes | no | keep | — | — | Pushed from `TodayPlanScreen`'s own AppBar menu since E17-R06 (`today_plan_screen.dart`, `today-plan-open-preview`), after E17-R05 made both seams real; Today Plan is routed behind `practiceGeneratorEnabled`, but the push is imperative, so ADR 0471 D4 does not count it as gated. Design-system native, so no migration round is owed. Measured 2026-09-15. |
+| `lib/features/practice_generator/presentation/screens/plan_privacy_screen.dart` | `PlanPrivacyScreen` | yes | no | keep | — | — | Pushed from `TodayPlanScreen`'s own AppBar menu since E17-R06 (`today_plan_screen.dart`, `today-plan-open-privacy`), after E17-R05 made both seams real; Today Plan is routed behind `practiceGeneratorEnabled`, but the push is imperative, so ADR 0471 D4 does not count it as gated. Design-system native, so no migration round is owed. Measured 2026-09-15. |
 | `lib/features/practice_generator/presentation/screens/plan_setup_screen.dart` | `PlanSetupScreen` | yes | yes | keep | — | — | E15-R07 F1 (ADR 0491 D1) wired this screen behind `practiceGeneratorEnabled`, via the practice hub's one entry point; already design-system migrated — no Ch15 action. |
 | `lib/features/practice_generator/presentation/screens/today_plan_screen.dart` | `TodayPlanScreen` | yes | yes | keep | — | — | E15-R07 F1 (ADR 0491 D1) wired this screen behind `practiceGeneratorEnabled`; already design-system migrated — no Ch15 action. |
-| `lib/features/practice_generator/presentation/screens/weekly_plan_screen.dart` | `WeeklyPlanScreen` | no | no | unreachable | — | — | Practice Generator has no route and no measured construction site anywhere in lib/. |
+| `lib/features/practice_generator/presentation/screens/weekly_plan_screen.dart` | `WeeklyPlanScreen` | yes | no | keep | — | — | Pushed from `TodayPlanScreen`'s own AppBar menu since E17-R06 (`today_plan_screen.dart`, `today-plan-open-weekly`), after E17-R05 made both seams real; Today Plan is routed behind `practiceGeneratorEnabled`, but the push is imperative, so ADR 0471 D4 does not count it as gated. Design-system native, so no migration round is owed. Measured 2026-09-15. |
 | `lib/features/practice_hub/screens/practice_area_hub_screen.dart` | `PracticeAreaHubScreen` | yes | yes | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
 | `lib/features/profile_hub/screens/profile_hub_screen.dart` | `ProfileHubScreen` | yes | yes | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
 | `lib/features/progress/screens/progress_screen.dart` | `ProgressScreen` | yes | no | migrate | E15-R08 | — | Legacy, reachable, the ONLY working Progress path today — progress_v2 is unwired (see its own unreachable rows), so this is `migrate`, not `retire`, until progress_v2 is wired. |
@@ -289,14 +344,14 @@ catch.
 | `lib/features/share/screens/strum_reel_screen.dart` | `StrumReelScreen` | yes | no | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
 | `lib/features/share/screens/wrapped_preview_screen.dart` | `WrappedPreviewScreen` | yes | no | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
 | `lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart` | `SetlistListScreenV2` | no | no | unreachable | — | — | Entered the measured population on 2026-09-06 when the inventory filter was widened to `_screen(_v\d+)?.dart`; legacy, with no route and no measured construction site anywhere in lib/. |
-| `lib/features/song_trainer/presentation/screens/setlist_session_screen.dart` | `SetlistSessionScreen` | no | no | unreachable | — | — | No route and no measured construction site anywhere in lib/. |
+| `lib/features/song_trainer/presentation/screens/setlist_session_screen.dart` | `SetlistSessionScreen` | yes | no | keep | — | — | Pushed from `SetlistDetailScreen` since E17-R03 (`setlist_detail_screen.dart`, one launcher, mode as a parameter) under `songTrainerV2Enabled`; imperative channel, so not flag-gated by ADR 0471 D4. Design-system native, so no migration round is owed. Measured 2026-09-15. |
 | `lib/features/song_trainer/presentation/screens/song_editor_screen.dart` | `SongEditorScreen` | yes | yes | migrate | E15-R09 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/song_trainer/presentation/screens/song_import_preview_screen.dart` | `SongImportPreviewScreen` | yes | no | migrate | E15-R09 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/song_trainer/presentation/screens/song_import_screen.dart` | `SongImportScreen` | yes | no | migrate | E15-R09 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/song_trainer/presentation/screens/song_library_screen.dart` | `SongLibraryScreen` | yes | yes | migrate | E15-R09 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/song_trainer/presentation/screens/song_overview_screen.dart` | `SongOverviewScreen` | yes | yes | migrate | E15-R09 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/song_trainer/presentation/screens/song_result_screen.dart` | `SongResultScreen` | yes | yes | migrate | E15-R09 | — | Legacy, reachable — Ch15 design-system migration. |
-| `lib/features/song_trainer/presentation/screens/song_trainer_screen.dart` | `SongTrainerScreen` | yes | yes | migrate | E15-R09 | — | Legacy, reachable — Ch15 design-system migration. |
+| `lib/features/song_trainer/presentation/screens/song_trainer_screen.dart` | `SongTrainerScreen` | yes | no | migrate | E15-R09 | — | Legacy, reachable — Ch15 design-system migration. No longer flag-gated since E17-R03: the setlist detail constructs it unconditionally (`setlist_detail_screen.dart:158`) next to its `/song-trainer` route. |
 | `lib/features/song_trainer/presentation/screens/trainer_setup_screen.dart` | `TrainerSetupScreen` | yes | yes | migrate | E15-R09 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/songs/screens/setlist_detail_screen.dart` | `SetlistDetailScreen` | yes | no | migrate | E15-R10 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/songs/screens/setlist_list_screen.dart` | `SetlistListScreen` | yes | no | migrate | E15-R10 | — | Legacy, reachable — Ch15 design-system migration. |

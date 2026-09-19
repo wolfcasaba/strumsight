@@ -23,9 +23,19 @@ import '../../domain/models/tutor_message.dart';
 /// explicit "no measured evidence" notice (ADR 0287 §8, E13-R29 §5.6) —
 /// the absence is stated, not silently omitted.
 class TutorMessageBubble extends StatelessWidget {
-  const TutorMessageBubble({super.key, required this.message});
+  const TutorMessageBubble({
+    super.key,
+    required this.message,
+    this.onPracticePlanTap,
+  });
 
   final TutorMessage message;
+
+  /// When set, a [TutorPracticePlanBlock] renders as a tap target that hands
+  /// the block back to the owner (E17-R04: the chat opens the plan preview
+  /// from it). `null` keeps the block a plain text line — the bubble itself
+  /// never reaches into providers or routing.
+  final ValueChanged<TutorPracticePlanBlock>? onPracticePlanTap;
 
   bool get _hasEvidence => message.blocks.any(
     (block) =>
@@ -67,7 +77,11 @@ class TutorMessageBubble extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 for (final block in message.blocks)
-                  _BlockView(block: block, color: textColor),
+                  _BlockView(
+                    block: block,
+                    color: textColor,
+                    onPracticePlanTap: onPracticePlanTap,
+                  ),
                 if (_showsMissingEvidenceNotice)
                   _MissingEvidenceNotice(color: textColor),
               ],
@@ -111,10 +125,15 @@ class _MissingEvidenceNotice extends StatelessWidget {
 }
 
 class _BlockView extends StatelessWidget {
-  const _BlockView({required this.block, required this.color});
+  const _BlockView({
+    required this.block,
+    required this.color,
+    required this.onPracticePlanTap,
+  });
 
   final TutorContentBlock block;
   final Color color;
+  final ValueChanged<TutorPracticePlanBlock>? onPracticePlanTap;
 
   @override
   Widget build(BuildContext context) {
@@ -190,9 +209,26 @@ class _BlockView extends StatelessWidget {
       );
     }
     if (b is TutorPracticePlanBlock) {
+      final onTap = onPracticePlanTap;
+      final label = Text('[plan:${b.planId}] ${b.title}', style: bodySmall);
+      if (onTap == null) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: label,
+        );
+      }
+      final l10n = AppLocalizations.of(context);
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Text('[plan:${b.planId}] ${b.title}', style: bodySmall),
+        child: Semantics(
+          button: true,
+          label: l10n.tutorPlanOpenPreview,
+          child: InkWell(
+            key: ValueKey('tutor-plan-block-${b.planId}'),
+            onTap: () => onTap(b),
+            child: label,
+          ),
+        ),
       );
     }
     if (b is TutorWarningBlock) {

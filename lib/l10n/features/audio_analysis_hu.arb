@@ -1,0 +1,6 @@
+{
+  "@@locale": "hu",
+  "analysisHomeEntryCta": "Felvétel elemzése (V2)",
+  "analysisHomeImportUnavailable": "A fájlimport ebben a buildben még nem érhető el — vedd fel mikrofonnal helyette.",
+  "analysisHomeOpenFailed": "Nem sikerült megnyitni ezt az elemzést."
+}

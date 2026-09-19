@@ -133,12 +133,15 @@ List<_Sweep> _sweeps(Map<String, dynamic> jams) {
 /// Records the model's RAW verdict and reports a fixed confident one, so the
 /// analyzer emits exactly one event per classify call and the shipped
 /// no-strum suppression removes nothing from the pass. This seam's
-/// [StrumDirectionClassifier] has no `settleAfterFrames` member (that is an
-/// E18-only addition), so nothing is delegated beyond [observe].
+/// This seam delegates the settled-tier deadline to the wrapped classifier so
+/// the recorded pass matches the shipped one exactly.
 final class _Recorder implements StrumDirectionClassifier {
   _Recorder(this._inner);
   final LiveCrnnStrumClassifier _inner;
   final List<StrumClassification> calls = [];
+
+  @override
+  int? get settleAfterFrames => _inner.settleAfterFrames;
 
   @override
   void observe(Float64List frame, StrumFrameFeatures features) =>

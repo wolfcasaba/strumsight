@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -8,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/routing/route_guards.dart';
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../learn/public.dart' show chordAuditionProvider;
 import '../../application/editor/song_editor_state.dart';
 import '../../application/editor/song_editor_controller.dart';
 import '../../application/song_trainer_providers.dart';
@@ -273,6 +275,9 @@ final class _EditorBody extends ConsumerWidget {
     final controller = ref.read(songEditorControllerProvider(id));
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final typography = Theme.of(context).extension<SsTypography>()!;
+    // Watched, not read: the route-scoped audition lives exactly as long as
+    // the editor body is mounted (ADR 0535 D2).
+    final audition = ref.watch(chordAuditionProvider);
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(SsSpacing.space4),
@@ -400,8 +405,15 @@ final class _EditorBody extends ConsumerWidget {
           const SizedBox(height: SsSpacing.space5),
           SongEventEditor(
             measureCount: draft.measures.length,
-            onAddChord: (measureIndex, symbol) =>
-                controller.addChord(measureIndex: measureIndex, symbol: symbol),
+            onAddChord: (measureIndex, symbol) {
+              controller.addChord(measureIndex: measureIndex, symbol: symbol);
+              // Composing by ear: the chord just written is heard as its
+              // strummed fingering (ADR 0535 D1, D4). A separate "hear
+              // again" control is deferred: it would move the E13-R24 pixel
+              // golden of this screen, which only the user's box can
+              // regenerate (brief §0.0).
+              unawaited(audition.strum(symbol));
+            },
             onApplyPattern: (measureIndex, pattern) =>
                 controller.applyStrumPattern(
                   measureIndex: measureIndex,

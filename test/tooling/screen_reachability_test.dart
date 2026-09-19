@@ -82,15 +82,118 @@ List<String> _retireRowsMissingSuccessorOrReason(List<_PlanRow> retireRows) {
 void main() {
   final repository = Directory.current;
 
-  group('A1 — every one of the 97 real screens gets a verdict with a source '
+  group('A0 — a class name in a COMMENT is not a reference to it', () {
+    // MEASURED DEFECT, E18-R22. The scan had no comment handling, so
+    // `app_router.dart`'s comment explaining that `CommunityChallengesScreen` is
+    // deliberately NOT routed (the hosted backend serves no challenge list) was
+    // matched as that screen's route site. The screen was reported **reachable**,
+    // citing the comment line as its source.
+    //
+    // It was not one stray line. Stripping comments changed the measurement across
+    // the tree: Reachable 86 -> 85, Flag-gated 36 -> 37, and fifteen cited route
+    // lines in `app_router.dart` turned out to be prose. The most consequential was
+    // `ProgressDashboardScreen`, whose only REAL registration sits inside
+    // `adaptiveShellEnabled` — it had been reported un-gated, i.e. available in every
+    // build. Test-reference counts were inflated too (`OnboardingScreen` 27 -> 20,
+    // `LearnScreen` 33 -> 27), so "how well covered is this screen" read high.
+    //
+    // These cells pin the stripper's behaviour directly, because it now decides every
+    // verdict the guards below rest on.
+
+    test('it cuts at // but never inside a string', () {
+      expect(
+        ScreenReachability.stripLineComment(
+          '  const x = 1; // LiveScreen here',
+        ),
+        '  const x = 1; ',
+      );
+      // A route path or URL containing `//` must survive: truncating it would drop
+      // real code and silently make routed screens look unreachable — the same
+      // defect with the sign flipped.
+      expect(
+        ScreenReachability.stripLineComment("  path: 'https://x/y', // note"),
+        "  path: 'https://x/y', ",
+      );
+      expect(
+        ScreenReachability.stripLineComment(
+          '  builder: (_, _) => const LiveScreen(),',
+        ),
+        '  builder: (_, _) => const LiveScreen(),',
+      );
+      // An escaped quote must not be read as closing the string.
+      expect(
+        ScreenReachability.stripLineComment(
+          r"  final s = 'it\'s // not a comment';",
+        ),
+        r"  final s = 'it\'s // not a comment';",
+      );
+      // A doc comment is a comment.
+      expect(
+        ScreenReachability.stripLineComment('/// [LiveScreen] does x'),
+        '',
+      );
+    });
+
+    test('the challenge screen is measured from the ROUTE, not from the '
+        'comment that used to be read as one (E18-R22 / integráció)', () {
+      // The specific regression, asserted on the real tree rather than a
+      // fixture. When the scan had no comment handling, the router's prose
+      // explaining why `CommunityChallengesScreen` was NOT routed counted as
+      // its route site. The prose is gone: the shipped router registers
+      // `AppRoutes.communityChallenges` under `communityEnabled`, and the
+      // hosted instance serves the challenge reads (`challenges.py` GETs).
+      // So the declarative hits must be REAL route sites in the router, and
+      // the verdict must be flag-gated rather than unconditionally available
+      // — which is exactly what a comment-derived hit could never show.
+      final measured = ScreenReachability(repository).render();
+      final challenges = measured.verdicts.firstWhere(
+        (v) => v.screenPath.endsWith('community_challenges_screen.dart'),
+      );
+      expect(
+        challenges.declarativeReferences.map((r) => r.source.path),
+        everyElement(endsWith('app_router.dart')),
+        reason: 'the only declarative site is the router table itself',
+      );
+      expect(challenges.declarativeReferences, isNotEmpty);
+      expect(challenges.isReachable, isTrue);
+      expect(
+        challenges.isFlagGated,
+        isTrue,
+        reason:
+            'the route sits under `communityEnabled`; an un-gated verdict '
+            'would mean the scan matched something outside the flag block',
+      );
+    });
+
+    test('the stated limit is real: no scanned source has a block comment', () {
+      // `stripLineComment` cannot remove `/* ... */`, which needs state a
+      // single-line scan does not carry, and this tool avoids a full Dart parser on
+      // purpose. So the limit is MEASURED rather than hoped: if a routing source
+      // ever grows a block comment, this fails and says so, instead of the gap
+      // quietly reopening.
+      expect(
+        ScreenReachability(repository).blockCommentSources(),
+        isEmpty,
+        reason:
+            'a block comment in a routing source can still hide a class name from '
+            'the stripper — either reword it as // lines or teach the scan to '
+            'track block state',
+      );
+    });
+  });
+
+  group('A1 — every one of the 100 real screens gets a verdict with a source '
       'reference', () {
-    test('measures all 97, each with a non-empty source location, '
+    test('measures all 100, each with a non-empty source location, '
         'deterministically', () {
       final checker = ScreenReachability(repository);
       final first = checker.render();
       final second = checker.render();
 
-      expect(first.verdicts, hasLength(97));
+      // 98 -> 99 on 2026-09-15: the 60-second strum challenge screen.
+      // 99 -> 100 on 2026-09-19: `setlist_list_screen_v2.dart`, brought in by
+      // the E18-vonal integration (the widened inventory filter).
+      expect(first.verdicts, hasLength(100));
       expect(first.toJsonString(), second.toJsonString());
       for (final verdict in first.verdicts) {
         expect(verdict.primaryReference.path, isNotEmpty);
@@ -240,7 +343,9 @@ final routes = [
     });
 
     test('the plan has exactly one row per measured screen', () {
-      expect(planRows.map((r) => r.screenPath).toSet(), hasLength(97));
+      // 98 -> 99 on 2026-09-15: the 60-second strum challenge screen.
+      // 99 -> 100 on 2026-09-19: see the A1 cell above.
+      expect(planRows.map((r) => r.screenPath).toSet(), hasLength(100));
       expect(
         planByPath.keys.toSet(),
         measured.verdicts.map((v) => v.screenPath).toSet(),

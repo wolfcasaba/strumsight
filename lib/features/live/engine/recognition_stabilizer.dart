@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import '../../../core/music/strum.dart';
 import '../domain/recognition/recognition_decision.dart';
 import '../model/live_frame.dart';
@@ -32,9 +34,25 @@ enum StabilizerProfile {
 /// it never rewrites one, since `LiveFrame`'s `copyWith` cannot clear a
 /// nullable field and the model file is out of this round's scope.
 class RecognitionStabilizer {
-  RecognitionStabilizer({this.profile = StabilizerProfile.free});
+  RecognitionStabilizer({
+    this.profile = StabilizerProfile.free,
+    this.onsetTransientGuardSec = defaultOnsetTransientGuardSec,
+  });
 
   final StabilizerProfile profile;
+
+  /// Frames closer than this to the latest strum onset never COUNT toward a
+  /// displacement (ADR 0539 D2). The decoder deliberately lowers its switch
+  /// guard for ~186 ms after an onset (chunk 016 rec #2) — exactly the
+  /// window in which the attack transient makes the chroma least reliable —
+  /// so a wrong label there is the common one-strum blip, not evidence. The
+  /// pending label is remembered, the counter simply starts after the
+  /// attack; a frame without onset timing (`latestStrumTime < 0` or
+  /// `engineTimeSec < 0`) is counted as before. Set to 0 to disable.
+  final double onsetTransientGuardSec;
+
+  /// Covers the decoder's 2-frame onset boost (2 × 93 ms) plus onset lag.
+  static const double defaultOnsetTransientGuardSec = 0.2;
 
   RecognitionDecision _chordState = RecognitionDecision.candidate;
   String? _pendingLabel;
@@ -64,6 +82,10 @@ class RecognitionStabilizer {
   /// displacements.
   double get flipRate =>
       _framesProcessed == 0 ? 0 : _confirmedFlips / _framesProcessed;
+
+  /// Frames seen so far (test surface for flip counting).
+  @visibleForTesting
+  int get debugFramesProcessed => _framesProcessed;
 
   /// Returns [frame] when it should reach the timeline, `null` when it
   /// should be dropped.
@@ -98,13 +120,17 @@ class RecognitionStabilizer {
 
     // A displacement attempt against an established label needs sustained
     // agreement before it can override it (ADR 0518 D3).
-    if (current.label == _pendingLabel) {
-      _agreeFrames++;
-    } else {
+    if (current.label != _pendingLabel) {
       _pendingLabel = current.label;
-      _agreeFrames = 1;
+      _agreeFrames = 0;
       _pendingFirstFrame = _framesProcessed;
     }
+    if (_inOnsetTransient(frame)) {
+      // Attack-window evidence (ADR 0539 D2): remembered, never counted.
+      _chordState = RecognitionDecision.provisional;
+      return null;
+    }
+    _agreeFrames++;
 
     if (_agreeFrames < profile.minAgreeFrames) {
       _chordState = RecognitionDecision.provisional;
@@ -118,6 +144,12 @@ class RecognitionStabilizer {
     _agreeFrames = 0;
     _chordState = RecognitionDecision.confirmed;
     return frame;
+  }
+
+  bool _inOnsetTransient(LiveFrame frame) {
+    if (onsetTransientGuardSec <= 0) return false;
+    if (frame.latestStrumTime < 0 || frame.engineTimeSec < 0) return false;
+    return frame.engineTimeSec - frame.latestStrumTime < onsetTransientGuardSec;
   }
 
   /// ADR 0518 D7 — an accepted strum event's direction is immutable, keyed by

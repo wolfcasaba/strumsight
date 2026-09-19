@@ -170,6 +170,12 @@
   "followingFeedPracticeNotAvailable": "A gyakorlás indítása a jövőbeli körökben érhető el.",
   "@followingFeedPracticeNotAvailable": {},
 
+  "followingFeedCompose": "Új poszt",
+  "@followingFeedCompose": {},
+
+  "followingFeedSearch": "Emberek keresése",
+  "@followingFeedSearch": {},
+
   "feedCardPracticeSummaryTitle": "Gyakorlás összegzés",
   "@feedCardPracticeSummaryTitle": {},
 
@@ -320,6 +326,9 @@
 
   "communityNotificationsMarkAllRead": "Összes olvasottnak jelölése",
   "@communityNotificationsMarkAllRead": {},
+
+  "communityNotificationsOpenChallenges": "Kihívások",
+  "@communityNotificationsOpenChallenges": {},
 
   "communityNotificationsEmpty": "Még nincsenek értesítések.",
   "@communityNotificationsEmpty": {},
@@ -789,5 +798,6 @@
   "communityChallengeResultVerifiedIcon": "Ellenőrizve",
   "@communityChallengeResultVerifiedIcon": {},
 
-  "communityChallengeMyResultAction": "Saját eredmény megtekintése"
+  "communityChallengeMyResultAction": "Saját eredmény megtekintése",
+  "communityOpenCta": "Közösség megnyitása"
 }

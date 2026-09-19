@@ -6,7 +6,7 @@ import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../settings/public.dart';
 import '../audio/metronome.dart';
-import '../calibration/latency_calibrator.dart';
+import '../../../core/audio/latency_calibrator.dart';
 
 /// Rock-Band-style timing calibration (chunk 016b P3): a click plays at
 /// 100 BPM; the user taps a big SILENT button on every click; the median tap

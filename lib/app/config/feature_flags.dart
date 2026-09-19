@@ -113,6 +113,19 @@ final class FeatureFlags {
   /// - [songTrainerV2Enabled] is available outside production through the
   ///   same `nonProd` rollout boundary as Practice V2. The default constructor
   ///   remains OFF, so manually created flags still require an explicit opt-in.
+  /// - [aiTutorEnabled] (the LOCAL tutor) is available outside production
+  ///   since the owner decision of 2026-09-15 ("the whole app must work in
+  ///   the builds I install"): the local tutor path is offline-capable
+  ///   (`LocalTutorFallback`) and `main.dart` already wires the production
+  ///   tutor overrides at boot, so nothing external is required. Production
+  ///   is unchanged (OFF). [aiTutorCloudEnabled] needs the backend proxy and
+  ///   stays OFF everywhere.
+  /// - Audio Analysis V2 — [audioAnalysisV2Enabled] and its six non-
+  ///   experimental sub-flags — is available outside production under the
+  ///   same 2026-09-15 owner decision; the V2 route gains its capture
+  ///   producer in the same development/lab lane. Production is unchanged
+  ///   (OFF, `analysisRolloutStage` stays `v1Default` there). The two
+  ///   experimental analysis flags stay OFF everywhere.
   /// - [previewAll] mirrors the `STRUMSIGHT_PREVIEW_ALL` dart-define (WP-E,
   ///   2026-09-06). It is a **non-production preview switch only**: see
   ///   [_withPreviewSurfacesEnabled] for the exact list of what it turns on,
@@ -245,7 +258,13 @@ final class FeatureFlags {
       migratedLearnEnabled: nonProd,
       practiceDetailedHistoryEnabled: nonProd,
       songTrainerV2Enabled: nonProd,
-      aiTutorEnabled: false,
+      // Owner decision 2026-09-15 — the LOCAL AI Tutor follows the same
+      // `nonProd` boundary as Practice V2: ON in development/lab, OFF in
+      // production. It is offline-capable (`LocalTutorFallback`) and the
+      // production tutor overrides are wired in `main.dart` regardless of
+      // this flag. `aiTutorCloudEnabled` requires the StrumSight backend
+      // proxy (R-PRIV-01 open) and stays OFF everywhere.
+      aiTutorEnabled: nonProd,
       aiTutorCloudEnabled: false,
       // E15-R07 F1 (ADR 0491 D2) — same `nonProd` rollout boundary as
       // `practiceEngineV2Enabled`: ON outside production, OFF in
@@ -264,24 +283,20 @@ final class FeatureFlags {
       visionAnalysisIntegrationEnabled: false,
       visionExperimentalFineFretEnabled: false,
       visionLabCaptureEnabled: false,
-      // 2026-09-05: dart-define-olható, DE az alapérték változatlanul
-      // hamis — a `bool.fromEnvironment` define nélkül `false`, tehát a
-      // szállított viselkedés bájtra ugyanaz. A kapcsolóra azért van
-      // szükség, mert a felvételi folyamat (`presentation/capture/`) e
-      // nélkül EGYETLEN buildben sem volt bekapcsolható, így a
-      // kézi teszteléshez sem. Az Epic 6 rollout-döntését ez NEM előlegzi
-      // meg: a `false` marad az alapértelmezés minden környezetben.
-      audioAnalysisV2Enabled: const bool.fromEnvironment(
-        'STRUMSIGHT_ANALYSIS_V2',
-      ),
-      analysisBeatGridEnabled: false,
-      analysisPitchEnabled: false,
+      // Owner decision 2026-09-15 — Audio Analysis V2 and its six
+      // non-experimental sub-flags follow the `nonProd` boundary: ON in
+      // development/lab (where the V2 route gains its capture producer),
+      // OFF in production (`analysisRolloutStage` stays `v1Default` there).
+      // The two experimental flags below stay OFF in every environment.
+      audioAnalysisV2Enabled: nonProd,
+      analysisBeatGridEnabled: nonProd,
+      analysisPitchEnabled: nonProd,
       analysisPreprocessingExperimentalEnabled: false,
       analysisExperimentalFusionEnabled: false,
-      analysisTechniqueProxiesEnabled: false,
-      analysisComparisonEnabled: false,
-      analysisPracticeIntegrationEnabled: false,
-      analysisTutorIntegrationEnabled: false,
+      analysisTechniqueProxiesEnabled: nonProd,
+      analysisComparisonEnabled: nonProd,
+      analysisPracticeIntegrationEnabled: nonProd,
+      analysisTutorIntegrationEnabled: nonProd,
       recognitionRecoveryEnabled: false,
       recognitionShadowModeEnabled: false,
       newLiveStageEnabled: false,
@@ -481,10 +496,14 @@ final class FeatureFlags {
   /// default constructor stays OFF. The flag has no dart-define override.
   final bool songTrainerV2Enabled;
 
-  /// Whether the AI Tutor feature is available. Defaults to OFF.
+  /// Whether the (local, offline-capable) AI Tutor feature is available.
+  /// [forEnvironment] enables it outside production (owner decision
+  /// 2026-09-15); production stays OFF and the default constructor stays
+  /// OFF for explicitly constructed flag sets.
   final bool aiTutorEnabled;
 
-  /// Whether cloud AI Tutor capabilities are available. Defaults to OFF.
+  /// Whether cloud AI Tutor capabilities are available. Defaults to OFF and
+  /// stays OFF in every environment (needs the backend proxy, R-PRIV-01).
   final bool aiTutorCloudEnabled;
 
   /// Whether deterministic practice-plan generation is available. Available
@@ -531,14 +550,18 @@ final class FeatureFlags {
   /// Whether Lab-only camera capture diagnostics are available.
   final bool visionLabCaptureEnabled;
 
-  /// Whether the parallel Audio Analysis V2 route is available. It remains
-  /// OFF in every environment throughout the Epic 6 build phase (ADR 0220).
+  /// Whether the parallel Audio Analysis V2 route is available.
+  /// [forEnvironment] enables it outside production (owner decision
+  /// 2026-09-15, `nonProd`); production stays OFF (ADR 0220) and the
+  /// default constructor stays OFF.
   final bool audioAnalysisV2Enabled;
 
-  /// Whether V2 may publish beat-grid evidence. Defaults to OFF (ADR 0220).
+  /// Whether V2 may publish beat-grid evidence. Constructor default OFF;
+  /// `nonProd` in [forEnvironment] (ADR 0220, owner decision 2026-09-15).
   final bool analysisBeatGridEnabled;
 
-  /// Whether V2 may publish pitch evidence. Defaults to OFF (ADR 0220).
+  /// Whether V2 may publish pitch evidence. Constructor default OFF;
+  /// `nonProd` in [forEnvironment] (ADR 0220, owner decision 2026-09-15).
   final bool analysisPitchEnabled;
 
   /// Whether experimental V2 DC removal and peak normalization may run.
@@ -552,21 +575,23 @@ final class FeatureFlags {
   /// Whether the Lab-only technique-proxy calculators (E06-R18, ADR 0236) may
   /// run. Even when true, the calculator itself only executes for a caller
   /// that separately signals explicit Lab mode — the two gates are distinct
-  /// and both required. It remains OFF in every environment until the
-  /// proxies' eval-matrix rows are closed.
+  /// and both required. Constructor default OFF; `nonProd` in
+  /// [forEnvironment] (owner decision 2026-09-15), OFF in production.
   final bool analysisTechniqueProxiesEnabled;
 
   /// Whether the session comparison and trend route (E06-R25, ADR 0246) is
-  /// reachable. Remains OFF in every environment until the eval-matrix rows
-  /// are closed with real device data (brief §9).
+  /// reachable. Constructor default OFF; `nonProd` in [forEnvironment]
+  /// (owner decision 2026-09-15), OFF in production.
   final bool analysisComparisonEnabled;
 
   /// Whether Analysis evidence adapters for Practice and Song may instantiate.
-  /// This remains OFF in every environment until consumer wiring ships.
+  /// Constructor default OFF; `nonProd` in [forEnvironment] (owner decision
+  /// 2026-09-15), OFF in production.
   final bool analysisPracticeIntegrationEnabled;
 
   /// Whether the redacted Analysis-to-Tutor adapter may instantiate.
-  /// This remains OFF in every environment until Tutor wiring ships.
+  /// Constructor default OFF; `nonProd` in [forEnvironment] (owner decision
+  /// 2026-09-15), OFF in production.
   final bool analysisTutorIntegrationEnabled;
 
   /// Whether the recognition recovery program may activate its guarded paths.

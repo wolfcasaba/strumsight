@@ -122,11 +122,13 @@ class PracticeSetupScreen extends ConsumerWidget {
   /// for the entry points that still land here with an empty stack (a
   /// `/practice/setup` deep link, or `onException`'s reset).
   void _backToHub(BuildContext context) {
+    // Pushed from the hub (E18-R01 F4) → pop back to it; a deep link with
+    // nothing underneath still lands on the hub.
     if (context.canPop()) {
       context.pop();
-      return;
+    } else {
+      context.go(AppRoutes.practiceHub);
     }
-    context.go(AppRoutes.practiceHub);
   }
 }
 
@@ -431,16 +433,38 @@ class _ScoringProfileReadout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ),
-        Text(profileId, style: Theme.of(context).textTheme.bodySmall),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // The id keeps its natural width — so the un-scaled layout (and its
+        // pixel goldens) is unchanged — but may take at most 60 % of the
+        // row: at textScale 2.0 it wraps instead of overflowing (E18-R01;
+        // the E12-R20 audit's `setup-scoring-profile-overflow` finding).
+        final idMaxWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth * 0.6
+            : double.infinity;
+        return Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            // No `textAlign: end`: with the paragraph laid out at its own
+            // intrinsic width the end-alignment lands on a sub-pixel offset
+            // (bodySmall's letter spacing) and shifts every glyph — the
+            // e13_r21 compact golden moved by 240 px. Start-aligned lines are
+            // pixel-identical to the pre-fix render.
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: idMaxWidth),
+              child: Text(
+                profileId,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

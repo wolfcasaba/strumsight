@@ -23,8 +23,10 @@ entries one of three buckets (ADR 0503 D1):
                    account, or belongs to an unrelated subsystem (tutor,
                    diagnostics).
   known_gap       the contract itself marks it `known_gap` (a client call
-                   site with no backend route yet) — the chain expects a
-                   `404` and reports the path's PRESENCE as the failure.
+                   site with no backend route yet). The chain does not
+                   probe these; `backend/tests/test_client_contract_parity.py`
+                   is the canary that turns red the moment such a route
+                   appears without the contract flipping to `mounted`.
 
 An entry that lands in none of the three buckets is `unclassified`, and
 `main()` fails closed on that (exit 2) BEFORE any network call — a new
@@ -74,12 +76,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_CONTRACT_PATH = (
     _REPO_ROOT / "docs" / "contracts" / "client-backend-endpoints.json"
 )
-
-# No route in `backend/app/community/routers/challenges.py` matches ANY id
-# shape for the three known_gap paths (there is no GET route registered at
-# all) — a fixed placeholder is enough to prove the path 404s.
-_KNOWN_GAP_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000"
-
 
 class _HttpError(Exception):
     """A request could not even reach the server — distinct from an HTTP
@@ -219,6 +215,9 @@ _EXERCISED_ORDER: tuple[tuple[str, str], ...] = (
     ("PUT", "/community/profiles/me"),
     ("GET", "/community/blocked"),
     ("GET", "/community/muted"),
+    ("GET", "/community/challenges"),
+    ("GET", "/community/notifications"),
+    ("GET", "/community/notifications/preferences"),
 )
 
 # Every other `mounted` contract entry, with the documented reason it is out
@@ -296,6 +295,16 @@ _NOT_EXERCISED: dict[tuple[str, str], str] = {
         "requires an existing mute from a second account; see the mute "
         "endpoint above"
     ),
+    ("GET", "/community/challenges/{challenge_public_id}"): (
+        "requires an existing challenge id; GET /community/challenges "
+        "already proves the authenticated challenge read surface, and no "
+        "challenge-creation endpoint is mounted to seed one from a single "
+        "account"
+    ),
+    ("GET", "/community/challenges/{challenge_public_id}/me"): (
+        "requires an existing challenge id this single-account chain has no "
+        "way to create; see the challenge detail entry above"
+    ),
     ("POST", "/community/challenges/{challenge_public_id}/invites"): (
         "needs an existing challenge and a second account to invite; no "
         "challenge-creation endpoint is mounted to seed one from a single "
@@ -316,6 +325,21 @@ _NOT_EXERCISED: dict[tuple[str, str], str] = {
     ),
     ("GET", "/community/leaderboards/{challenge_public_id}"): (
         "requires an existing challenge id; see the results endpoint above"
+    ),
+    ("POST", "/community/notifications/{public_id}/read"): (
+        "requires an existing inbox entry, which only a second account's "
+        "follow/invite activity can produce; also registered only under "
+        "community_writes_enabled, a deploy switch this bring-up chain does "
+        "not assume"
+    ),
+    ("POST", "/community/notifications/read-all"): (
+        "takes a cutoff notification id the single-account chain cannot "
+        "obtain (empty inbox); registered only under community_writes_enabled"
+    ),
+    ("PUT", "/community/notifications/preferences/{category}"): (
+        "a preference write registered only under community_writes_enabled, "
+        "a deploy switch this bring-up chain does not assume; GET "
+        "/community/notifications/preferences already proves the read shape"
     ),
 }
 
@@ -346,8 +370,9 @@ def classify_contract(
                     entry.method,
                     entry.path,
                     "known_gap",
-                    "contract declares this a known_gap (ADR 0497 D5) — the "
-                    "chain expects 404 and reports its presence as a break",
+                    "contract declares this a known_gap (ADR 0497 D5) — not "
+                    "probed by the chain; the backend parity test is the "
+                    "canary for a route that appears without a contract flip",
                 )
             )
         elif key in exercised:
@@ -429,32 +454,6 @@ def _record(
         StepResult(name, method, path, True, f"{resp.status_code} as expected")
     )
     return True
-
-
-def _record_expected_absent(
-    steps: list[StepResult], *, name: str, method: str, path: str, resp: Response
-) -> bool:
-    """The known_gap counterpart to `_record`: a `404` is the PASS outcome —
-    anything else means the contract is stale (a future round implemented
-    the route without flipping its `status` to `mounted`)."""
-    if resp.status_code == 404:
-        steps.append(
-            StepResult(name, method, path, True, "404 as expected (known_gap)")
-        )
-        return True
-    steps.append(
-        StepResult(
-            name,
-            method,
-            path,
-            False,
-            f"expected {method} {path} -> 404 (known_gap), got "
-            f"{resp.status_code} — the contract may be stale: a route that "
-            "now exists must flip this entry to 'mounted' and get a real "
-            "classification",
-        )
-    )
-    return False
 
 
 def run_chain(client, *, email: str, password: str) -> list[StepResult]:
@@ -707,29 +706,50 @@ def run_chain(client, *, email: str, password: str) -> list[StepResult]:
     ):
         return steps
 
-    # known_gap probes (ADR 0503 D1 "Következmények") — the SAME chain, same
-    # halt-on-divergence discipline, proving the three challenges-listing
-    # paths are still absent on this deploy.
-    known_gap_paths = (
-        ("known_gap_challenges", "GET", "/community/challenges"),
-        (
-            "known_gap_challenge_detail",
-            "GET",
-            f"/community/challenges/{_KNOWN_GAP_PLACEHOLDER_ID}",
-        ),
-        (
-            "known_gap_challenge_me",
-            "GET",
-            f"/community/challenges/{_KNOWN_GAP_PLACEHOLDER_ID}/me",
-        ),
-    )
-    for name, method, path in known_gap_paths:
+    # The challenge listing was a known_gap until the challenge read
+    # endpoints were mounted (E17-R13 backend leg); the chain now exercises
+    # it as an authenticated read — an empty page is the expected shape for
+    # a freshly registered account.
+    try:
+        resp = client.get("/community/challenges", headers=auth_headers)
+    except _HttpError as error:
+        steps.append(
+            StepResult(
+                "community_challenges",
+                "GET",
+                "/community/challenges",
+                False,
+                f"request failed: {error}",
+            )
+        )
+        return steps
+    if not _record(
+        steps,
+        name="community_challenges",
+        method="GET",
+        path="/community/challenges",
+        resp=resp,
+        expected_status=200,
+    ):
+        return steps
+
+    # Notification inbox + preferences (E17-R13 backend leg): both are
+    # authenticated reads registered under ``community_enabled`` alone (the
+    # inbox writes follow ``community_writes_enabled`` and are left to the
+    # backend suite), so an empty inbox and the default preference set are
+    # the expected shapes for a freshly registered account.
+    for name, path in (
+        ("community_notifications", "/community/notifications"),
+        ("community_notification_preferences", "/community/notifications/preferences"),
+    ):
         try:
             resp = client.get(path, headers=auth_headers)
         except _HttpError as error:
-            steps.append(StepResult(name, method, path, False, f"request failed: {error}"))
+            steps.append(StepResult(name, "GET", path, False, f"request failed: {error}"))
             return steps
-        if not _record_expected_absent(steps, name=name, method=method, path=path, resp=resp):
+        if not _record(
+            steps, name=name, method="GET", path=path, resp=resp, expected_status=200
+        ):
             return steps
 
     return steps

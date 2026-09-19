@@ -1,24 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/storage/storage_providers.dart';
 import 'package:strumsight/features/practice_generator/public.dart';
 
 import '../../../core/storage/in_memory_key_value_store.dart';
 import '../../../fixtures/practice_generator/validation/validation_fixtures.dart';
-
-/// Riverpod 3 wraps a provider-creation error in a [ProviderException]
-/// (possibly nested, when the failure comes from a chain of `ref.watch`
-/// calls) whenever it crosses a `container.read`/`ref.watch` boundary.
-/// The B2 guard cells below care about the ROOT cause
-/// (`UnimplementedError`, the deliberate open-seam signal — round brief
-/// §10.9 / ADR 0482 / D9), not how many wrapping layers Riverpod added.
-
-// 2026-09-05: a `_throwsUnimplementedSeam` matcher MEGSZŰNT, mert nincs
-// többé nyitott seam ebben a fájlban — a katalógus-feloldó és a
-// terv-bemenet építő is be van kötve. A matchert nem `ignore`-ral
-// hagytuk bent: egy „dobásra váró" segéd egy bekötött rendszerben azt
-// sugallná, hogy még van mire várni.
 
 /// E15-R14 §6/A3: every MANDATORY constructor dependency of the 6 plan
 /// screens (round brief §0.0.B/R4) resolves from ONE `ProviderScope`, with
@@ -237,102 +223,106 @@ void main() {
     expect(closed, isTrue);
   });
 
-  group(
-    'B2 guard: a production-shape container (keyValueStoreProvider '
-    'overridden ONLY) — which provider builds and which throws is a '
-    'MEASURED fact, not an assumption (round brief §10.1, ADR 0482 / D9)',
-    () {
-      ProviderContainer buildProductionShapeContainer() {
-        final container = ProviderContainer(
-          overrides: [
-            keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
-          ],
-        );
-        addTearDown(container.dispose);
-        return container;
-      }
+  group('B2 guard: a production-shape container (keyValueStoreProvider '
+      'overridden ONLY) — which provider builds is a MEASURED fact, not an '
+      'assumption (round brief §10.1, ADR 0482 / D9). E17-R05 closed both '
+      'seams, so every cell now builds; the seam-level proof lives in '
+      'seam_implementation_test.dart', () {
+    ProviderContainer buildProductionShapeContainer() {
+      final container = ProviderContainer(
+        overrides: [
+          keyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
+        ],
+      );
+      addTearDown(container.dispose);
+      return container;
+    }
 
-      test('1/6 PlanSetup: planSetupControllerProvider builds', () {
-        final container = buildProductionShapeContainer();
-        expect(
-          () => container.read(planSetupControllerProvider),
-          returnsNormally,
-        );
-      });
+    test('1/6 PlanSetup: planSetupControllerProvider builds', () {
+      final container = buildProductionShapeContainer();
+      expect(
+        () => container.read(planSetupControllerProvider),
+        returnsNormally,
+      );
+    });
 
-      // 2026-09-05: a cella MEGFORDULT. Korábban azt rögzítette, hogy a
-      // provider DOB, mert nem volt éles `ExerciseCandidateResolver`. Az a
-      // seam azóta be van kötve (beépített katalógus + tervezői metaadat),
-      // ezért a mért tény most az ellenkezője. A cella nem törlődött: a
-      // hibaosztály ugyanaz marad, csak az elvárt irány fordult.
-      test('2/6 PlanPreview: planPreviewControllerFactoryProvider builds — '
-          'az éles ExerciseCandidateResolver be van kötve', () {
-        final container = buildProductionShapeContainer();
-        expect(
-          () => container.read(planPreviewControllerFactoryProvider),
-          returnsNormally,
-        );
-      });
+    test('2/6 PlanPreview: planPreviewControllerFactoryProvider builds on '
+        'the production ExerciseCandidateResolver seam (E17-R05)', () {
+      final container = buildProductionShapeContainer();
+      expect(
+        () => container.read(planPreviewControllerFactoryProvider),
+        returnsNormally,
+      );
+      expect(
+        () => container.read(planValidationContextForPlanProvider),
+        returnsNormally,
+      );
+    });
 
-      test('3/6 PlanPrivacy: deletePracticePlanningDataProvider and '
-          'exportPracticePlanningDataProvider both build', () {
-        final container = buildProductionShapeContainer();
-        expect(
-          () => container.read(deletePracticePlanningDataProvider),
-          returnsNormally,
-        );
-        expect(
-          () => container.read(exportPracticePlanningDataProvider),
-          returnsNormally,
-        );
-      });
+    test('3/6 PlanPrivacy: deletePracticePlanningDataProvider and '
+        'exportPracticePlanningDataProvider both build', () {
+      final container = buildProductionShapeContainer();
+      expect(
+        () => container.read(deletePracticePlanningDataProvider),
+        returnsNormally,
+      );
+      expect(
+        () => container.read(exportPracticePlanningDataProvider),
+        returnsNormally,
+      );
+    });
 
-      test('4/6 PlanChangeReview: revisePracticePlanProvider builds', () {
-        final container = buildProductionShapeContainer();
-        expect(
-          () => container.read(revisePracticePlanProvider),
-          returnsNormally,
-        );
-      });
+    test('4/6 PlanChangeReview: revisePracticePlanProvider and the Today '
+        'proposal use case both build; no active plan → no proposal '
+        '(explicit null, never a fabricated change set)', () async {
+      final container = buildProductionShapeContainer();
+      expect(() => container.read(revisePracticePlanProvider), returnsNormally);
+      expect(
+        () => container.read(proposeTodayPlanChangeProvider),
+        returnsNormally,
+      );
+      final proposal = await container.read(
+        todayPlanChangeProposalProvider.future,
+      );
+      expect(proposal, isNull);
+    });
 
-      test('5/6 TodayPlan: todayPlanControllerProvider builds', () {
-        final container = buildProductionShapeContainer();
-        expect(
-          () => container.read(todayPlanControllerProvider),
-          returnsNormally,
-        );
-      });
+    test('5/6 TodayPlan: todayPlanControllerProvider builds', () {
+      final container = buildProductionShapeContainer();
+      expect(
+        () => container.read(todayPlanControllerProvider),
+        returnsNormally,
+      );
+    });
 
-      test('6/6 WeeklyPlan: a nap ÉS az aktív terv is felold — a terv '
-          'hiánya `null`, nem kivétel', () async {
-        final container = buildProductionShapeContainer();
-        expect(
-          () => container.read(practiceGeneratorTodayProvider),
-          returnsNormally,
-        );
-        // Üres tárolón NINCS mentett terv. A helyes válasz `null` — az a
-        // „még nincs terv" állapot, amit a képernyő maga is kezel —, nem
-        // kivétel és nem kitalált üres terv.
-        await expectLater(
-          container.read(activePracticePlanProvider.future),
-          completion(isNull),
-        );
-      });
+    test('6/6 WeeklyPlan: practiceGeneratorTodayProvider builds and '
+        'activePracticePlanProvider reads "no active plan" through the '
+        'real plan repository + production resolver', () async {
+      final container = buildProductionShapeContainer();
+      expect(
+        () => container.read(practiceGeneratorTodayProvider),
+        returnsNormally,
+      );
+      final activePlan = await container.read(
+        activePracticePlanProvider.future,
+      );
+      expect(activePlan, isNull);
+    });
 
-      test('GEN: generationOrchestratorProvider és startPlanGenerationProvider '
-          'egyaránt felépül — mindkét seam be van kötve', () {
-        final container = buildProductionShapeContainer();
-        expect(
-          () => container.read(generationOrchestratorProvider),
-          returnsNormally,
-        );
-        expect(
-          () => container.read(startPlanGenerationProvider),
-          returnsNormally,
-        );
-      });
-    },
-  );
+    test('GEN: generationOrchestratorProvider and startPlanGenerationProvider '
+        'both build — the resolver AND the input-builder seam are closed '
+        '(E17-R05 / A1)', () {
+      final container = buildProductionShapeContainer();
+      expect(
+        () => container.read(generationOrchestratorProvider),
+        returnsNormally,
+      );
+      expect(
+        () => container.read(startPlanGenerationProvider),
+        returnsNormally,
+      );
+    });
+  });
 
   test('production default: the evidence repository is the PERSISTENT '
       'implementation, never the never-forgets in-memory test fake '

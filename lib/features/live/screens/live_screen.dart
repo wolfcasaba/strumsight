@@ -400,14 +400,20 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final brightness = Theme.of(context).brightness;
 
     // ---- Accessible announcement, throttled independently of the visual
-    // frame rate (ADR 0280 §2, §0.0/R8). ----
+    // frame rate (ADR 0280 §2, §0.0/R8). Announces the STABILIZED label the
+    // hero shows (ADR 0539 D1) — a screen reader must never hear a one-frame
+    // blip the sighted user no longer sees. ----
+    final announcedChord = timeline.isNotEmpty
+        ? timeline.last.chord
+        : frame.current;
     if (!_paused &&
         frame.listening &&
         frame.current != null &&
+        announcedChord != null &&
         frame.engineTimeSec >= 0) {
       final micros = (frame.engineTimeSec * 1e6).round();
       _liveRegion.report(
-        frame.current!.transposed(-capo).label,
+        announcedChord.transposed(-capo).label,
         at: Duration(microseconds: micros),
       );
     }
@@ -443,7 +449,17 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         : SsSessionTransportStatus.active;
 
     final latestStrum = frame.latestStrum;
-    final chordLabel = hasChord ? frame.current!.transposed(-capo).label : null;
+    // The hero shows the STABILIZED label (the timeline's newest card — only
+    // a label that survived the RecognitionStabilizer's agreement window
+    // ever becomes a card), not the raw per-frame decision: a one-or-two
+    // frame blip on a strum attack made the big chord jump to a wrong chord
+    // and back (user report 2026-09-09, ADR 0539). The raw frame still owns
+    // presence (`hasChord`), so the hero disappears the moment the chord
+    // gate releases; the raw label is only the cold-start fallback.
+    final stableChord = timeline.isNotEmpty ? timeline.last.chord : null;
+    final chordLabel = hasChord
+        ? (stableChord ?? frame.current!).transposed(-capo).label
+        : null;
     final confColor = AppColors.confidence(frame.confidence, brightness);
     final confTier = AppColors.confidenceTier(frame.confidence);
 
@@ -580,6 +596,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
             capo: capo,
             listening: !_paused && frame.listening,
             beat: beat,
+            // The card must expire with the chord gate (E18-R01 F2): no
+            // hero — and no confidence figure — while the frame says
+            // nothing is sounding, in step with the Stage hero above.
+            hasCurrent: hasChord,
           ),
           if (frame.bar.isNotEmpty)
             Padding(

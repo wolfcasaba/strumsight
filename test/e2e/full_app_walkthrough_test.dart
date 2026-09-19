@@ -21,6 +21,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/app/config/app_environment.dart';
 import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/app/routing/app_route.dart';
+import 'package:strumsight/features/curriculum/presentation/screens/curriculum_ladder_screen.dart';
 import 'package:strumsight/features/library_v2/screens/unified_library_screen.dart';
 import 'package:strumsight/features/onboarding/screens/first_win_stage_screen.dart';
 import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
@@ -130,8 +131,14 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
   // directly on the real Today experience with no teszt-oldali híd.
 
   // 2. Today Hub — a fresh install is the REAL "new user" state (zero
-  // sessions, zero streak, no plan) — its own doc-comment (A8) requires
-  // this be derived from real zero-state signals, never an invented number.
+  // sessions, zero streak) — its own doc-comment (A8) requires this be
+  // derived from real zero-state signals, never an invented number.
+  //
+  // It does, however, have a PLAN. `CurriculumTodayPlanRepository.load()`
+  // asks `curriculumNextStep` and the shipped course always offers a first
+  // rung, so `recommendedMissionId` is non-null from the very first launch.
+  // This comment used to say "no plan", and that stale clause is exactly what
+  // made the next stop wrong for a while — see stop 3.
   expect(find.byType(TodayHubScreen), findsOneWidget);
   walked.add('TodayHubScreen');
   expect(
@@ -145,9 +152,31 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
   await tester.tap(find.byKey(const ValueKey('today-hub-primary-cta')));
   await tester.pumpAndSettle();
 
-  // 3. Practice Area Hub (adaptive shell) — static content, no provider
-  // feed (ADR 0276 A4): the only "real data" assertion available is its
-  // own localized copy actually rendering.
+  // 3. Curriculum ladder — the Today CTA's REAL destination.
+  //
+  // `TodayHubScreen` picks `curriculumLadder` whenever the plan names a rung
+  // and `practiceHub` only when it does not, and its own comment says why:
+  // "a button labelled 'continue' that goes somewhere else is the hub lying
+  // about what it just offered." Since the plan always names one (stop 2),
+  // this tap has always landed here.
+  //
+  // This walkthrough asserted `PracticeAreaHubScreen` instead, and went red
+  // when `677b72e6 feat(today): the daily loop` made the shipped course the
+  // plan. The expectation was stale, NOT the product — so the fix is to
+  // assert the real destination rather than to bend the assertion back.
+  // Static content, no provider feed, so the available "real data" assertion
+  // is its own localized copy actually rendering (same standard as stop 3b).
+  expect(find.byType(CurriculumLadderScreen), findsOneWidget);
+  walked.add('CurriculumLadderScreen');
+  expect(find.text(l10n.curriculumLadderTitle), findsOneWidget);
+
+  // 3b. Practice Area Hub (adaptive shell) — no longer on the Today CTA's
+  // path, so it is reached the way stops 5-8 below already reach theirs:
+  // `session.router.go`, this file's own navigation idiom. Keeping the stop
+  // matters because everything from Setup onwards hangs off its CTA, and
+  // dropping it would shrink A2/A3 coverage silently.
+  session.router.go(AppRoutes.practiceHub);
+  await tester.pumpAndSettle();
   expect(find.byType(PracticeAreaHubScreen), findsOneWidget);
   walked.add('PracticeAreaHubScreen');
   expect(find.text(l10n.practiceAreaHubRecommendedTitle), findsOneWidget);
@@ -245,14 +274,19 @@ Future<Set<String>> runCoreWalkthrough(WidgetTester tester) async {
   await tester.pumpAndSettle();
 
   // 5. Library. MÉRT LELET (recorded in
-  // docs/release/full-app-verification.md, §5.2 — not fixed here):
-  // `libraryV2SourcesProvider` (`library_v2_providers.dart`) unconditionally
-  // reads `analysisRepositoryProvider`/`songRepositoryProvider`/
+  // docs/release/full-app-verification.md, §5.2): `libraryV2SourcesProvider`
+  // (`library_v2_providers.dart`) unconditionally reads
+  // `analysisRepositoryProvider`/`songRepositoryProvider`/
   // `setlistRepositoryProvider`, three providers whose base declarations
   // (`analysis_providers.dart`) deliberately `throw StateError` until the
-  // PRODUCTION bootstrap (`main.dart`) wires them from the boot variants —
+  // PRODUCTION bootstrap (`main.dart`) wires them from the boot variants.
+  // Until E18-R01 F5 the production bootstrap wired only the song store —
+  // the SAME error state shipped to every device; `main.dart` now wires all
+  // three (`production_repository_overrides.dart`, guarded by
+  // `test/app/bootstrap/production_repository_overrides_test.dart`).
   // `bootE2eApp` builds its `ProviderContainer` directly (E12-R11, ADR
-  // 0472), never runs that bootstrap, and does not override these three.
+  // 0472), never runs that bootstrap, and does not override these three,
+  // so THIS harness still measures the error branch.
   // `LibraryV2Controller.build()` therefore fails for EVERY item source,
   // and `UnifiedLibraryScreen` renders its own real, localized, EXPLICIT
   // `libraryV2LoadFailed` error state (§5.1's "or an explicit state" branch
@@ -379,6 +413,7 @@ void main() {
             'OnboardingScreen',
             'FirstWinStageScreen',
             'TodayHubScreen',
+            'CurriculumLadderScreen',
             'PracticeAreaHubScreen',
             'PracticeSetupScreen',
             'PracticeSessionScreen',

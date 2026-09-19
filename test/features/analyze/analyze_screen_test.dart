@@ -89,7 +89,7 @@ Widget _analyzeHost({required bool audioAnalysisV2Enabled}) {
         builder: (_, _) => const Scaffold(body: AnalyzeScreen()),
       ),
       GoRoute(
-        path: AppRoutes.analysisCapture,
+        path: AppRoutes.analysisHome,
         builder: (_, state) => Scaffold(body: Text('STUB ${state.uri.path}')),
       ),
     ],
@@ -125,7 +125,7 @@ void _wpDEntryPointTests() {
     await tester.tap(find.byKey(const Key('analyze-open-analysis-v2')));
     await tester.pumpAndSettle();
 
-    expect(find.text('STUB ${AppRoutes.analysisCapture}'), findsOneWidget);
+    expect(find.text('STUB ${AppRoutes.analysisHome}'), findsOneWidget);
   });
 
   testWidgets('WP-D — the entry is ABSENT when audioAnalysisV2Enabled is off '

@@ -12,6 +12,11 @@ import '../../../support/synth.dart';
 /// [StrumDirectionClassifier] seam, so the TFLite CRNN can drop in without
 /// touching the analyzer. This pins the seam's calling contract.
 class _RecordingClassifier implements StrumDirectionClassifier {
+  /// No settled tier: this double answers once, like the
+  /// heuristic (ADR 0556 D3).
+  @override
+  int? get settleAfterFrames => null;
+
   int observeCalls = 0;
   final List<(int onset, int current)> classifyCalls = [];
 

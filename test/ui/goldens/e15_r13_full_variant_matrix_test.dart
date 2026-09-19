@@ -117,6 +117,71 @@ import 'package:strumsight/features/community/domain/value_objects/public_user_i
 import 'package:strumsight/features/community/presentation/screens/clubs/club_list_screen.dart';
 import 'package:strumsight/features/community/presentation/screens/clubs/club_member_management_screen.dart';
 import 'package:strumsight/features/community/presentation/screens/edit_profile_screen.dart';
+// E18-R19 routed the community surface (`app_router.dart`, `if
+// (communityEnabled)`), so nine more community screens are measured
+// reachable — fixtures adapted from `e13_r33_screens_golden_test.dart` and
+// the `test/features/community/presentation/**` widget tests named per block.
+import 'package:strumsight/features/community/application/controllers/feed_controller.dart';
+import 'package:strumsight/features/community/application/controllers/notification_controller.dart';
+import 'package:strumsight/features/community/application/controllers/post_composer_controller.dart';
+import 'package:strumsight/features/community/data/local/feed_cache.dart';
+import 'package:strumsight/features/community/data/repositories/relationship_repository_impl.dart';
+import 'package:strumsight/features/community/domain/entities/community_challenge.dart';
+import 'package:strumsight/features/community/domain/entities/community_comment.dart';
+import 'package:strumsight/features/community/domain/entities/community_post.dart';
+import 'package:strumsight/features/community/domain/entities/moderation_state.dart';
+import 'package:strumsight/features/community/domain/entities/notification_item.dart';
+import 'package:strumsight/features/community/domain/entities/share_artifact.dart';
+import 'package:strumsight/features/community/domain/repositories/challenge_repository.dart';
+import 'package:strumsight/features/community/domain/repositories/feed_repository.dart';
+import 'package:strumsight/features/community/domain/repositories/notification_repository.dart';
+import 'package:strumsight/features/community/domain/repositories/post_repository.dart';
+import 'package:strumsight/features/community/domain/repositories/social_graph_repository.dart';
+import 'package:strumsight/features/community/presentation/screens/bookmarks_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/comments_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/community_gate_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/community_notifications_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/followers_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/following_feed_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/leaderboard_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/safety_relationships_screen.dart';
+// The E18 curriculum: the ladder is routed (`AppRoutes.curriculumLadder`) and
+// pushes the rhythm screen; the rhythm screen is routed on its own too.
+import 'package:strumsight/features/curriculum/presentation/screens/curriculum_ladder_screen.dart';
+import 'package:strumsight/features/curriculum/presentation/screens/rhythm_practice_screen.dart';
+// The 60-second strum challenge (2026-09-15): routed top-level at
+// `AppRoutes.strumChallenge`, opened from the Today hub's card. Same engine
+// stream + preference store the curriculum screens inject.
+import 'package:strumsight/features/strum_challenge/presentation/screens/strum_challenge_screen.dart';
+// The E17 lane (2026-09-15) made thirteen more screens reachable: the
+// tutor's plan preview (E17-R04), the Analysis V2 capture wizard (E17-R02),
+// the setlist session (E17-R03), the four remaining Practice Generator
+// screens (E17-R05/R06) and four Community screens (E17-R07…R11). Their
+// fixtures mirror the widget tests named per block below.
+import 'package:strumsight/core/audio/lifecycle/audio_session_coordinator.dart';
+import 'package:strumsight/core/audio/lifecycle/audio_session_lease.dart';
+import 'package:strumsight/features/ai_tutor/domain/models/practice_plan_block.dart';
+import 'package:strumsight/features/ai_tutor/domain/models/practice_plan_draft.dart';
+import 'package:strumsight/features/ai_tutor/domain/models/skill_node.dart';
+import 'package:strumsight/features/ai_tutor/domain/services/practice_plan_validator.dart';
+import 'package:strumsight/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart';
+import 'package:strumsight/features/audio_analysis/application/analysis_state.dart';
+import 'package:strumsight/features/audio_analysis/data/capture/analysis_recorder.dart';
+import 'package:strumsight/features/audio_analysis/domain/analysis_progress.dart';
+import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_home_screen.dart';
+import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_processing_screen.dart';
+import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_recording_screen.dart';
+import 'package:strumsight/features/auth/model/auth_user.dart';
+import 'package:strumsight/features/community/application/controllers/challenge_controller.dart'
+    as challenge_controller;
+import 'package:strumsight/features/community/presentation/screens/clubs/club_detail_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/community_challenges_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/community_search_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/post_composer_screen.dart';
+import 'package:strumsight/features/song_trainer/domain/models/setlist_result.dart';
+import 'package:strumsight/features/song_trainer/domain/models/song_setlist.dart';
+import 'package:strumsight/features/song_trainer/presentation/screens/setlist_session_screen.dart';
+import 'package:strumsight/features/live/model/live_frame.dart';
 import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/gamification/public.dart';
 import 'package:strumsight/features/learn/screens/lesson_list_screen.dart';
@@ -297,48 +362,8 @@ import '../../support/fake_engines.dart';
 import '../../support/fake_settings.dart';
 import '../../support/preference_store.dart';
 import 'package:strumsight/core/theme/app_theme.dart';
-import 'package:strumsight/features/auth/model/auth_user.dart';
-import 'package:strumsight/features/community/application/controllers/feed_controller.dart';
-import 'package:strumsight/features/community/application/controllers/post_composer_controller.dart';
-import 'package:strumsight/features/community/data/local/feed_cache.dart';
-import 'package:strumsight/features/community/data/repositories/relationship_repository_impl.dart';
-import 'package:strumsight/features/community/domain/entities/community_comment.dart';
-import 'package:strumsight/features/community/domain/entities/community_post.dart';
-import 'package:strumsight/features/community/domain/entities/moderation_state.dart';
-import 'package:strumsight/features/community/domain/entities/share_artifact.dart';
-import 'package:strumsight/features/community/domain/repositories/feed_repository.dart';
-import 'package:strumsight/features/community/domain/repositories/post_repository.dart';
-import 'package:strumsight/features/community/domain/repositories/social_graph_repository.dart';
-import 'package:strumsight/features/community/presentation/screens/bookmarks_screen.dart';
-import 'package:strumsight/features/community/presentation/screens/comments_screen.dart';
-import 'package:strumsight/features/community/presentation/screens/community_gate_screen.dart';
-import 'package:strumsight/features/community/presentation/screens/community_search_screen.dart';
-import 'package:strumsight/features/community/presentation/screens/followers_screen.dart';
-import 'package:strumsight/features/community/presentation/screens/following_feed_screen.dart';
-import 'package:strumsight/features/community/presentation/screens/post_composer_screen.dart';
-import 'package:strumsight/features/community/application/controllers/notification_controller.dart';
-import 'package:strumsight/features/community/domain/entities/community_challenge.dart';
-import 'package:strumsight/features/community/domain/entities/notification_item.dart';
-import 'package:strumsight/features/community/domain/repositories/challenge_repository.dart';
-import 'package:strumsight/features/community/domain/repositories/notification_repository.dart';
-import 'package:strumsight/features/community/presentation/screens/clubs/club_detail_screen.dart';
-import 'package:strumsight/features/community/presentation/screens/community_challenges_screen.dart';
-import 'package:strumsight/features/community/presentation/screens/community_notifications_screen.dart';
-import 'package:strumsight/features/community/presentation/screens/leaderboard_screen.dart';
-import 'package:strumsight/features/community/presentation/screens/safety_relationships_screen.dart';
-
-import 'package:strumsight/core/audio/lifecycle/audio_session_coordinator.dart';
-import 'package:strumsight/core/audio/lifecycle/audio_session_lease.dart';
-import 'package:strumsight/features/audio_analysis/application/analysis_state.dart';
-import 'package:strumsight/features/audio_analysis/data/capture/analysis_recorder.dart';
-import 'package:strumsight/features/audio_analysis/domain/analysis_progress.dart';
-import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_home_screen.dart';
-import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_processing_screen.dart';
-import 'package:strumsight/features/audio_analysis/presentation/capture/analysis_recording_screen.dart';
 
 import '../../fixtures/practice_generator/plan/plan_fixtures.dart';
-import 'package:strumsight/features/community/application/controllers/challenge_controller.dart'
-    as challenge_controller;
 import 'package:strumsight/features/community/data/repositories/challenge_repository_impl.dart'
     show communityChallengeRepositoryProvider;
 
@@ -810,6 +835,113 @@ List<Override> _editProfileOverrides() => [
     _FakeCommunityProfileRepository(profile: null),
   ),
 ];
+
+// ── community, the E18-R19 routed surface ──────────────────────────────────
+// (test/ui/goldens/e13_r33_screens_golden_test.dart — bookmarks, followers,
+// following_feed, comments, gate fixtures; test/features/community/
+// presentation/clubs/club_list_screen_test.dart, community_notifications_
+// test.dart, leaderboard_screen_test.dart, screens/safety_relationships_
+// screen_test.dart — the overrides each screen's own widget test injects.)
+
+// ── community, the E17-R07…R11 push targets ────────────────────────────────
+//    (test/features/community/presentation/clubs/club_list_row_tap_test.dart,
+//    community_notifications_challenges_tap_test.dart and
+//    following_feed_entry_points_test.dart measure the taps that reach these
+//    four; the render arguments are the ones
+//    test/ui/goldens/e13_r33_screens_golden_test.dart and
+//    e13_r34_screens_golden_test.dart pump.)
+
+// ── curriculum (test/features/curriculum/curriculum_ladder_screen_test.dart,
+//    test/features/curriculum/rhythm_practice_screen_test.dart) ─────────────
+// Both screens read the engine's `liveFrameProvider` stream plus the
+// preference store (calibration, metronome mute); the tests inject exactly
+// these two. The rhythm screen starts an unconditional Ticker in `initState`
+// (same class as StrumReelScreen) — the bounded three-frame pump covers it.
+
+LiveFrame _curriculumFrame() => LiveFrame(
+  current: null,
+  next: null,
+  latestStrum: null,
+  bar: const [],
+  bpm: 0,
+  inputLevel: 0.4,
+  tuningHz: 440,
+  listening: true,
+  engineTimeSec: 1.0,
+  latestStrumTime: -1,
+  strumSeq: 0,
+);
+
+List<Override> _curriculumOverrides() => [
+  ...preferenceOverrides(),
+  liveFrameProvider.overrideWith(
+    (ref) => Stream<LiveFrame>.value(_curriculumFrame()),
+  ),
+];
+
+Widget _curriculumLadderScreen() => const CurriculumLadderScreen();
+Widget _rhythmPracticeScreen() => const RhythmPracticeScreen();
+
+// ── strum_challenge ────────────────────────────────────────────────────────
+//    (test/features/strum_challenge/strum_challenge_screen_test.dart)
+// Reads the same `liveFrameProvider` stream and preference store (calibration,
+// metronome mute, today's best) as the rhythm screen, and starts the same
+// unconditional Ticker in `initState` — the bounded three-frame pump covers it.
+Widget _strumChallengeScreen() => const StrumChallengeScreen();
+
+// ── ai_tutor, the practice-plan preview (E17-R04) ──────────────────────────
+//    (test/features/ai_tutor/practice_plan_preview_wiring_test.dart opens it
+//    from the chat; the draft/context shape is the one
+//    test/ui/goldens/e13_r29_screens_golden_test.dart pumps.)
+// A plain StatefulWidget — the draft and the validation context arrive
+// through the constructor, no provider is read at render time.
+
+PracticePlanValidationContext _practicePlanValidationContext() =>
+    PracticePlanValidationContext(
+      songIds: const <String>{},
+      practiceTargetIds: const <String>{},
+      userAvoidList: const <String>{},
+      activeTuning: const <String>[],
+      capabilities: const <PracticePlanCapability>{},
+      availableSkillIds: const <SkillId>{},
+    );
+
+PracticePlanDraft _practicePlanDraft() => PracticePlanDraft(
+  id: 'matrix-plan',
+  title: 'Rhythm focus',
+  targetDuration: const Duration(minutes: 10),
+  blocks: <PracticePlanBlock>[
+    PracticePlanBlock.basic(
+      id: 'warmup',
+      type: PracticePlanBlockType.warmup,
+      duration: const Duration(minutes: 2),
+    ),
+    PracticePlanBlock.basic(
+      id: 'rhythm',
+      type: PracticePlanBlockType.rhythm,
+      duration: const Duration(minutes: 8),
+      tempoBpm: 92,
+    ),
+  ],
+  goalIds: const <String>[],
+  rationale: 'You have been rushing chord changes in the last two sessions.',
+  source: PracticePlanSource.aiSuggestion,
+);
+
+Widget _practicePlanPreviewScreen() => PracticePlanPreviewScreen(
+  draft: _practicePlanDraft(),
+  validationContext: _practicePlanValidationContext(),
+);
+List<Override> _practicePlanPreviewOverrides() => [...preferenceOverrides()];
+
+// ── audio_analysis, the V2 capture wizard (E17-R02) ────────────────────────
+//    (test/features/audio_analysis/capture_wiring_test.dart drives the
+//    routed flow over the real router; the per-screen arguments are the ones
+//    test/ui/goldens/e13_r26_screens_golden_test.dart pumps.)
+// All three are fed through their constructors — no provider is read at
+// render time. The recording screen disposes its recorder on unmount, so
+// every cell builds a fresh one over the fake microphone and its own
+// coordinator; nothing starts capturing until the user taps.
 
 // ── gamification (test/ui/goldens/e13_r32_screens_golden_test.dart) ────────
 
@@ -2596,6 +2728,12 @@ Widget _todayPlanScreen() {
 
 List<Override> _todayPlanOverrides() => [...preferenceOverrides()];
 
+// The four screens Today Plan pushes since E17-R06
+// (test/features/practice_generator/screen_wiring_test.dart measures the
+// menu taps; the render arguments mirror presentation/
+// plan_preview_screen_test.dart, accessibility/planner_accessibility_test.dart
+// and the wiring test's own confirmation proposal).
+
 // ── progress (test/features/progress/progress_screen_test.dart) ───────────
 
 class _SeededPracticeLog extends PracticeLogController {
@@ -2669,7 +2807,7 @@ final _strumReelResult = AnalyzeResult(
 Widget _strumReelScreen() => StrumReelScreen(result: _strumReelResult);
 List<Override> _strumReelOverrides() => [...preferenceOverrides()];
 
-// ── songs (test/features/songs/*_test.dart) ─────────────────────────────────
+// ── songs (test/features/songs/*_test.dart) ────────────────────────────────
 
 class _SeededSongs extends SongsController {
   _SeededSongs(this._seed);
@@ -2710,6 +2848,35 @@ List<Override> _setlistDetailOverrides() => [
   songsProvider.overrideWith(() => _SeededSongs([_setlistFixtureSong])),
   setlistsProvider.overrideWith(() => _SeededSetlists([_setlistFixtureSet])),
 ];
+
+// The setlist session the detail launches since E17-R03
+// (test/features/song_trainer/setlist_session_wiring_test.dart measures the
+// launcher over the real controller; the render arguments are the ones
+// test/ui/goldens/e13_r25_screens_golden_test.dart pumps — performance mode
+// needs no scoring-runner factory and reads no provider).
+SongSetlist _setlistSessionFixture() => SongSetlist(
+  id: 'golden-setlist',
+  name: 'Golden Setlist',
+  createdAt: DateTime.utc(2026, 8, 26),
+  updatedAt: DateTime.utc(2026, 8, 26),
+  items: <SongSetlistItem>[
+    SongSetlistItem(id: 'first', songId: SongId('song-a')),
+    SongSetlistItem(
+      id: 'second',
+      songId: SongId('song-b'),
+      overrides: const SetlistItemOverrides(tuningOverrideCode: 'dropD'),
+    ),
+  ],
+);
+
+Widget _setlistSessionScreen() => SetlistSessionScreen(
+  setlist: _setlistSessionFixture(),
+  mode: SetlistSessionMode.performance,
+  availability: (_) => SetlistItemAvailability.ready,
+  performanceRunner: (item) async =>
+      SetlistItemResult.completed(itemId: item.id),
+);
+List<Override> _setlistSessionOverrides() => [...preferenceOverrides()];
 
 Widget _setlistListScreen() => const SetlistListScreen();
 List<Override> _setlistListOverrides() => [
@@ -2989,6 +3156,38 @@ final _screens = <String, _ScreenFixture>{
         'lib/features/community/presentation/screens/edit_profile_screen.dart',
     build: _editProfileScreen,
     overridesBuilder: _editProfileOverrides,
+  ),
+  'curriculum_ladder': _ScreenFixture(
+    screenPath:
+        'lib/features/curriculum/presentation/screens/curriculum_ladder_screen.dart',
+    build: _curriculumLadderScreen,
+    overridesBuilder: _curriculumOverrides,
+  ),
+  'rhythm_practice': _ScreenFixture(
+    screenPath:
+        'lib/features/curriculum/presentation/screens/rhythm_practice_screen.dart',
+    build: _rhythmPracticeScreen,
+    overridesBuilder: _curriculumOverrides,
+  ),
+  'strum_challenge': _ScreenFixture(
+    screenPath:
+        'lib/features/strum_challenge/presentation/screens/strum_challenge_screen.dart',
+    build: _strumChallengeScreen,
+    overridesBuilder: _curriculumOverrides,
+  ),
+  // The E17 lane (2026-09-15): thirteen more reachable screens, keyed by
+  // their snake_case basename like every entry above.
+  'practice_plan_preview': _ScreenFixture(
+    screenPath:
+        'lib/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart',
+    build: _practicePlanPreviewScreen,
+    overridesBuilder: _practicePlanPreviewOverrides,
+  ),
+  'setlist_session': _ScreenFixture(
+    screenPath:
+        'lib/features/song_trainer/presentation/screens/setlist_session_screen.dart',
+    build: _setlistSessionScreen,
+    overridesBuilder: _setlistSessionOverrides,
   ),
   'achievements': _ScreenFixture(
     screenPath:

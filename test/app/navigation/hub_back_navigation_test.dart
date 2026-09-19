@@ -316,6 +316,20 @@ Set<String> _registeredPaths(GoRouter router) {
 
 typedef _HubEntry = ({String hub, Type hubScreen, String label, Type screen});
 
+/// Pumps a bounded number of frames instead of settling.
+///
+/// Some routed screens animate CONTINUOUSLY by design — `SsStrumPendulum`
+/// polls its clock pull-style and deliberately never stops its ticker (its
+/// own comment says so), so the rhythm rung and the strum challenge never
+/// reach a quiescent tree and `pumpAndSettle` times out on them. What this
+/// group claims is that the hub stays on the stack and the route pops back to
+/// it — that needs the route BUILT, not the tree still.
+Future<void> _pumpFrames(WidgetTester tester) async {
+  for (var i = 0; i < 8; i++) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+}
+
 void main() {
   final l10n = AppLocalizationsEn();
 
@@ -503,11 +517,11 @@ void main() {
 
       for (final path in detailRoutes) {
         router.go(AppRoutes.today);
-        await tester.pumpAndSettle();
+        await _pumpFrames(tester);
         expect(router.canPop(), isFalse, reason: path);
 
         router.push<void>(path);
-        await tester.pumpAndSettle();
+        await _pumpFrames(tester);
 
         expect(tester.takeException(), isNull, reason: path);
         expect(
@@ -517,7 +531,7 @@ void main() {
         );
 
         router.pop();
-        await tester.pumpAndSettle();
+        await _pumpFrames(tester);
         expect(router.state.uri.path, AppRoutes.today, reason: path);
       }
     });

@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../app/routing/app_route.dart';
 import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controller/today_plan_controller.dart';
+import '../../application/usecase/propose_today_plan_change.dart';
 import '../../domain/model/adaptive_practice_plan.dart';
 import '../../domain/model/practice_block.dart';
+import '../controller/plan_preview_controller.dart';
+import '../providers/practice_generator_providers.dart';
+import 'plan_change_review_screen.dart';
+import 'plan_preview_screen.dart';
+import 'plan_privacy_screen.dart';
+import 'weekly_plan_screen.dart';
 
 /// The local, offline Today projection of the learner's active plan.
 class TodayPlanScreen extends StatelessWidget {
@@ -57,29 +63,11 @@ class TodayPlanScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.todayPlanTitle),
-        // A tervező két MELLÉK-képernyője (`/practice/generator/weekly`,
-        // `/practice/generator/privacy`) be volt kötve, de a szállított
-        // felületről semmi nem vezetett hozzájuk. Mindkettőt a router a
-        // saját providereiből építi fel — `extra` nélkül megnyithatók,
-        // ezért ez a képernyő el TUDJA érni őket. Az előnézet és a
-        // változás-áttekintés NEM kap itt belépési pontot: azok a
-        // folyamat lépései, és `extra` nélkül a mai tervre esnének vissza
-        // (l. a router redirect-őrét) — egy ilyen gomb visszadobná a
-        // felhasználót ugyanide, azaz halott vezérlő lenne.
-        actions: <Widget>[
-          IconButton(
-            key: const Key('today-plan-open-weekly'),
-            onPressed: () => context.push(AppRoutes.practiceGeneratorWeekly),
-            icon: const Icon(Icons.calendar_month_outlined),
-            tooltip: l10n.weeklyPlanTitle,
-          ),
-          IconButton(
-            key: const Key('today-plan-open-privacy'),
-            onPressed: () => context.push(AppRoutes.practiceGeneratorPrivacy),
-            icon: const Icon(Icons.privacy_tip_outlined),
-            tooltip: l10n.practicePrivacyTitle,
-          ),
-        ],
+        // E17-R06 / ADR 0525 §5.2: the four plan sub-screens open from
+        // Today's context, never from the shell root. The menu is
+        // scope-free itself — each pushed page resolves its own data from
+        // the composition root (`practice_generator_providers.dart`).
+        actions: const [_TodayPlanMenu()],
       ),
       body: SafeArea(
         child: Padding(
@@ -376,4 +364,268 @@ String _formatDuration(Duration duration) {
   final hours = minutes ~/ 60;
   final rest = minutes % 60;
   return rest == 0 ? '${hours}h' : '${hours}h${rest}m';
+}
+
+// ---------------------------------------------------------------------------
+// E17-R06 — entry points to the four plan sub-screens (ADR 0525)
+// ---------------------------------------------------------------------------
+
+enum _TodayPlanMenuAction { weeklyPlan, planPreview, changeReview, privacy }
+
+/// The Today AppBar overflow menu. One text-labelled item per sub-screen
+/// (never icon-only, A3/A4 of the planner accessibility contract); each
+/// item pushes a page that reads the ACTIVE plan and the composition
+/// root's use cases through `Consumer` scopes of its own, so this screen
+/// keeps building without a `ProviderScope` (its existing scope-free
+/// widget tests and the 2.0 text-scale cells stay valid).
+class _TodayPlanMenu extends StatelessWidget {
+  const _TodayPlanMenu();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return PopupMenuButton<_TodayPlanMenuAction>(
+      key: const Key('today-plan-menu'),
+      tooltip: l10n.practiceGeneratorMoreActions,
+      onSelected: (action) => _open(context, action),
+      itemBuilder: (context) => <PopupMenuEntry<_TodayPlanMenuAction>>[
+        PopupMenuItem<_TodayPlanMenuAction>(
+          key: const Key('today-plan-open-weekly'),
+          value: _TodayPlanMenuAction.weeklyPlan,
+          child: Text(l10n.practiceGeneratorOpenWeeklyPlan),
+        ),
+        PopupMenuItem<_TodayPlanMenuAction>(
+          key: const Key('today-plan-open-preview'),
+          value: _TodayPlanMenuAction.planPreview,
+          child: Text(l10n.practiceGeneratorOpenPlanPreview),
+        ),
+        PopupMenuItem<_TodayPlanMenuAction>(
+          key: const Key('today-plan-open-change-review'),
+          value: _TodayPlanMenuAction.changeReview,
+          child: Text(l10n.practiceGeneratorOpenChangeReview),
+        ),
+        PopupMenuItem<_TodayPlanMenuAction>(
+          key: const Key('today-plan-open-privacy'),
+          value: _TodayPlanMenuAction.privacy,
+          child: Text(l10n.practiceGeneratorOpenPrivacy),
+        ),
+      ],
+    );
+  }
+
+  void _open(BuildContext context, _TodayPlanMenuAction action) {
+    final Widget page = switch (action) {
+      _TodayPlanMenuAction.weeklyPlan => const _WeeklyPlanRoute(),
+      _TodayPlanMenuAction.planPreview => const _PlanPreviewRoute(),
+      _TodayPlanMenuAction.changeReview => const _PlanChangeReviewRoute(),
+      _TodayPlanMenuAction.privacy => const _PlanPrivacyRoute(),
+    };
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+  }
+}
+
+/// A titled page carrying one message (an explicit "nothing here yet" or
+/// read-failure state) or a progress indicator while a read is pending —
+/// the same shape as `WeeklyPlanScreen`'s no-plan branch.
+class _MessageScaffold extends StatelessWidget {
+  const _MessageScaffold({
+    required this.title,
+    this.message,
+    this.busy = false,
+    super.key,
+  });
+
+  final String title;
+  final String? message;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(SsSpacing.space6),
+          child: busy
+              ? const CircularProgressIndicator()
+              : Text(
+                  message ?? '',
+                  textAlign: TextAlign.center,
+                  style: typography.bodyMedium.copyWith(
+                    color: colors.textSecondary,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Resolves the ACTIVE plan for a pushed sub-screen. A read failure is an
+/// explicit error page, never reclassified as "no plan yet"
+/// (`activePracticePlanProvider`'s M4 contract).
+class _ActivePlanRoute extends ConsumerWidget {
+  const _ActivePlanRoute({required this.title, required this.builder});
+
+  final String Function(AppLocalizations l10n) title;
+  final Widget Function(
+    BuildContext context,
+    WidgetRef ref,
+    AdaptivePracticePlan? plan,
+  )
+  builder;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    return switch (ref.watch(activePracticePlanProvider)) {
+      AsyncData(:final value) => builder(context, ref, value),
+      AsyncError() => _MessageScaffold(
+        key: const Key('today-plan-route-error'),
+        title: title(l10n),
+        message: l10n.practiceGeneratorPlanLoadFailed,
+      ),
+      _ => _MessageScaffold(
+        key: const Key('today-plan-route-loading'),
+        title: title(l10n),
+        busy: true,
+      ),
+    };
+  }
+}
+
+class _WeeklyPlanRoute extends StatelessWidget {
+  const _WeeklyPlanRoute();
+
+  @override
+  Widget build(BuildContext context) => _ActivePlanRoute(
+    title: (l10n) => l10n.weeklyPlanTitle,
+    builder: (context, ref, plan) => WeeklyPlanScreen(
+      plan: plan,
+      // Computed at READ time — the provider exposes a function, never a
+      // cached `LocalDate` (M3).
+      today: ref.watch(practiceGeneratorTodayProvider)(),
+    ),
+  );
+}
+
+class _PlanPreviewRoute extends StatelessWidget {
+  const _PlanPreviewRoute();
+
+  @override
+  Widget build(BuildContext context) => _ActivePlanRoute(
+    title: (l10n) => l10n.planPreviewTitle,
+    builder: (context, ref, plan) {
+      if (plan == null) {
+        final l10n = AppLocalizations.of(context);
+        return _MessageScaffold(
+          key: const Key('today-plan-preview-no-plan'),
+          title: l10n.planPreviewTitle,
+          message: l10n.practiceGeneratorNoActivePlanForAction,
+        );
+      }
+      return _PlanPreviewHost(plan: plan);
+    },
+  );
+}
+
+/// Owns ONE [PlanPreviewController] for the pushed preview: built once
+/// from the composition root's factory (the real `LocalPracticePlanRepository`
+/// activation, ADR 0482 / D4) and disposed with the page — never rebuilt
+/// on every frame.
+class _PlanPreviewHost extends ConsumerStatefulWidget {
+  const _PlanPreviewHost({required this.plan});
+
+  final AdaptivePracticePlan plan;
+
+  @override
+  ConsumerState<_PlanPreviewHost> createState() => _PlanPreviewHostState();
+}
+
+class _PlanPreviewHostState extends ConsumerState<_PlanPreviewHost> {
+  late final PlanPreviewController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = ref.read(planPreviewControllerFactoryProvider)(
+      initialPlan: widget.plan,
+      validationContext: ref.read(planValidationContextForPlanProvider)(
+        widget.plan,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      PlanPreviewScreen(controller: _controller);
+}
+
+class _PlanChangeReviewRoute extends ConsumerWidget {
+  const _PlanChangeReviewRoute();
+
+  Future<void> _accept(
+    BuildContext context,
+    WidgetRef ref,
+    TodayPlanChangeProposal reviewed,
+  ) async {
+    final navigator = Navigator.of(context);
+    final revision = ref.read(proposeTodayPlanChangeProvider).accept(reviewed);
+    if (revision != null) {
+      await ref
+          .read(localPracticePlanRepositoryProvider)
+          .activate(revision.snapshot);
+      if (!context.mounted) return;
+      ref.invalidate(activePracticePlanProvider);
+    }
+    navigator.pop();
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    return switch (ref.watch(todayPlanChangeProposalProvider)) {
+      AsyncData(:final value) =>
+        value == null
+            ? _MessageScaffold(
+                key: const Key('today-plan-change-review-empty'),
+                title: l10n.planChangeReviewTitle,
+                message: l10n.practiceGeneratorNoChangesToReview,
+              )
+            : PlanChangeReviewScreen(
+                proposal: value.proposal,
+                onAccepted: () => _accept(context, ref, value),
+                onRejected: () => Navigator.of(context).pop(),
+              ),
+      AsyncError() => _MessageScaffold(
+        key: const Key('today-plan-route-error'),
+        title: l10n.planChangeReviewTitle,
+        message: l10n.practiceGeneratorPlanLoadFailed,
+      ),
+      _ => _MessageScaffold(
+        key: const Key('today-plan-route-loading'),
+        title: l10n.planChangeReviewTitle,
+        busy: true,
+      ),
+    };
+  }
+}
+
+class _PlanPrivacyRoute extends ConsumerWidget {
+  const _PlanPrivacyRoute();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => PlanPrivacyScreen(
+    deleteUseCase: ref.watch(deletePracticePlanningDataProvider),
+    exportUseCase: ref.watch(exportPracticePlanningDataProvider),
+    cacheDirectoryResolver: ref.watch(practiceGeneratorCacheDirectoryProvider),
+  );
 }

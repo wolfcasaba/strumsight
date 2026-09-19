@@ -1,5 +1,35 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔀 INTEGRÁCIÓ 2026-09-19: az E18-vonal a mainbe — `integration/e18`
+
+A `claude/guitar-app-development-points-d0asfy` (E18-R01…R24, 162 commit,
+2026-09-10–15: song-editor akkord-hallgatás, felismerés-stabilitás,
+ritmus-módok, 60 másodperces pengentés-kihívás, mért DSP-nyereségek,
+„MINDEN BEKAPCSOLVA") **`--no-ff` merge-dzsel** a mainbe, amely a 09-18-i
+hibavadász-kört és a Song Trainer / hangimport vonalat hozza. 62 ütközés,
+mind SZEMANTIKUSAN feloldva — egyik oldal sem lett vakon átvéve.
+
+| Ütközés | Döntés |
+|---|---|
+| `feature_flags.dart` | a branch E18-R24 bekapcsolásai (`aiTutor`, Analysis V2 + hat alkapcsoló = `nonProd`) + a main `previewAll` doc-ja és minden zászló-bővítése |
+| `app_router.dart` | a main community-blokkja marad (ő a bővebb: search, challenges, compose, club-detail) a main al-zászló-kapuival, DE a branch null-biztos path-param builderei portálva; a branch duplikált E18-R19 blokkja törölve |
+| Analysis V2 felvételi folyam | KÉT párhuzamos folyam épült; a branch E17-R02-esét tartjuk (`/analysis/home` → `/analysis/recording` → `/analysis/processing`): az valódi PCM-validátort hív és menti az eredményt. A main `/analysis/capture` és `/analysis/record` címei törölve, az Analyze-képernyő CTA-ja átirányítva |
+| `analyze_audio_use_case.dart` | a main KÖTELEZŐ `audio` paramétere marad (néma placeholder-csend elemzése tilos); a branch mindkét hívója úgyis átadja |
+| community (lib + backend) | mindkét oldal MEGÍRTA ugyanazt az E17-R07…R13 munkát; a mainé marad (bővebb: komment- és reakció-router, poszt-projekció, klub-feed/pinned, 5 további képernyő-bekötés). A branch duplikátumai (`post_dto`, `social_graph_repository_impl`, bootstrap-override-ok, 2 backend router-teszt) törölve; a branch kihívás-olvasó GET-jei (`challenges.py` + `challenge_query_service.py`) MEGMARADNAK |
+| `practice_area_hub_screen.dart` | a main kategória-chipjei (tiltott Scales + tooltip) + a branch három új gyorseszköze (ritmus, tanterv-létra, Analysis V2) és a main ajánló-CTA-ja |
+| `today_hub_screen.dart` | a main `SsStaggeredEntrance` szekció-listája + a branch `_StrumChallengeCard` és `_PrivacyPromiseCard` kártyái + a branch `primaryDestination`-je |
+| `practice_generator_providers.dart` | a branch E17-R05 élő katalógus- és evidence-vezetéke (a Practice `public.dart` barrelen át) |
+| DSP / ML | `strum_analyzer.dart`: mindkét új mező (`lastOnsetTimeSec` + `settledRevision`); `live_crnn_classifier.dart`: a kapu 0,85 mindkét oldalon, a main részletesebb ADR 0549 D1–D4 provenienciája marad |
+| `build_tutor_knowledge_manifest.dart` | a main `package:path`-alapú `isExcludedManifestPath`-e (a branch `_pathKey` string-trükkje helyett) |
+| `app_en.arb` / `app_hu.arb` | GENERÁLTAK: szegmens-unióból újragenerálva, **paritás 2518 = 2518**; a duplikált `analysisHomeImportUnavailable` a base-ből kivéve (a feature-szegmens a gazdája) |
+| `lab_build.json` | unió; build tag `e18-r24-everything-on` |
+| goldenek | a képernyő-kód győztes oldaláé (community + practice hub: main; today hub: branch) — mind a CI-n vevődik újra |
+
+**Ismert nyitott tétel:** a törölt `practice_area_hub_goal_test.dart` a main
+kategória-chip javításának régebbi párja volt (ugyanaz a hiba, két körben
+megjavítva); a viselkedést a `practice_area_hub_category_chips_test.dart` méri
+tovább.
+
 ## 🔀 INTEGRÁCIÓ 2026-09-18: a Song Trainer-vonal a mainbe — `integration/audio-import`
 
 A `claude/workflow-production-readiness-r1866i` (122 commit, 2026-09-17: járható
@@ -717,6 +747,1516 @@ statikus PNG. A ↓/↑ irány-pontozás EGYETLEN versenytársnál sincs.
 (`tools/round-slots.py reserve-adr --round E18-R00`) + a queue-sor felvétele
 — ez a session a pipeline-queue.tsv-hez NEM nyúlt. A Chapter 17 `hold`
 sorai és a Chapter 18 fájlszinten nem ütköznek (plan §0).
+## 🟢 E18-R24 — „MINDEN BEKAPCSOLVA": a 328 kör alatt megépült, de kikapcsolt / bekötetlen részek élesítése — branch `claude/guitar-app-development-points-d0asfy` (2026-09-15, távoli konténer)
+
+**User-kérés (felülíró):** „De én szeretném ha a teljes app működne." — vagyis
+ne csak zöld legyen az ág, hanem minden, ami az elmúlt körökben elkészült,
+legyen bekapcsolva ÉS elérhető a felületről. A tulajdonos nem fejlesztő:
+laikus összefoglaló lent, a „mit kell neki tennie" pontban.
+
+### Mi volt a helyzet (mért, `tool/check_screen_reachability.dart` szabályaival)
+
+99 képernyőből **13 sehonnan nem volt elérhető** (megépült, tesztelt, de egy
+gomb sem vezetett oda), **8 funkció-kapcsoló ki volt kapcsolva** minden
+környezetben (AI Tutor, Hangelemzés V2 és hat alkapcsolója), a közösségi
+képernyők pedig **hibapanelt mutattak**, mert az adatréteg csak „placeholder"
+volt (a szerverhez soha nem beszéltek), és a szerveren sem létezett klub-,
+kihívás-lista- és értesítés-útvonal.
+
+### Ami elkészült (commitok `84e277e` után, mind pusholva)
+
+| Commit | Mit ad |
+|---|---|
+| `ad50623`, `5359026` | **8 kapcsoló BE minden nem-éles buildben** (dev/lab): `aiTutorEnabled`, `audioAnalysisV2Enabled` + beatGrid/pitch/techniqueProxies/comparison/practiceIntegration/tutorIntegration. Éles (production) érték byte-ra változatlan (`verify_ga_scope.py`). Docs: capability-rollout, ga-scope, kill-switches. |
+| `25b5184` | **Setlist-munkamenet** elérhető a setlist részleteiből („Run as session", gyakorlás/előadás mód). |
+| `f3719b6` | **Tutor gyakorlásterv-előnézet** elérhető a Tutor-chatből (AppBar-gomb + terv-blokk érintése); „Start" a meglévő Practice útvonalat használja. |
+| `643c9ce` | **Hangelemzés V2 felvétel-folyam** végig működik: home → felvétel → feldolgozás → áttekintés; a Practice hub új gyorseszköze nyitja. |
+| `a39ac88`, `64f8ca9` | **Gyakorlás-generátor:** a két „seam" valódi (katalógus-olvasó, terv-bemenet összeállító), a heti terv / előnézet / módosítás-áttekintés / adatvédelem képernyők a Today Plan menüből nyílnak; a Today Plan útvonal az aktív tervet kapja. |
+| `566fc82`, `a773457`, `a7e31c6`, `ece71a2` | **Közösség valódi adatréteggel:** HTTP feed/poszt/értesítés/klub/social-graph repositoryk (Dio, PATCH is), production overrides az app-indításnál; klub-részlet, kihívások, keresés, poszt-szerkesztő elérhető a feedből/értesítésekből. 5 új sor az adat-leltárban (egress). |
+| `3514284`, `de4a5ba` | **Szerver (FastAPI):** teljes klub-router (16 útvonal), kihívás-olvasó GET-ek (lista/részlet/saját részvétel), értesítés-router (5 útvonal). Szerződés-fájl 39 bejegyzés, mind `mounted`; a `live_backend_smoke.py` lánc már a kihívás- és értesítés-olvasásokat hívja (13 exercised / 26 not_exercised / 0 known_gap). Backend-suite: 916+ zöld helyben. |
+| `24f8901` | **Őrök a méréshez igazítva:** 99/99 elérhető, 0 elérhetetlen, 30 kapu mögött; §3.2 tábla 88 sor; e15_r13 mátrix 99 fixture; retirement-plan sorok. |
+| `451ca21` | Formázás-átnézés (13 alak-javítás, mért precedensekkel) + **`lab_build.json`**: a Lab APK a `https://casaba.app/strumsight` szerverre épül, fiók + közösség (írás, ranglista, klubok) BE, build tag `e18-r23-everything-on`. |
+
+**Szándékosan NEM kapcsolt be:** *vision* (a ML-modellek deferred asset-ek →
+biztos betöltési hiba lenne), a felismerés-helyreállító trió és a kísérleti
+kapcsolók (nulla fogyasztójuk van a kódban). A közösség **nem** `nonProd`,
+hanem `lab_build.json` define-okkal megy — így a „külső erőforrás sosem
+alapból BE" őrök maradnak.
+
+### CI-állás (a „minden bekapcsolva" fej zöldítése, 2026-09-15)
+
+| Futás | Fej | Eredmény | Mit tanított |
+|---|---|---|---|
+| 1060 | `451ca21` | ❌ formázás (17 fájl) | a formázó pontos diffjét egy eldobható ág Coverage-jobja írta ki (`diag-format-dump`: `dart format --output=show` + sor-diff a teszt `print`-jével) → 29 hunk szó szerint alkalmazva |
+| 1062 | `c6a7535` | ❌ analyze (22 találat, 2 valódi hiba) | `ExercisePrescription`-nek nincs `candidate` mezője → a katalógus-feloldó adja; a felvétel-folyam a vezérlő állapotát provideren át olvassa; lintek |
+| 1063 | `73474f4` | ❌ teszt: 11402 ✅ / 22 ❌ | a 5000-soros log-vég csak 4-et mutatott → import-lezárásos teszt-szeletek (`diag-slice-A3`, `-B1…B4`) nevezték meg a többit |
+| — | `301229b`, `16409fc` | javítások | ismétlődő jelölt a heti tervezőnek (dedup), Processing Stage végtelen csíkja (`pump` a `pumpAndSettle` helyett, 2 teszt), felvétel-képernyő görgethető fekvő 2.0×-nél (4 mátrix-cella), feed-repository beágyazott generikusa láthatatlan volt az egress-leltárnak (typedef) |
+| record-goldens #1 | `b2fb484` → `063f8ca` | ✅ 9 PNG felvéve x86-on | **új workflow, tulajdonosi engedéllyel** (`.github/workflows/record-goldens.yml`, a main-en is, mert a GitHub csak onnan indít kézzel) |
+| full-gate 1077 | `063f8ca` | ✅ **ZÖLD** (formázás, analyze, architektúra, titok, l10n, asset, teszt, property) | [34940932559](https://github.com/wolfcasaba/strumsight/actions/runs/34940932559) |
+| build-apk #593 | `063f8ca` | ✅ **ZÖLD** — artefaktum `strumsight-1.0.0-1-063f8ca-development.apk` (38.9 MB) | [34940934608](https://github.com/wolfcasaba/strumsight/actions/runs/34940934608) |
+| lab-apk #11 | `063f8ca` | ✅ **ZÖLD** — artefaktum `strumsight-lab-apk` (39.6 MB; casaba.app backend, fiók + közösség BE, tag `e18-r23-everything-on`) | [34940962471](https://github.com/wolfcasaba/strumsight/actions/runs/34940962471) |
+
+**Tanulság (L-jelölt):** a szeletelésnél a `test/fixtures`, `test/support`,
+`test/core` és a tesztek által `File(...)`-lel olvasott fájlok is kellenek —
+különben a szelet 100+ hamis „loading failed"-et mutat. A
+scratchpad-beli `slice.py` az import-lezárást számolja; a `File('test/…')`
+string-hivatkozásokat is követi.
+
+### Mit kell a TULAJDONOSNAK tennie (laikusan)
+
+1. **Szerver-kapcsolók** a casaba.app szolgáltatáson (környezeti változók):
+   `STRUMSIGHT_COMMUNITY_ENABLED=true`, `STRUMSIGHT_COMMUNITY_WRITES_ENABLED=true`,
+   `STRUMSIGHT_COMMUNITY_CLUBS_ENABLED=true`, `STRUMSIGHT_COMMUNITY_LEADERBOARD_ENABLED=true`
+   — e nélkül az app közösségi része „nincs ilyen útvonal" hibát kap. Utána a
+   frissen deployolt szerver ellenőrzése: `python3 tool/release/live_backend_smoke.py --base-url https://casaba.app/strumsight`.
+2. ~~Goldenek felvétele~~ — MEGTÖRTÉNT a `record-goldens.yml`-lel (9 kép,
+   `063f8ca`); a jövőben bármely szándékos golden-eltérés így vehető fel:
+   Actions → „Record goldens (x86 CI)" → ág + tesztfájl(ok) + indok.
+3. **Lab APK kipróbálása** valódi gitárral: Tutor-chat → terv-előnézet; Practice
+   hub → Hangelemzés; Today Plan menü; Songs → setlist → „Run as session";
+   Community fül (bejelentkezve).
+4. Az eldobható diag-ágak törlése a saját boxról (a proxy innen nem engedi):
+   `git push origin --delete claude/diag-guards-slice claude/diag-format-probe claude/diag-slice-2 claude/diag-format-dump claude/diag-slice-A claude/diag-slice-A2 claude/diag-slice-A3 claude/diag-slice-B claude/diag-slice-B1 claude/diag-slice-B2 claude/diag-slice-B3 claude/diag-slice-B4`
+
+## 🟢 E18-R23 — AZ E18 ÁG CI-ZÖLDÍTÉSE (csak a 4 golden felvétele van hátra) + A 60 MÁSODPERCES PENGETÉS-KIHÍVÁS — branch `claude/guitar-app-development-points-d0asfy` (2026-09-15, távoli konténer)
+
+**User-kérés:** „autonóm módon menj az agent csapatoddal… úgy készítsd el az
+appot, hogy mindenkinek tetsszen, végezz kutatást, tervezz, fejlessz gyorsan;
+a CI-t csak nagyobb résznél használd; te vagy a főnök." A tulajdonos NEM
+fejlesztő — minden javaslat laikus indoklással (CLAUDE.md, új szakasz).
+
+**Kiindulás (mért):** a `main` (`1ae9e55`, E17-R01) mögött 122 commitnyi, be nem
+olvasztott E18-munka állt a `claude/e18-r06-verify-followup` ágon (R01–R22:
+emulátor-javítások, tanterv-létra, ritmus-pillér, napi hurok, közösségi
+route-ok, hosztolt backend). Ez az ág PIROS volt a CI-ban (`build-apk`
+34743093520: 5 bukó teszt; a `MINIMAX_START_HERE.md` §5b négy nyitott őrt
+nevezett meg). **Döntés:** erre az ágra épülünk tovább, nem a `main`-re; a
+munkaág az E18 fejéről (`f66a512`) indul.
+
+**Piaci kutatás:** [`docs/research/guitar-app-appeal-2026-09.md`](docs/research/guitar-app-appeal-2026-09.md)
+— 12 szeretett minta, 6 kerülendő panasz, 5 ajánlás; ebből kettő ebben a
+körben leszállítva (pengetés-kihívás, adatvédelmi ígéret).
+
+### Ami elkészült (commitok az ágon, mind pusholva)
+
+| Commit | Mit ad |
+|---|---|
+| `976db82`, `13f18fa` | **Őr 3 javítva:** a router a 9 közösségi képernyőt a `community/public.dart` barrelen át éri el (explicit `show` lista, +`FollowersMode`); a barrel exportálja a routolt képernyőket. |
+| `c590a6d` | **Őr 2 + 5 javítva:** a §3.2 kizárási tábla 10 új sora (9 community + `rhythm_practice`, indokkal, gazdával, `nincs — …` körrel) és 11 új `_ScreenFixture` az e15_r13 mátrixban (a `curriculum_ladder` is hiányzott). Döntés: a community walkthrough-fedés a backend `community_enabled` bekapcsolása után értelmes. |
+| `55746a1` | **12 mért nagybetűs (2.0×) túlcsordulás javítva a lib-ben** (nem cella-kizárással): community gate (görgethető), értesítés-beállítások (≥1.5× egymás alá), safety-lista (akció a sor alá), ritmus-gyakorlás (transport `Wrap`). Mind a négy képernyő kapott 2.0×/hu regressziós cellát. |
+| `6e17a96` | **ÚJ funkció: 60 másodperces pengetés-kihívás** (`lib/features/strum_challenge/`, `/practice/strum-challenge` stage-route, Today hub kártya, napi legjobb `ss.strum_challenge.best`, 20 teszt-cella, l10n szegmens). |
+| `c3ed31e` | **Today hub „Alapból privát" kártya** (nincs fiók / offline / nincs reklám / a hang nem hagyja el a telefont), 5 l10n kulcs. |
+| `f539b03`…`86c015f` | Formázás- és teszt-javítások a CI mérése nyomán. |
+
+### CI-állás (full-gate, a saját tail-korlát-kerülő diagnosztikával mérve)
+
+- 2. futás (`13f18fa`): 10816 ✅ / **3** ❌ → placeholder A4, e15 A1, e13_r17 golden.
+- 3. futás (`648ec1c`, őrök után): 10982 ✅ / **13** ❌ → 1 golden + 12 valódi
+  túlcsordulás (a szelet-ág `claude/diag-guards-slice` listázta ki őket).
+- 4. futás (`55746a1`, túlcsordulások után): 10996 ✅ / **3** ❌ → CSAK goldenek.
+- 5–7. futás (`6e17a96` → `c7ef12e`): formázási körök (a tall-style formázó
+  alakjait egy szelet-ág, `claude/diag-format-probe`, nevezte meg), majd
+  11028 ✅ / 9 ❌ — a 4 nem-golden hibát a `claude/diag-slice-2` szelet
+  listázta (Today hub kártyák a 600 px-es teszt-felület alatt; a
+  ProviderScope helyben frissül `pumpWidget`-nél → `key: UniqueKey()`).
+- **8. futás (`86c015f`): 11033 ✅ / 4 ❌ — KIZÁRÓLAG a 4 golden**
+  ([34924543554](https://github.com/wolfcasaba/strumsight/actions/runs/34924543554)).
+
+**Goldenek, amiket x86-on ÚJRA KELL VENNI (a diff szándékos, mért):**
+`e13_r17` practice area hub compact (E18 feature-drift), `e13_r17` today hub
+compact + `_scale2` (új kártyák), `e13_r34` notifications és safety
+`_compact_scale2` (a ≥1.5× egymás-alá-rendezés). A távoli konténerből NEM
+vehetők fel: az artefaktum-letöltés, a log-zip és a blob-host is proxy-403;
+a `record-goldens.yml` felvevő-workflow hozzáadását a mérce-őr (H-GATEGUARD
+marker) engedély nélkül nem engedi. **A kész workflow-vázlat a session
+scratchpadjában készült; a tulajdonos döntése: (a) engedélyezi a workflow
+hozzáadását, vagy (b) a saját boxán `tools/golden-x86.sh record …` (docker).**
+
+**Takarítás a user boxáról:** `git push origin --delete claude/diag-guards-slice claude/diag-format-probe claude/diag-slice-2`
+(a proxy a távoli törlést elutasította, mint az E18-R01 négy szelet-ágánál).
+
+### KÖVETKEZŐ
+
+1. Goldenek felvétele (fent) → full-gate ZÖLD → `build-apk.yml` → APK-evidencia.
+2. Az ág squash-merge-e a `main`-re (E18 sáv R01–R23 egyben; PR a tulajdonos
+   jóváhagyásával, mert 130+ commit).
+3. Kutatás 1. és 5. ajánlása: 90 mp-es first-win forgatókönyv; adaptív rövid
+   ülés + heti edzői kártya.
+4. `MINIMAX_START_HERE.md` §5b elavult (az őrök zöldek) — frissítendő.
+
+
+## 🟢 E18-R22 — A MÉRÉS KOMMENTET OLVASOTT: egy szándékosan nem route-olt képernyő „elérhető" volt — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**Hogyan jött.** A fül-rung köre után lefuttattam pár szomszédos tooling-tesztet, és a
+`screen_reachability_test.dart` bukott. Előbb megnéztem, **az én változásaim előtt is
+bukik-e** — stashelve igen —, tehát korábbi. Eddig ez csak egy lejárt pin lett volna.
+
+De amikor a plan hiányzó sorait írtam volna meg, a mérés azt állította, hogy a
+`CommunityChallengesScreen` route-olva van az `app_router.dart:522`-n. Ez
+**ellentmondott a saját felmérésemnek**. Az 522. sor:
+
+```dart
+// `CommunityChallengesScreen` would be a screen that always fails, and a
+```
+
+**Egy komment.** A szkenner a kommentben szereplő osztálynevet route-helyként számolta,
+és a képernyőt — amit szándékosan NEM route-oltam, mert a futó backend nem szolgál ki
+kihívás-listát — **elérhetőnek** jelentette.
+
+**Nem egyetlen sor volt.** A kommentek levágása után: **Reachable 86 → 85, Flag-gated
+36 → 37**, és az `app_router.dart`-ban **tizenöt** hivatkozott „route-sor" próza volt
+— mind a tizenötöt egyenként ellenőriztem, hogy valódi kódot ne vágjak le. A legsúlyosabb
+nem a kihívás-képernyő:
+
+- **`ProgressDashboardScreen`** egyetlen valódi regisztrációja az `adaptiveShellEnabled`
+  mögött van; **kapu nélkülinek** volt mérve, azaz minden buildben elérhetőnek.
+- **A teszt-hivatkozások széles körben felfújva** (`OnboardingScreen` 27 → 20,
+  `LearnScreen` 33 → 27, `TunerScreen` 34 → 32) — a „mennyire lefedett" túl volt mondva.
+
+**Javítás:** `ScreenReachability.stripLineComment`, **idézőjel-tudatosan** — egy `//`-t
+tartalmazó útvonal levágása ugyanaz a hiba lenne fordítva. A blokk-kommentet nem kezeli,
+és ez a korlát **mérve** van: `blockCommentSources()` jelenti, ha egy szkennelt forrás
+tartalmaz ilyet, és az őr elbukik, ahelyett hogy a rés csendben visszanyílna.
+
+**A plan hamis állításai javítva.** A `docs/ui/retirement-plan.md` §6 tizenhárom
+community sora azt írta, hogy a funkciónak „*has no route registered in
+`lib/app/routing/**` at all*" — miközben az **E18-R19-ben route-oltam őket**. Tizenöt sor
+hozzáigazítva a méréshez (9 route-olt, 6 nem), mindegyikhez a valódi indokkal, plusz a
+két hiányzó curriculum sor.
+
+**Három lejárt pin, mind 96-on, a valóság 98:** a `screen_reachability_test.dart` A1 és
+A3 cellái, és a `test/ui/ui_inventory_test.dart`. A `theme_adoption_test` negyedikként
+korábban derült ki. Mind ugyanazért maradt észrevétlen: a körök, amik a két
+curriculum-képernyőt hozzáadták, a saját teszt-útjaikon futtatták a kaput. *Egy
+kipinezett szám csak addig véd, amíg valami lefuttatja.*
+
+**Új őr:** `A0` csoport — a vágó viselkedése közvetlenül pinelve (string-belseje, escape,
+doc-komment), a kihívás-képernyő elérhetetlensége a valódi fán állítva, és a
+blokk-komment korlát mérve. → `docs/LESSONS.md` **L661**.
+
+**Gate:** zöld — `test/tooling/screen_reachability_test.dart`, `test/ui/ui_inventory_test.dart`.
+
+### Amit NEM én rontottam el, és nem is javítottam
+
+A `test/ui/goldens/e13_r16_screens_golden_test.dart` **8 cellája az érintetlen alapon is
+bukik** (stashelve ellenőrizve) — képi összehasonlítás, ezen a boxon betű-renderelés.
+Ugyanabba a családba tartozik, mint a `test/tooling/` régóta ismert CRLF/LF stdout
+bukásai itt.
+
+## 🟢 E18-R21 — A FÜL: a negyedik ritmus-mód játszható, és a mérőeszközöm felülszámolt — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „folytasd a v2 még nem kapcsolod be" — tehát az elemzés V2 marad
+lekapcsolva, és a `listenAndRepeat` mód volt a maradék olyan tétel, ami rajtam állt.
+
+Két commit, mert két külön tárgy.
+
+### 1. `3e2b46eb` — a mérés, és egy mérőeszköz-hiba, amit a saját kimenete kényszerített ki
+
+**A keresett válasz.** A `listenAndRepeat` idővonala ~20 klikket küld a pipeline-on át a
+pontozott ütemek ELŐTT. A megnevezett kockázat nem az átszivárgás volt (az ütemekkel
+messze van), hanem hogy a pre-roll **átállítja az adaptív onset-küszöböt**, és a tanuló
+ütéseit a saját demonstrációja által felemelt küszöbhöz mérjük. Ez minden olyan
+tesztnek láthatatlan, ami az 1. ütemnél indul, a tanulónak meg úgy hangzik: „játszottam
+és nem számolta". Kontrollal mérve — ugyanaz az előadás ugyanazokon az absztolút
+időpontokon, egyszer hangzó, egyszer néma pre-rollal:
+
+```
+notated strokes : 24
+pre-roll ON  : reported 39, dropped before bar 1: 15, scored 24
+pre-roll OFF : reported 24, scored 24
+```
+
+A pre-roll **15 ütésként hallatszik**, **mind kívül esik**, és a kísérlet **azonosan**
+hallatszik — minden ütés 5 ms-on belül. Új mechanizmus nem kellett.
+
+**A másik, ami többet ér (→ L660).** Az első futás **43 onsetet jelentett 24 notált
+ütésre — MINDKÉT felvételen**, tehát nem arról, amit mértem. Nem mentem el mellette: a
+`D DU UDU` nyolcad-minta a `mission.dDuUdU`, ami **ma is szállított, pontozott rung**.
+Három gyanúsított néven nevezve, rácsban mérve:
+
+```
+ring/gap 0.8 KS-chord: struck 12 | LivePipeline 12 | rawSuperFlux 12
+ring/gap 2.0 KS-chord: struck 12 | LivePipeline 22 | rawSuperFlux 22
+ring/gap 2.0 harmonic: struck 12 | LivePipeline 12 | rawSuperFlux 12
+```
+
+**Nem a sűrűség** (ring ≤ gap mellett mindkét modell pontos), **nem a réteg** (a nyers
+detektor onsetre egyezik a teljes pipeline-nal mind a hat cellában) — a **stimulus**. A
+`modelled_guitar.dart` húronként és pengetésenként egy **független, zajjal gerjesztett**
+Karplus-Strong hangot ad össze, és két függetlenül seedelt zajos hang interferenciája
+tranzienseket gyárt. A szabály most az `addStrummedChord` doksijában áll.
+
+És a csípős rész: **ez a szám egy szállított mérés kimenetében ült olvasatlanul.** A
+`metronome_click_pollution_test` `23/16`-ot ír ki ugyanebből az okból, és mivel a
+pengetés-számot csak **kiírja, soha nem állítja**, soha nem bukott el — én sem néztem rá
+jelként, amikor az ADR 0546-ot írtam. *Egy szám, amit egy mérés kiír de nem állít, nem
+bizonyíték, hanem díszlet.*
+
+**NYITOTT, és ez most konkrét kérés:** hogy a motor egy **valódi** gitár
+nyolcad-pengetését jól számolja-e. Az immunis stimulus azért immunis, mert *sima*, nem
+mert *valósághű*.
+
+### 1b. A user adta felvétel — a projekt eddigi leghosszabb valódi take-je
+
+A `gitár minta/` Moonlight Sonata MP3 (**gitáron játszott** átirat), 140,2 s, 44,1 kHz
+monóra dekódolva. **A felvétel nem került a repóba**, csak a mérés:
+
+```
+140.2s | frames 2012 | strums 791 (5.6/s) | peak 0.91
+chords: Am:252 E7:238 Esus4:184 Dm:173
+decisions: confirmed:1961 rejected:46 uncertain:5
+```
+
+A négy címke pontosan **i – V7 – V(sus4) – iv** egy moll hangnemben, **97,5%
+megerősített** 140 másodpercen, sűrű, folyamatosan átfedő gitárhangon. Az eddigi
+leghosszabb take 22,6 s volt. **Amit NEM dönt el:** a pengetés-irányt (ez arpeggio, nem
+akkordütés) és a `sus4` felüljelentést (arpeggióban az átmenő kvart **tényleg**
+megszólal). Az onset-ráta 5,6/s a készlet legmagasabbja, ami *irányba mutat*, de címke
+nélkül nem mérés.
+
+### 2. A fül-rung (→ ADR 0548)
+
+A pedagógiai ellenvetést kellett előbb eldönteni: a mód elveszi a nyílsort, az app
+egyetlen hangja a klikk, és **egy klikk nem tudja közölni, hogy LE vagy FEL** — miközben
+pont ezt pontozzuk. Kutatva: a fülre tanulás forrásai pontosan ezt a munkamegosztást
+írják le („keresd meg az ismétlődő ritmikai ötletet, kopogd ki, mondd ki semleges
+szótagokkal" — kifejezetten anélkül, hogy melyik ütés melyik). **Amit a fül ad, az a
+MIKOR. Az irányt a pendulum adja.**
+
+Ebből:
+
+- **A klikk nem kódol irányt.** Egy „fel"-et jelentő hangmagasság olyan jelzést
+  tanítana, ami a gitáron nem létezik. Az akcentus az 1-es ütés — az metrum, és igaz.
+- **A mód csak pendulum-rácson őszinte**, és a `RhythmAssignment` konstruktora
+  **visszautasítja** a `!showsArrowRow && !followsPendulum` kombinációt. Általánosan
+  fogalmazva, nem a módra szabva — az authored rácsok maguk nem tiltottak, az a tanított
+  valcert nevezné hibásnak.
+- **Idővonal:** 2 demó ütem → **1 CSENDES ütem** → beszámolás → pontozott ütemek. A
+  csendes ütem nem díszítés: egyetlen klikk-színnel egy negyed-minta demonstrációja és a
+  beszámolás **szó szerint azonos** lenne.
+- **`needsMetronome` igazra javítva.** Hamisként volt deklarálva, a pontozás megírása
+  előtt. Pulzus nélkül a tanuló **tempó-elcsúszását és a mintáját együtt** mérnénk, és a
+  bukás értelmezhetetlen lenne (ADR 0545 logikája). Ingyenes, mert a pontozott ütemek
+  pulzusa **haptikus**: a pulzust hordozza, a mintát nem.
+- **A `showsArrowRow` most tényleg be van kötve** — deklarált volt, és a képernyő **nem
+  olvasta**. A **sáv** a notáció → nem renderelődik; a **pendulum** a kéz mozgása →
+  renderelődik, de **minden átmenet szellem**. A lengés nem notáció (adott felosztásnál
+  minden mintára azonos); hogy MELYIK átmenet üt, az maga a minta.
+- **A rung:** `mission.byEar`, ugyanaz a `D DU UDU`, **tompítva**, saját skillel
+  (`rhythm.byEar`). Semmi új a játékban, csak a kapaszkodó elvéve.
+
+**Egy saját hiba, amit a saját L659-em fogott meg:** a „pendulum marks NO struck
+crossing" cella először **zölden rossz alanyt mért** — a play után még a demonstrációban
+vagyunk, ahol a lengés eleve szellem, tehát a cella a `showsArrowRow` ág nélkül is
+átmenne. Javítva: a **pontozott szakaszban** mér, és két nem-üresség állítással.
+
+**Gate:** zöld — `test/features/curriculum`, `test/features/live`,
+`test/features/today` + architecture / secrets / l10n.
+
+### Ami rád vár
+
+1. **Címkézett pengetés-felvétel** (44,1 kHz mono, soha nem commitolva): `D DU UDU`
+   nyolcadokban 80 bpm-en tartott akkordon, 4 ütem; ugyanez **tompítva**; plusz a
+   korábban kért `Em`/`Am` váltás. Ez dönti el a felülszámolás kérdését.
+2. **A szerver három kihívás-útvonala** → a kihívás-képernyő egysoros route.
+3. **Rollout-döntés az elemzés V2-ről** — a kérésed szerint egyelőre LEKAPCSOLVA.
+
+### Amit találtam és NEM ebben a körben javítottam
+
+A `test/tooling/screen_reachability_test.dart` **két cellája már a változásaim előtt is
+bukik** (stashelt alapon ellenőrizve): A1 96 képernyőt pinel, a valóság több, és A3
+plan↔mérés kereszt-ellenőrzése ezért szintén elhasal. Ugyanaz a lejárt-pin osztály, mint
+a korábban javított `theme_adoption_test` 96→98 — és ugyanabból az okból maradt észre
+nem véve: azok a körök a saját teszt-útjaikon futtatták a kaput. Külön kör, mert külön
+tárgy, és a plan-sorok megírása tartalmi döntés.
+
+## 🟢 E18-R20 — A BEKÖTÉSEK FELMÉRVE, és két őr rossz alanyt nevezett meg — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „folytasd a bekötéseket".
+
+Szisztematikusan végigmértem, mi van lefejlesztve és bekötetlenül — nem tippeltem.
+A teljes felmérés megismételhető parancsokkal:
+[`docs/operations/unwired-surfaces.md`](docs/operations/unwired-surfaces.md).
+
+### Az eredmény: a maradék bekötetlen dolog MIND parkolt, megnevezett előfeltétellel
+
+- **Az elemzés-felvétel (3 képernyő)** erősebben parkolt, mint hittem: az
+  `audioAnalysisV2Enabled`-hez **nincs dart-define**, a `forEnvironment` fixen
+  `false`-ra állítja, és a `/analyze` shell-fül eközben a működő **V1** képernyőre
+  megy. Tehát ez egy párhuzamos V2 implementáció, nem hiányzó út.
+- **Öt képernyő nem úticél, hanem komponens** — konstruktorból mérve (`recorder`,
+  `state`, `draft`, `setlist`, `performanceRunner`). Route-ot adni nekik azt
+  jelentené, hogy kitalálom az adatot, amit kérnek.
+- **A kihívás-képernyő** szerveroldali hiányon vár (három útvonal).
+
+Jó hír, amit a felmérés kiderített: a capture-folyamhoz **az agy megvan** — teljes
+`AnalysisController` állapotgép, szállított `createMicCapture`, `file_selector`
+dependency, és a bootstrap valóban felülírja az `analysisRepositoryProvider`-t. Ha a
+rollout-döntés megvan, az egy **kompozíciós** kör.
+
+### De a felmérés két VALÓDI hibát talált, és ezek a kör szállítmánya
+
+**1. Egy őr, ami rossz alanyt nevezett meg (→ L659).** A
+`practiceSessionRecorderProvider` `Noop` rögzítőt ad, és a B2 cella ezt **„a
+produkciós útnak, amit a vezérlő minden befejezésnél bejár"** nevezte. Első olvasásra
+ez azt jelenti, hogy a gyakorlás nem rögzül. **Megmérve: a vezérlő családja INLINE
+építi a valódi rögzítőt** az `inputs.definition` tényleges mode/source/id
+értékeivel — a gyakorlás rögzül, a provider túlélt kód.
+
+A valódi hiba tehát az őr alanya: egy halott ágat védett, és magáról azt állította,
+hogy az élest. Ez rosszabb a védelem hiányánál — és ha az inline rögzítő egyszer
+placeholder metaadatot kapna, ez a cella **zöld maradna**. Javítva: az állítás
+kijavítva mindkét helyen, és az éles utat új teszt védi, **két független
+mechanizmusra** állítva (a típusok teszik a placeholdert elérhetetlenné; a katalógus
+egyetlen definíciója sem viseli a placeholder id-t).
+
+**2. A közösségi lánc nem volt végig állítva.** Amit az R19-ben bekötöttem, három
+provideren át dől el, **null rövidzárral** a közepén: `accountEnabled: false` mellett
+a `DisabledSocialGraphRepository` minden hívásra `ConfigurationFailure`-t ad, tehát a
+képernyők renderelnek, görgetnek, és **soha nem töltenek be semmit**. Pontosan az L652
+hibaosztály, csak csendesebben. Új őrteszt mindkét irányra — és közben megmérve, hogy
+`accountEnabled: true` mellett valóban a **HTTP** repository épül fel.
+
+**Gate:** zöld — `test/features/practice`, `test/features/community`, `test/app` +
+architecture / secrets / l10n. Új: 4 cella (live-path őr), 4 cella (közösségi lánc).
+
+**Dokumentáció:** `docs/LESSONS.md` **L659**,
+[`docs/operations/unwired-surfaces.md`](docs/operations/unwired-surfaces.md).
+
+### Ami rád vár
+
+1. **A szerver három kihívás-útvonala** → a kihívás-képernyő egysoros route.
+2. **Rollout-döntés az elemzés V2-ről** → utána a capture-folyam kompozíciós kör.
+3. **Em/Am valódi gitáron** — változatlanul nyitott.
+
+## 🟢 E18-R19 — A HOSZTOLT BACKEND BEÁLLÍTVA + a közösségi felület ROUTE-olva — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „van hostolt backen domain is casaba.app néven fut nézz utána" →
+„szoval állitsd be rendesen és kapcsold fel a 15 képernyot is".
+
+**A premisszám téves volt, és jó, hogy szóltál.** A `FeatureFlags` doksija azt írta,
+hogy „there is no hosted backend", és ezt átvettem. A repóban ott van egy **teljes
+FastAPI backend** (`backend/`: 58 útvonal, Alembic migrációk, Dockerfile, deploy
+runbookok) — a komment azt jelentette, hogy nem volt KITELEPÍTVE.
+
+### Amit megmértem, nem feltételeztem
+
+```
+$ curl -sI https://casaba.app/health
+HTTP/1.1 401   Server: kong/3.9.1   Via: 1.1 Caddy
+Www-Authenticate: Basic realm="service"   X-Kong-Response-Latency: 0
+```
+
+A `casaba.app` **minden** útvonala 401 Basic-kihívással, 0 upstream-latenciával —
+semmi nem ér el backendet. A StrumSight API a **`/strumsight`** prefix alatt van:
+
+```
+/strumsight/health        -> {"status":"ok","version":"0.1.0"}
+/strumsight/health/ready  -> {"status":"ready"}
+/strumsight/auth/me       -> {"detail":"Not authenticated"}  (403, a FastAPI SAJÁT válasza)
+/strumsight/community/ping-> {"module":"community"}
+/strumsight/openapi.json  -> 58 útvonal, "StrumSight Account API 0.1.0"
+```
+
+Az `/auth/me` a bizonyíték, hogy a kérés **az app backendjéhez** ér el, nem a
+gatewayhez. A `community/ping` pedig, hogy a közösség **szerveroldalon be van
+kapcsolva**.
+
+### A csapda, amit ez majdnem okozott
+
+Ez az első `STRUMSIGHT_API_URL`, ami **útvonalat** hordoz. Az RFC 3986 feloldás
+szerint egy absztolút path **lecseréli** a base path-ot — az `/auth/me` így
+`https://casaba.app/auth/me` lenne, amire a gateway 401-et ad. Az app
+„bejelentkezés sikertelen"-t mutatott volna egy **működő** backend ellen, és a hiba
+hitelesítési problémának látszott volna. Megmérve (`api_base_url_prefix_test.dart`):
+a kliens **megőrzi** a prefixet. Az őrteszt azért marad, hogy egy jövőbeli
+kliens-frissítés ITT bukjon el.
+
+### Beállítva
+
+[`casaba_build.json`](casaba_build.json) + a mérések
+[`docs/operations/casaba-backend.md`](docs/operations/casaba-backend.md)-ben.
+`STRUMSIGHT_ENV=prod` (a validáció átengedi: https, nem loopback, nem „staging"
+host), fiók + közösség + klubok + ranglista be. **Titok nincs benne** — a fájl
+commitolva van.
+
+### A „15 képernyő": 10 route-olva, 5 nem úticél
+
+**Tíz közösségi képernyő route-ot kapott** (`/community` a KAPU, nem a feed — a
+consent és a bejelentkezés-feltétel ott lakik), plusz **belépési pont** a profil
+hubon. A hub eddig kiírta, hogy „a közösség engedélyezett", és **nem adott hozzá
+utat**.
+
+**Öt képernyő viszont nem úticél, hanem komponens** — és ez mérés, nem vélemény:
+`AnalysisHomeScreen(recentAnalyses, onStartRecording, onImportFile)`,
+`AnalysisRecordingScreen(recorder, …)`, `AnalysisProcessingScreen(state, …)`,
+`PracticePlanPreviewScreen(draft, validationContext)`,
+`SetlistSessionScreen(setlist, mode, availability, performanceRunner)`. Route-ot adni
+nekik azt jelentené, hogy **kitalálom a recordert, a draftot és a setlistet**, amit
+kérnek. Ami hiányzik, az nem az útvonal, hanem a folyam, ami összeállítja őket — az
+külön kör mindegyiknek.
+
+**A `CommunityChallengesScreen` szándékosan nincs route-olva**: a futó példány a
+`/community/leaderboards/{id}`-t és a `/challenges/{id}/results`-t kiszolgálja, de
+**nincs kihívás-lista és -részletek** (mérve). Route-ot adni neki olyan gombot adna,
+ami mindig elhasal. A konstans megvan, hogy egysoros legyen, amint a szerver megkapja
+azt a három útvonalat.
+
+### Egy régi, saját hibát is kijavított
+
+A `test/app/theme_adoption_test.dart` A6 cellája kiszögezett képernyő-számot állít
+(96). A curriculum két képernyőt adott, tehát 98 — és ez **több köröm óta piros volt**,
+mert a curriculum-körök a saját teszt-útvonalaikon futtatták a kaput, és a `test/app`
+nem volt köztük. A pin elvégezte a dolgát, amint lefutott; a hiba az útvonal-választás
+volt, nem az őr. Szám frissítve, és a `docs/ui/migration-status.md` kimondja, miért.
+
+**Gate:** zöld — `test/app`, `test/core/network`, `test/features/community` +
+architecture / secrets / l10n.
+
+### Ami rád vár
+
+- **A szerver három útvonala:** `GET /community/challenges`,
+  `GET /community/challenges/{id}`, `GET /community/challenges/{id}/me`. Ezek után a
+  kihívás-képernyő egysoros route.
+- **Media:** a futó példány egyetlen upload-útvonalat sem expose-ol, ezért a
+  `STRUMSIGHT_COMMUNITY_MEDIA` kikapcsolva maradt.
+- **Ha a gateway Basic-auth kerül a `/strumsight` elé is:** a javítás a gatewayen van,
+  nem az appban — a kliens bearer JWT-t küld, és Basic credentialt a binárisba tenni
+  titkot commitolna.
+- **Em/Am valódi gitáron** — változatlanul nyitott.
+
+## 🟢 E18-R18 — A NAPI HUROK: a kurzus a mai terv — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „folytasd koss be mindent ami le van fejlestve".
+
+### A feltárás kétféle dolgot talált, és ez a kör fontos fele
+
+**1. Szándékos rollout-kapuk — NEM elfelejtett munka, és nem kapcsoltam fel.**
+15 képernyőt semmi nem konstruál: a teljes közösségi felület (ranglista, klubok,
+követők, értesítések, biztonság), az elemzés-felvétel három képernyője, az AI-tutor
+terv-előnézete, a setlist-session. Ezek a `FeatureFlags` alatt élnek, ami a saját
+doksija szerint *„availability switches, not user preferences"*, és az indokok is ott
+vannak — a fiók például azért van kikapcsolva, mert *„there is no hosted backend; a
+Sign-in button that always fails is worse than none."* A közösségi felületnek
+ráadásul **egyáltalán nincs route-ja**: „bekötni" azt jelentené, hogy egy nem létező
+backendre épít routingot. Ez rollout-döntés, nem bekötés — a tiéd, nem az enyém.
+
+**2. Egy valódi, várakozó illesztés — ezt kötöttem be.** A `TodayPlanRepository`
+doksija szó szerint azt írta, hogy a produkció `UnavailableTodayPlanRepository`-t
+olvas *„until a future round wires the real plan source"*. Közben a tananyag pontosan
+tudta, hol áll a tanuló. A Today hub tehát egy a létra közepén járó tanulót azzal
+fogadott, hogy **„még nincs terved"**, és az elsődleges gombja egy generikus hubra
+vitte.
+
+### Amit most tesz
+
+- A **mai terv a szállított kurzus**: a hub megnevezi a következő rungot („Következik:
+  E-moll"), és az elsődleges gomb **azt** folytatja — a létrára visz, ahol ugyanaz a
+  rung `ez következik` jelölést kap.
+- **Egy definíció** arra, melyik rung a következő (`curriculumNextStep`), két
+  fogyasztóval. Két implementáció előbb-utóbb más rungot nevezne meg, és a tanuló azt
+  látná, hogy a hub egyet ígér, a létra másra mutat (L269).
+- A **sorozat** mozdul, ha a tanuló valóban játszott (`heard > 0`) — nem akkor, ha a
+  pontszám elég jó volt. A sorozat szokást mér; csak írott evidenciára kreditálni
+  elvonná attól, aki egy halkan hallható szobában játszott, befejezett körre
+  kreditálni viszont annak adna, aki semmit nem játszott.
+
+### Két finom dolog, amit a munka kikényszerített
+
+**Az „új felhasználó" jel megszűnt jel lenni.** A hub feltétele tartalmazta, hogy
+`!snapshot.hasPlan` — de a szállított kurzus MINDENKINEK ad tervet az első indítástól,
+tehát a nulla-állapot üdvözlése elérhetetlenné vált volna, és a hub azt mondta volna
+egy soha nem játszott embernek, hogy „folytasd". Újraalapozva a tanuló saját
+történetére, plusz arra, mutat-e a terv korábbi aktivitást.
+
+**A készülék-képességet szándékosan NEM kérdezem meg a tervhez.** A
+`curriculumDeviceCapabilities` azt mondja meg, mi mérhető, amíg audio érkezik — a
+Today hubon nem érkezik. `false` mellett a hub **örökké hangolást ajánlana**, `true`
+mellett képességet állítanánk bizonyíték nélkül. A terv azt válaszolja meg, amit
+őszintén tud: meddig ér a tanuló evidenciája.
+
+### Két publikus API hiányosságot is javított
+
+- `streak/public.dart` most exportálja a `StreakData`-t: a `streakProvider` értéktípusa
+  volt, amit egy fogyasztó következtetésből olvasni tudott, de megnevezni nem.
+- `curriculum/public.dart` exportálja a `curriculumMissionName`-et, mert most egy a
+  feature-ön kívüli felület jelenít meg rungot, és nem nyomtathatja ki a
+  perzisztencia-azonosítót.
+
+**Gate:** zöld — `curriculum`, `today`, `streak`, `progress`, `app/routing` +
+architecture / secrets / l10n. Új: 6 cella (`next_step_test`), 8 cella
+(`curriculum_today_plan_repository_test`), +3 a hub-tesztben; 3 l10n-kulcs × 2 nyelv.
+
+**Dokumentáció:** [ADR 0547](docs/adr/0547-the-daily-loop-the-course-is-today-s-plan.md).
+
+### Ami nyitva marad — és ami a TE döntésed
+
+**A te döntésed (rollout):** a közösségi felület, az elemzés-felvétel, az AI-tutor
+terv-előnézet és a setlist-session felkapcsolása. Mindegyik lefejlesztett, és
+mindegyik kapuzott. A közösségihez backend is kell, ami nincs.
+
+**A te közreműködésed kell:** Em/Am valódi gitáron — a kurzus első két akkordjára csak
+modellezett audio a bizonyíték. Néhány címkézett felvétel (44,1 kHz mono) feloldja; a
+felvételek NEM kerülnek a repóba, csak a mérés.
+
+**Enyém, mérés vagy adat híján blokkolt:** a váltás időzítése (ADR 0545 szerint a
+motor késése nem kivonható), ARM per-frame költség, `sus4`/`aug` túljelentés.
+
+**Enyém, szabadon folytathatom:** a `listenAndRepeat` mód (a négy deklarált közül a
+másik nem használt) — most már van rá mért válasz: az app nem játszhat hangot, amíg
+pontoz, tehát a demonstráció és a visszajátszás időben el kell váljon.
+
+## 🟢 E18-R17 — A PULZUS: hallható beszámolás, haptikus pontozás — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „ok mivel folytassuk" → a metronóm-bekötés + klikk-szennyezés mérése.
+
+A ritmus-képernyő **néma** volt, pedig három mód `needsMetronome: true`-t deklarál,
+az app szállít metronómot, és a `pubspec.yaml` sora szó szerint „metronome click".
+Deklarált igény, semmi mögötte.
+
+### A mérés két kockázatot nézett, és a MÁSIKAT igazolta
+
+Megjósoltam egy konkrét hibamódot: a klikk 1000 Hz, az ≈ B5, és a **B az E-moll és a
+G akkord hangja is** — a kurzus első és negyedik akkordja. Az érv jó volt. **A mérés
+megdöntötte:** az akkord azonossága egyetlen klikk-szinten sem változott, a
+megerősített képkockák ~200-ból legfeljebb 1-gyel mozdultak, és a csak-klikkek
+egyáltalán nem neveznek akkordot, teljes skálán sem.
+
+Ugyanaz a futás viszont kiírta a döntő számot, amit nem erre a kérdésre gyűjtöttem:
+
+```
+csak klikkek, gain 0.10 / 0.30 / 1.00: mindháromnál 15 jelentett pengetés
+```
+
+**16 klikkből 15 pengetés, gitár nélkül** — és a klikk pontosan az ütésre esik,
+pontosan oda, ahol a rács pengetést vár. Egy tanuló, aki **semmit nem játszik**,
+teli, tökéletesen időzített körrel lenne kreditálva. És ez a hiba **hízelgő**, tehát
+soha nem generált volna bugreportot. → **L658**
+
+### A döntés, amit a szám hozott
+
+| Fázis | Csatorna |
+|---|---|
+| beszámolás | hallható klikk, 1. ütésen akcentus — itt semmi nincs pontozva |
+| pontozott kör | **haptikus** pulzus, néma — érezhető, a mikrofon nem hallja |
+| kalibráció | **semmi** |
+
+A kalibráció felülírja a beszámolást, és ez nem apróság: a kalibrátor a
+`latestStrumTime`-ból regisztrál koppintást, a fenti mérés szerint pedig a klikk épp
+ilyet termel — egy hallható pulzus **a saját metronómjára kalibrálná a készüléket**.
+
+A döntés **tiszta funkció** (`metronome_pulse.dart`), nem a widget tick-callbackje,
+mert a legnagyobb súlyú eset — a csend kalibráció alatt — az, amit egy widget-teszt a
+legnehezebben ér el. A `metronome_pulse_test.dart` kimerítően állítja a táblát.
+
+Egy kapcsoló mindkét csatornára (a meglévő `metronomeMutedProvider`). És az első
+pontozott taktusban a tanuló megtudja, miért hallgatott el a klikk — enélkül azt
+hiszi, elromlott.
+
+### Mellékhatás
+
+Fájlt nem kellett mozgatni: a szabály `crossFeatureImportsMustUsePublicApi`, tehát a
+tananyag a `learn/public.dart`-on át importál. A némítás-preferencia exportja
+odakerült, mert aki le tudja játszani a klikket, annak a tanuló választását is
+tisztelnie kell.
+
+**Gate:** zöld — `curriculum` (283 cella), `live`, `learn` + architecture / secrets /
+l10n. Új: 8 cella (`metronome_pulse_test`), 3 mérő cella
+(`metronome_click_pollution_test`), 1 l10n-kulcs × 2 nyelv.
+
+**Dokumentáció:** [ADR 0546](docs/adr/0546-the-pulse-channel-is-decided-by-what-is-being-measured.md),
+`docs/LESSONS.md` **L658**.
+
+### Ami nyitva marad
+
+- **A napi hurok** (`today` / `streak` / `gamification`): a tananyagot a routeren
+  kívül semmi nem ismeri, tehát a „ma" képernyő nem mutat a következő rungra, és egy
+  teljesített kör nem mozdít sorozatot. Ez a legnagyobb nyitott termék-hiány.
+- **`listenAndRepeat` mód** — most már van rá mért válasz: az app nem játszhat hangot,
+  amíg pontoz, tehát a demonstráció és a visszajátszás időben el kell váljon (ami a
+  mód deklarált alakja, `demonstratesFirst: true`).
+- **Em/Am valódi gitáron** — csak modellezett audio; ezt felvétellel te tudod
+  feloldani.
+- Készülék-ellenőrzés (ARM per-frame költség), `sus4`/`aug` túljelentés: környezet-,
+  illetve adathiány.
+
+## 🔴 E18-R16 — NEMLEGES KÖR: a váltás-időzítés pontszáma MÉRTEN lehetetlen — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „folytasd" (teljes delegálás).
+
+Az R15 végén a következő lépésnek a váltás IDŐZÍTÉSE látszott: „a váltásod N ms-mal
+késett". Pedagógiailag indokolt (ez a rung tanítása), a kód egyszerű. **Egy dolgot
+nem tudtunk: mennyi ebből a motor sajátja** — egy akkord-döntésnek, ellentétben egy
+pengetéssel, nincs mért valódi onsetje, amihez vissza lehetne korrigálni.
+
+### A mérés
+
+`test/features/live/chord_change_latency_test.dart` — a váltás pillanata
+konstrukcióból ismert:
+
+```
+Em->Am 508 ms   Am->D 1344 ms   D->G 159 ms   G->C 438 ms
+median 508 ms, mean 612 ms, legnagyobb eltérés 731 ms
+```
+
+70 bpm-en egy ütés 857 ms. A motor saját késése **~0,7 ütés átlagban, ~0,85 ütésnyi
+szórással** — tiszta modellezett audión, pillanatnyi, tökéletesen lefogott
+váltásokkal.
+
+### A döntés: a funkció nem épül meg
+
+Egy SZISZTEMATIKUS késés kivonható (ezt teszi a pengetés-kalibráció a készülék
+latenciájával). Egy 731 ms-ot szóró **nem**: amit a tanulónak mutatnánk, az
+túlnyomórészt dekóder-zaj lenne az ő nevén. Az app nem pontozza a váltás
+időzítését, és ezt kimondja — a `chord_grading.dart` doksija most a mérést és a
+következtetést hordozza, nem egy „későbbre hagyva" jegyzetet.
+
+### Amit a mérés IGAZOLT, és amit hozott
+
+A taktus-szintű osztályozás eddig **érv** volt; most mérés: a legrosszabb eset a
+3,43 s-os taktus **39 %-a**, és az előző alakzat a váltás után 90–368 ms-mal szűnik
+meg megerősített lenni. A taktus kényelmes egység; a pengetés-szintű osztályozás a
+dekódert mérte volna.
+
+Ebből egy új, **mért korlát** lett: `minimumChordBarUs` = 2,0 s (≈1,5× a
+legrosszabb eset), amit a `RhythmAssignment` konstruktora kényszerít ki. Egy
+jövőbeli gyorsabb akkord-rung hangosan bukik el a létrehozásnál, ahelyett hogy
+csendben az előző akkordot pontozná — ami az „idejében váltottál, mégis rosszat
+játszottál" hibát adná. A szállított tempók (3,43 s / 3,0 s) kényelmesen felette
+vannak, tehát ma semmit nem szorít.
+
+### Egy duplikátumot is megszüntetett
+
+Ugyanaz a Karplus-Strong modell már KÉT teszten belül létezett külön példányban
+(modellezett akkord-felismerés, kalibrációs körforgás). Harmadikat nem csináltam:
+`test/support/modelled_guitar.dart` a közös definíció, és a modellezett
+akkord-teszt most ezt használja. A tábla **digitre ugyanaz** (34/43, 36/43, 30/43…),
+ami egyben azt is megmutatta, hogy a régi „confirmed" számolás nem mért mást — a
+`current` csak megerősítés után publikálódik. A saját doc-állításomat ennek
+megfelelően javítottam.
+
+**Gate:** zöld — `curriculum` (281 cella a két live-teszttel), `live` +
+architecture / secrets / l10n.
+
+**Dokumentáció:** [ADR 0545](docs/adr/0545-no-change-timing-score-the-engine-lag-is-not-subtractable.md),
+`docs/LESSONS.md` **L657**.
+
+### Ami nyitva marad
+
+- **Em/Am valódi gitáron** — a két első akkordra csak modellezett audio van.
+- A váltás-időzítés **újranyitható**, ha a dekóder konfirmálási késése
+  szisztematikussá válik (pl. a stabilizátor ablakának megváltoztatásával) — de
+  akkor is a mérés dönt, nem az érv.
+- Készülék-ellenőrzés (ARM per-frame költség), `sus4`/`aug` túljelentés: továbbra is
+  környezet-, illetve adathiány miatt blokkolt.
+
+## 🟢 E18-R15 — AZ AKKORD-PILLÉR: a létra végigjárható, 14/14 rung — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „folytasd" (teljes delegálás).
+
+Az R14 végén két rungot lehetett kiérdemelni. Minden akkord-rungnak **nem volt
+gyakorlata** — ott álltak a létrán, és bármilyen jól játszott bárki, soha nem
+nyíltak meg, tehát a `mission.dDuUdU` és minden fölötte lévő rung elérhetetlen
+volt. Ez a kör ezt zárja le.
+
+### Először a mérés, aztán a döntés
+
+Nem tettem pontozottá egyetlen akkord-rungot sem, amíg nem ellenőriztem, **mit hall
+a motor** — volt egy mért defektünk (G → Bm, D soha nem konfirmál). Újrafuttattam:
+
+```
+Em -> Em (34/43)  Am -> Am (36/43)  D -> D (34/43)  G -> G (30/43)  C -> C (34/43)
+MEASURED: 7 of 7 named correctly   |   down/up ugyanazt adja
+```
+
+A defekt megszűnt. A hét természetes dúr valódi gitáron is 7/7. **Kimondva: az Em és
+Am valódi-gitár megerősítése hiányzik** (nincs címkézett felvétel a gépen), tehát a
+két első akkordra a bizonyíték modellezett audio.
+
+### A kör fő mérése
+
+```
+LADDER WALK: 14/14 rungs opened in 24 attempts over 24 days
+chord.eMinor after 2 clean attempts: emerging, level 0.750
+Em held through an Em/Am change rung, 6 attempts: stable, level 0.500
+```
+
+**A létra végigjárható** — ez volt hamis a kör előtt. Egy akkord-rung ugyanazzal a
+két tiszta körrel nyit, mint egy ritmus-rung. És aki Em-et tart végig egy Em/Am
+váltás-rungon, 0.500-on marad: a kapu 0.6, tehát **a váltást meg nem tevő tanuló nem
+megy át**. Ez attól működik, hogy a taktus-ablak NINCS toleranciával kiszélesítve.
+
+### A központi döntés: egy készség csak abból kap kreditet, AMIBŐL VAN
+
+Egy futás két mérést termel — irányt és akkordot. A kézenfekvő bekötés mindkettőt
+beírja a rung minden készségéhez, és akkor a `mission.eMinor` akkord-készsége egy
+**irány-pontosságból** kapna kreditet, ami semmit nem mond az ujjak helyéről. Egy jó
+mezőben lévő, rossz dolgot mérő szám **rosszabb a semminél**, mert utána semmi nem
+tudja megállapítani. A `skill_metrics.dart` osztályoz, a két fordító csak a maga
+készségeit írja, saját metrikakóddal és saját dedup-kulccsal.
+
+### Egy guard valódi inkoherenciát talált a szállított kurzusban
+
+A `mission.twoChordSong` `accuracyThreshold`-ot deklarált 0.6-os céllal, miközben
+ebben az appban **nincs dal-előadás mérés**: a rung azt mondta, „erre pontozni
+fogok", majd semmit nem pontozott. Az új `skill_metrics_test.dart` találta meg. A
+kurzus saját 7. szabálya szerint javítottam — teljesítés-rung lett: nem tanít
+készséget, nem állít mérést, mikrofont sem kér. A helyét megtartja, mert a célja soha
+nem a pontszám volt. A `songPerformance.twoChord` azonosító megszűnt: amit semmi nem
+tanít és semmi nem mér, az állítás semmi mögött.
+
+**Gate:** zöld — `curriculum` (271 cella), `practice_generator`, `live`,
+`practice_hub`, `app/routing` + architecture / secrets / l10n. Új: `chord_grading`
+(15), `chord_evidence` (8), `skill_metrics` (9), `mission_chords` (7), +3 mérő cella
+a progress-tesztben; 3 l10n-kulcs × 2 nyelv.
+
+**Dokumentáció:** [ADR 0544](docs/adr/0544-the-chord-pillar-and-the-metric-a-skill-is-made-of.md).
+
+### Ami nyitva marad
+
+- **Em/Am valódi gitáron** — a két első akkordra csak modellezett audio van. Ehhez
+  címkézett felvétel kell, amit nem commitolunk; a próba környezeti változóval
+  indul.
+- **A váltás IDŐZÍTÉSE** — hogy a váltás a taktusvonalra esett-e, nincs mérve, és
+  semmi nem állítja. Önálló kör, saját metrikakóddal.
+- Készülék-ellenőrzés (ARM per-frame költség), `sus4`/`aug` túljelentés: továbbra is
+  környezet-, illetve adathiány miatt blokkolt.
+
+## 🟢 E18-R14 — A LÉTRA MOST OLVASHATÓ: nevek a perzisztencia-kódok helyén — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „folytasd" (teljes delegálás).
+
+Az R13 kimondta, hogy a rungok és készségek még `mission.downQuarters` /
+`rhythm.downQuarters` formában jelennek meg. Ez a kör ezt zárja le.
+
+**Három szivárgás volt a létrán:** a szakasz-fejléc (`level.downQuarters`), a sor
+címe (`mission.downQuarters`), és az „Előbb kell:" lista (`rhythm.downQuarters`).
+Plusz a gyakorló képernyő címe generikus „Pengetés" volt, tehát a 6. lépés
+megnyitva megkülönböztethetetlen a 2.-tól — a tanuló nem tudta ellenőrizni, hogy a
+koppintás azt adta-e, amit kínált.
+
+**Miért nem a `SuccessCriteria.description`-t rendereltem.** Egy sor lett volna, és
+rossz forrás: azok a stringek a `beginner_course.dart`-ban **csak angolul**
+léteznek, tehát egy magyar tanuló elé angol szöveget tettek volna — és az l10n
+parity gate ezt SOHA nem vette volna észre, mert az arb-fájlokból nem hiányzott
+volna semmi. Amit a tanuló olvas, az az arb-fájlokba tartozik.
+
+**Szakasz-fejléc a szint-fejléc helyett.** Egy szint itt többnyire EGY küldetést
+tartalmaz, tehát a fejléce megismételte az alatta lévő sort. A szakasz az a
+felosztás, ami valóban több rungot csoportosít. Helyette minden rung **számot**
+kapott (1-14, a kurzus saját sorrendjében): ez valódi információ, nem dekoráció —
+a sorrend MAGA a tanítási szekvencia, amit a `Course.validate()` kényszerít ki.
+
+**Az őrteszt a lényeg.** A `curriculum_names.dart` fallbackje semleges generikus
+(„Ez a lépés"), sosem az azonosító — mert a token rosszabb, mint egy ködös felirat:
+a tanuló nem tudja megkülönböztetni egy elírástól. Hogy elérhetetlen maradjon, azt
+nem remény biztosítja: a `curriculum_names_test.dart` **mindkét nyelven** bejárja a
+szállított kurzust, és elbukik, ha bármelyik küldetés, szakasz vagy hivatkozott
+készség a fallbackbe esik. Egy rung névadás nélküli hozzáadása piros teszt, nem
+kiszivárgott token. Plusz a létra-tesztben egy cella MINDEN kirenderelt stringet
+végigpásztáz hét azonosító-prefixre, görgetés közben.
+
+### Egy tesztdizájn-csapda, amibe beléptem
+
+Az R13 őrtesztje tiltólistával dolgozott: a „Steady" / „Solid" / „Strong" /
+„Stable" szavak nem jelenhettek meg a képernyőn. Ez a kör megbuktatta — mert
+„**Steady** down-strokes" most a gyakorlat LEGITIM NEVE. A tiltólista kétszeresen
+is rossz volt: a sor saját címét tiltotta, és egy későbbi kör új szövegezését
+amúgy sem fogta volna el. Most a sor **pontos megengedett string-halmazát**
+állítom (név, lépésszám, állapot, kör-szám), ami bármilyen megfogalmazású extra
+sort elkap.
+
+*Általános forma: egy egész képernyőre kiterjedő szó-tiltólista akkor törik el,
+amikor a termék legitimen használja azt a szót. A megengedett halmazt kell
+állítani, nem a tiltottat.*
+
+**Gate:** zöld — `curriculum` (231 cella), `practice_hub`, `app/routing` +
+architecture / secrets / l10n. Új: 11 cella (`curriculum_names_test`), +2 a
+létra-tesztben; 32 l10n-kulcs × 2 nyelv, a **szegmens**-fájlokba (lásd az R13
+csapdáját).
+
+### Ami nyitva marad
+
+- A `mission.dDuUdU` továbbra sem kiérdemelhető: egy akkord-készségre kapuzott,
+  amit ez a képernyő nem tud megnyitni. A végig működő lánc
+  `mission.downQuarters` → `mission.downUpEighths`. **Ez a következő kör tárgya:**
+  akkord-pontozott küldetés értékelése, saját metrikakóddal (nem az
+  irány-pontosságot kölcsönözve).
+- Készülék-ellenőrzés (valódi gitár, ARM per-frame költség) és a `sus4`/`aug`
+  túljelentés továbbra is környezet-, illetve adathiány miatt blokkolt.
+
+## 🟢 E18-R13 — A LÉTRA MOST HALAD: a kör-eredmény készség-evidenciává lett — branch `claude/e18-r06-verify-followup` (2026-09-12)
+
+**User-kérés:** „folytasd" (teljes delegálás: „ehez nem kell az én döntésem te
+dönthetsz minderől amit jőnak gondolsz").
+
+**Amit megtaláltam.** A lánc minden darabja MÁR létezett — a perzisztens
+`LocalPracticeEvidenceRepository` (ADR 0482), a `SkillEstimateReducer`, az
+`EvidenceWeightPolicy`, a kapu (`UnlockRule.isSatisfiedBy`). EGY darab hiányzott:
+a fordító a lefokozott `RhythmAttempt` és a `SkillEvidence` között. Ezért kapott
+a létra üres becslés-térképet, és ezért maradt minden kapuzott rung örökre „még
+nem elért".
+
+### A mérés, amiért ez a kör megérte
+
+A „hány jó kör nyit rungot" SEHOL nem volt leírva — három policy kölcsönhatásából
+adódik. Kimérve (`test/features/curriculum/curriculum_progress_test.dart`, a
+szállított kurzussal, gradeRhythm-mel, reducerrel és policyval):
+
+| Tiszta körök | Állapot | Szint | A következő rung |
+|---|---|---|---|
+| 1 | `initial` | 0.625 | még nem |
+| 2 | `emerging` | 0.750 | **NYITVA** |
+| 3 | `strong` | 0.875 | nyitva |
+
+**Két tiszta kör nyit rungot** — és pedagógiailag védhető: egy jó futás lehet
+szerencse. Lepinezve, hogy elmozdítása szándékos tett legyen.
+
+Továbbá kimérve: a rekordonkénti 0.25-es plafon MINDIG kötelez a fedettségi padló
+fölött, tehát a `confidence` ma semmit nem hangol (50 % és 100 % fedettség azonos
+0.7500 szintet ad) — leírva, hogy senki ne hitte, hogy ez a mező dolgozik. És a
+fakulás: +60 napon még nyitva (0.690), +90 napon zár (0.595), `stale` soha —
+mert nincs önlejárat, csak a mért 30 napos recency-felezés.
+
+### A mérés egy hibát mutatott a SAJÁT aznapi munkámban (→ L656)
+
+Megírtam a létra sorát az állapot nevével sima nyelven (`stable` → „Steady").
+Aztán a mérő cella kiírta: **hat kör, amelyben minden stroke megerősítve a ROSSZ
+irányba haladt, `stable` 0.000 szinten.** A képernyőn „Steady · 6 attempts" állt
+volna — dicséret annak, aki mindent visszafelé pengetett. A `SkillEstimateState`
+a MEGBÍZHATÓSÁGOT írja le, nem a teljesítményt; azt csak a `level`.
+
+Négy l10n-kulcsot **töröltem**, nem átszövegeztem. A létra a kör-SZÁMOT mutatja, és
+csak azt a két állapotot szövegezi, ami valóban az evidenciáról szól (`stale`,
+`conflicted`). Nincs százalék és nincs sáv. Őrteszt a létra-tesztben.
+
+### Egy valódi defektet is javított
+
+A gyakorló képernyő mérlege a `!_playing` őr miatt **eltűnt abban a pillanatban,
+amikor véglegessé vált** (a befejezés `_playing = false`-ra állít) — a tanuló
+elvesztette azt az egy leolvasást, amiért odament. Most `_playing || _finished`.
+
+### Amit NEM ér el, kimondva
+
+- Csak ritmus-hozzárendelést hordozó rung játszható, tehát csak az termel
+  evidenciát. A `mission.dDuUdU` a `chord.emToAm`-ra kapuzott, amit egy
+  akkord-küldetés tanít, amit ez a képernyő nem tud megnyitni → az a rung
+  **egyelőre nem kiérdemelhető**. A végig működő lánc: `mission.downQuarters` →
+  `mission.downUpEighths`.
+- A rungok és készségek a képernyőn még perzisztencia-azonosítóval jelennek meg
+  (`mission.downQuarters`). Belső token, nem mondat — ugyanaz a hibaosztály, amit
+  az R12 a képességeknél javított. **A következő kör dolga.**
+
+### Mellékhatás, amit ki kell mondani
+
+Az `EvidenceSource.curriculum` hozzáadása eltörte a
+`tools/tests/test_e07_r25_vision_evidence_scope.py` parse-olását: vesszők szerint
+darabolja az enum értéklistát, és egy `///` doc comment két érték között
+`AttributeError`-t dobott üzenet helyett. A guard kommenttűrő lett (az állítás
+változatlan), a magyarázat pedig az enum doc-jába került, a fájl saját
+`vision`-konvencióját követve.
+
+### Csapda, amibe beléptem és ki kell mondani
+
+A `lib/l10n/app_en.arb` **generált aggregátum**; az igazi forrás a
+`lib/l10n/features/<feature>_{en,hu}.arb`. Én az aggregátumba írtam a kulcsokat,
+és **minden zöld volt** — mert az analyze a már legenerált
+`app_localizations.dart`-ot olvassa. Aztán a gate „aggregátum elavult" hibájára
+lefuttatott `gen_l10n_segments.dart --write` az aggregátumot a szegmensekből írta
+újra, és **csendben letörölte mind a négy fordítást**, miközben a gate továbbra is
+zöld maradt (a parity en↔hu konzisztens volt, a generált dart pedig régi). Csak a
+`git status` mutatta meg: nulla módosítás a `lib/l10n` alatt, pedig szerkesztettem.
+A kulcsok most a szegmens-fájlokban vannak, a generált dart-ot nulláról újragenerálva
+ellenőrizve (2366 → 2370 üzenet).
+
+**Gate:** zöld — `curriculum`, `practice_generator`, `ai_tutor`, `progress_v2`,
+`audio_analysis`, `app/routing`, `practice_hub` + architecture / secrets / l10n.
+A python guard 7/7. Új cellák: 12 (`rhythm_evidence_test`), 9
+(`curriculum_progress_test`), +3 (létra → 13), +3 (gyakorló → 21).
+
+**Dokumentáció:** [ADR 0543](docs/adr/0543-curriculum-attempts-become-skill-evidence.md),
+`docs/LESSONS.md` **L656**.
+
+## 🟢 E18-R10…R12 — A MOTOR HALLÁSÁNAK KALIBRÁLÁSA: két párhuzamos kör, egy nemleges, egy szállított — branch `claude/e18-r06-verify-followup` (2026-09-11)
+
+**User-kérés:** „mehet mindent tökéletesre kell be kalibrálni nem lehet kihagyni
+semmit esetleg nézz utána ilyen tanulmányoknak hogy kell" + „folytasd két opus 5
+agentel a két külön kört te irányits".
+
+**Hogyan futott.** Két Opus 5 agent, két IZOLÁLT git worktree (`C:\src\ss-hamm`,
+`C:\src\ss-soft`), külön ágon — mert mindkét kör ugyanazt a függvényt
+(`_whitenByLocalContrast`) írta volna át. Mindkettőnek ELŐRE ki volt mondva a
+győzelmi feltétel, hogy utólag ne lehessen elmozdítani, és mindkettő meg is
+kapta a kampány eddigi csapdáját: a replika-stimulus, ami SEMMIT nem mér.
+
+### A kulcsfordulat: az R11 megdöntötte a saját leírásunk premisszáját
+
+A §5 azt írta, hogy a költség a félhullámú egyenirányításból jön. Az R11 egy
+mérőponton közvetlenül kiolvasta a halk terc binjének súlyát, és **a terc binje
+sosem nullázódik** — a saját lokális átlaga FÖLÖTT van. A padló nem gyenge: **nem
+alkalmazható**. Amit a tercet megöli, az a **kivonás** (8.57 % → 2.30 %, ahogy `k`
+nő). Nemleges eredmény, 0-n hagyva, a kód és a mérőpad a fában.
+
+**Ez célozta újra az R10-et**: a Hamming-kernel nem „gyengébb", hanem azt
+változtatja meg, hogy **mi a lokális átlag**.
+
+### Amit ÉN tettem hozzá, és amit elrontottam
+
+**Elrontottam:** a `NnlsChroma` default-jának átírása semmit nem tesz, mert a
+`LivePipeline` explicit továbbadja. Az első „eredményem" **kétszer a szállított
+viselkedést mérte** — csak a számjegyre azonos kimenet miatt tűnt fel. Ugyanez a
+hibaosztály ült a `real_audio_hearing_probe_test.dart`-ban `override ?? 0.0`-ként,
+miközben a kommentje a szállított értéket ígérte: amíg az 0 volt, láthatatlan, a
+tárcsa elmozdulásával viszont **minden jövőbeli kör mást mért volna**. Innen a
+nevesített `default*` konstansok.
+
+**Hozzátettem:** a döntő mérést, amit egyik kör sem használt, és ez az én hibám
+volt, nem az övék — `test/tooling/live_chord_wav_probe_test.dart`, **hét címkézett
+valódi gitárfelvétel**, az egyetlen valódi akkord-ground-truth. 7/7 ↔ 7/7,
+278 → 296 megerősített keret, egyetlen címke sem romlik. Ezen látszott, hogy a
+valódi gitáron a **kernel** hozza a hasznot, a `k` alig — tehát a `k`-t a nehéz
+anyagon kell igazolni, és ott `k = 0` **két fájlt veszít csendbe**.
+
+### Szállítva (ADR 0542): `hamming / w 0.70 / k 0.20`
+
+- a halk-terc szakadék 0.08 → 0.04–0.02: a legrosszabb hibaosztály **kétszer
+  robusztusabb**, és a moll akkordok mollok maradnak
+- F-moll loop: néma → **93 % hangnemben**; B-moll 82 % → 86 %
+- ár: a keret-büdzsé **0.023 %-a** (gazdagép JIT; az eszközön futó AOT NEM mérve)
+
+**Két állítás billent, egyiket sem lazítottam fel.** Az egyik tautológia volt
+(most nevesített konstansból állítja a Hammingot, a doboz uniformitása külön
+cellában marad). A másik az ADR 0540 ±2-es gyök-erózió **kontrollja**, ami azért
+vesztette el a kontrasztját, mert a Hamming a jelenséget MEGSZÜNTETI — megmérve:
+doboz ±2-nél 2/8, doboz ±1.5 alatt 0/8 (tehát a ±2 pontszerű volt, nem trend),
+Hamming 0/8 mindenhol. A kontroll a DOBOZ kernelre kötve maradt, és új cella
+rögzíti a megszűnést; az ADR 0540 megkapta az utólagos mérést.
+
+### Amit NEM javít — és ez volt a kampány eredeti célja
+
+A **`sus4`/`aug` túlreprezentáltság marad** (43.6 % → 43.1 %, zaj). A `k ≤ 0.15`-nél
+látszó ~9 pontos javulás **műtermék**: a `sus4`-ben gazdag fájl ott elnémul és
+kiesik az átlagból. Nyitva marad, és a mechanizmus egy eddig nem próbált jelöltet
+nevez meg: **relatív kivonás** (a bin saját magnitúdójának egy része, nem a
+szomszédság átlaga) — önálló kör.
+
+### Mellékesen lezárva: az L269 utolsó szála (L654)
+
+A Kuhn-matcher két megmaradt kézi példánya a `core/music/onset_matching.dart`-ba
+olvadt. Az egyik doc-commentje azt állította, hogy a duplikáció **„per ADR 0359
+D6"** helyes — az ADR viszont kereszt-FEATURE függést tilt, a `core/music/` pedig
+egyik feature sem. Méréssel eldöntve: a `check_architecture.dart` **új
+allowlist-bejegyzés nélkül** zöld, tehát a D6 teljesítve van, nem felülírva. A
+paritást a „riport bájtra azonos" cella adta.
+
+**Commitok:** `6321d952` (matcher), `1ab2d4a0` (lágy padló, nemleges),
+`7f6c5305` (§5 javítása), `a1bf33ae` (Hamming, szállítva).
+
+## 🟢 E18-R09 — A RITMUS-PILLÉR UI-JA: pengető-inga, nyílsor akkorddal, ÉS EMULÁTOROS ELLENŐRZÉS — branch `claude/e18-r06-verify-followup` (2026-09-11)
+
+**User-kérés:** „az ui készítéshez végezz kutatást, nézd meg a versenytársak hogy
+ábrázolják a hangokat… nézz utána animációknak is, pl. a yosiciannal van egy
+ilyen golyóval mutatja ami pattog, nekünk a le-fel iránnyal kellene
+érzékeltetni a ritmust valósághűen" + „a mostani UI-k elég amatőrök, ezt
+mindenképp fejleszteni kell" + „a nyilaknál szeretném, ha mutatná a lefogott
+akkordot is" + „zöldüljön ki, amíg jó a lefogás" + „ha kész minden, teszteld le
+mindent emulátorban".
+
+**Kutatás:**
+[`docs/research/visual-rhythm-cues-2026-09.md`](docs/research/visual-rhythm-cues-2026-09.md).
+**Interaktív prototípus (a döntéshez, futó animációkkal):** Artifact —
+„Pengető-inga".
+
+### A kutatás KÉTSZER írta felül a kézenfekvő tervet
+
+**1. A szebb görbe az, amelyik veszített.** Az inga fizikailag szinuszos, tehát a
+szinusz lett volna a magától értetődő választás. A pattogó-golyó szinkronizációs
+vizsgálat az ellenkezőjét mérte: a **gravitáció-szerű, egyenletesen változó
+sebesség** elérte az AUDIO-metronóm pontosságát — amit vizuális metronómok
+általában nem tudnak —, és a szinuszos kontrollt szignifikánsan legyőzte
+(p = 0.028). Ezért `SsStrumPendulum.travelAt` állandó gyorsulás, és egy teszt a
+MÁSODIK DERIVÁLTAT mintavételezi: ha valaki később „kisimítaná", elhasal egy
+cella, nem pedig csendben visszaáll a rosszabb profilra.
+
+**2. Az ember előre üt, nem reagál** (negatív aszinkrónia). Ezért a felvillanás
+önmagában használhatatlan jelzés: a pengető fél slot-időn át **láthatóan
+gyorsulva közeledik** a húrsávhoz, és a glow csak ráadás.
+
+**NEM állítom:** a mért vizsgálatban a golyó EGY eseményt adott körönként, kemény
+visszapattanással; a pengetésnél KETTŐ van, és a fordulók a húrokon kívül esnek.
+Hogy a profil előnye erre is átvihető-e, **nyitott**.
+
+**3. A színkódolás működik — és csapda.** A Figurenotes-nak valódi bizonyítéka
+van, de minden támogató forrás ugyanarra figyelmeztet: mankó lesz belőle, és a
+tanuló végül AZ APPOT tudja olvasni, nem a hangszert; a megoldás a szín
+**eltávolíthatóságának** betervezése. Ezért: a jelölés a STANDARD (↓/↑, a
+klasszikus ⊓/V logikájával), az irányt ALAK hordozza (a pengető csúcsa vezet,
+csökkentett mozgásban is), a szín pedig csak az app bizonyítékát jelöli —
+aminek nincs kottai megfelelője, tehát levehető veszteség nélkül. Vörös
+egyáltalán nincs: az a pár olvad össze a leggyakoribb színvakságban.
+
+### Amit leszállítottunk
+
+| réteg | mi |
+|---|---|
+| design system | `SsStrumPendulum` — a TELJES látvány (a glow is) az óraállás tiszta függvénye (`frameAt`), ezért 17 cella widget-fa nélkül fut; `SsBeatClock`-ról hajtva, ADR 0274 |
+| feature widget | `RhythmLane` — akkord-sáv a nyilak FÖLÖTT, ghost nyilak, felkészülési ablak aláhúzással |
+| képernyő | `RhythmPracticeScreen` — élő mikrofonról a lefogás-állapot, szintmérő, transport |
+| l10n | `curriculum_{en,hu}.arb`, +25 üzenet, parity 2339 |
+| route | `/curriculum/rhythm`, belépő a Practice hub gyorseszközei közt |
+
+**A zöld lefogás szabálya:** az akkord-sáv és a **fogásdiagram pontjai** csak
+akkor zöldek, ha a felismerő MEGERŐSÍTETTE a KÉRT akkordot. `uncertain`,
+`rejected`, null döntés, vagy megerősített döntés címke nélkül → semleges. Más
+akkord → amber. Váltás közben szándékosan nem zöld: amíg az ujjak mozognak,
+semmi nincs megerősítve.
+
+**Amit a képernyő KIMONDOTTAN nem állít:** az ütések IDŐZÍTÉSE még nincs
+pontozva. Ahhoz a detektált onset és a rács ugyanazon az órán kell üljön, és a
+motor időalapja és a képernyő lejátszási órája közti eltolás **nincs megmérve**.
+Igazolatlan órán pontozni annyi lenne, mint azt mondani a tanulónak, hogy késett,
+amikor nem — pont az a hamis tanítás, ami ellen az egész pillér épült. A
+`gradeRhythm` megírva és tesztelve; a bekötése erre a mérésre vár.
+
+### Emulátoros ellenőrzés (Pixel 3a / API 34) — NÉGY hibát talált
+
+A gépi cellák mind zöldek voltak, mégis:
+
+1. **A képernyőnek nem volt belépési pontja** — regisztrált route, amit semmi nem
+   nyit meg. → Practice hub „Strumming" gyorseszköz.
+2. **A pengető nyugalomban eltűnt** — óra nélkül a painter kirajzolta a húrokat
+   és visszatért, így a hero-terület 180 px üres sötét volt. Töröttnek látszik,
+   nem „készenlétnek". → nyugalomban a húrsávon parkol.
+3. **A „not confirmed" olvashatatlan volt** — a szó a sáv SZEGÉLY-színét kapta, a
+   `border` pedig hajszálvonal-tónus, nem szövegszín. Ez túlmutat az esztétikán:
+   a szó pont azért van ott, hogy az állapot ne színfüggő legyen.
+4. **A play gomb a hajtás alatt volt** — egy gyakorlóképernyő lejátszás-gombjához
+   nem szabad görgetni. → fix alsó sávba került. (Ezt a widget-teszt „rákoppintottam
+   a playre, nem történt semmi" alakban fogta meg.)
+
+**SZABÁLY-ÜTKÖZÉS, kimondva:** az `AGENTS.md` „APK-build MINDIG CI-vel" szakasza
+azt írja, lokálisan `flutter build apk`-t **ne futtass és ne is próbálj**, az
+indoka pedig az, hogy „a fejlesztői boxon nincs Android SDK". Ezen a gépen ez az
+indok **már nem igaz**: az SDK ott van, az emulátor fut, a debug build 89 s alatt
+lefordult. A user kifejezett kérésére futott le (ő a szabály szerzője). A
+szabály SZÖVEGÉT frissíteni kell, mert egy hamis premisszájú kötelező szabály a
+következő session-t félrevezeti.
+
+**Mércék:** `tools/round-gate.sh` zöld minden szeletre (curriculum 149 cella,
+`test/core/design_system`, `test/app/navigation`, `test/features/practice_hub`,
+architecture, secrets, l10n). Az architektúra-kapu talált egy valódi
+határsértést is (a képernyő közvetlenül nyúlt a `chords/chord_shape.dart`-hoz) —
+barrel-re javítva, nem allowlistre téve.
+
+## 🟢 E18-R08 — JÁTÉKOS OKTATÁSI PROGRAM (Yousician-szerű) + A LE/FEL RITMUS-PILLÉR, amit a Yousician nem tud — branch `claude/e18-r06-verify-followup` (2026-09-11)
+
+**User-kérés:** „nézd meg a yosician appot, szeretnék hasonló játékos oktatási
+programot" + „csak fel le ütés is legyen a ritmusérzékeltetéshez, a yosicianon
+ilyen nincs" + „csináld meg úgy, hogy a tanulmányokat és minden tényezőt
+figyelembe véve a legjobb megoldásokat választva a legjobb élményt és tudást
+érjük el — ehhez nem kell az én döntésem".
+
+**Terv:**
+[`docs/superpowers/specs/2026-09-11-gamified-curriculum-design.md`](docs/superpowers/specs/2026-09-11-gamified-curriculum-design.md)
+(§1–3 leszállítva, §4–5 review-ra vár).
+**Kutatás:**
+[`docs/research/strumming-direction-pedagogy-2026-09.md`](docs/research/strumming-direction-pedagogy-2026-09.md).
+
+Új feature: `lib/features/curriculum/` — GOAL SEQUENCER a meglévő tervező felett.
+Nem épít gyakorlat-tartalmat: missziót ad át a `practice_generator`-nak, és az
+választ gyakorlatot a tanuló bizonyítékaiból. **107 cella**, analyze /
+architecture / l10n tiszta, allowlist változatlanul 12.
+
+### Amit a kutatás és a mérés ELDÖNTÖTT (nem a véleményem)
+
+**A tananyag-sorrendet a kutatás KÉTSZER írta át.** Egy független kereszt-
+ellenőrzés három állításomat cáfolta: (1) az Em-első NEM konszenzus (a
+JustinGuitar D-A-E-vel indul, a Musicademy G/Em7/Cadd9-cel) — most választásként
+van kimondva, az okaival, nem tényként; (2) a „ne állj meg a pengető kézzel" nem
+késői mérföldkő, három forrás az ELSŐ váltástól alkalmazza → a 4. fokra került;
+(3) a játszható dal nem a 10. fokon, hanem az 5-en — a visszatartása dokumentált
+lemorzsolódási kockázat.
+
+**Mit NEM pontozunk, mérés alapján.** A C/G késleltetését oldó egyszerűsített
+fogások egyike sem pontozható tisztességesen: a **G6 nincs a felismerő
+szótárában** (a kétujjas fogás `G`-ként olvas), a **Cmaj7 pedig 32 keretből
+24-ben a jelenlét-kapu alatt ült**, a sima C 3-ával szemben. Ezért a tananyag
+csak sima hármashangzatot pontoz; egyszerűsített fogás mutatható tippként, de
+célként soha — aki jól játszik, annak nem kaphat nulla elismerést.
+
+### A le/fel ritmus-pillér — és az ellenpélda, ami megváltoztatta a modellt
+
+A rács **nem engedi** az irányt szerzőileg megadni: `RhythmGrid.pendulum`
+booleanokat kap, a szerző azt mondja meg, MEGSZÓLAL-e egy slot, a rács azt, hogy
+MERRE. A nyolcad-rácson az ütésen le, az „és"-en fel; a kéz nem áll meg, ezért a
+minta lyuka nem kieső ütés, hanem **ghost** (a kéz megy, csak nem ér a húrhoz) —
+és a ghost slot sosincs pontozva.
+
+**A rendes, tiszta megoldás HIBÁS LETT VOLNA.** Ha az inga-szabályt kemény
+invariánsként kódolom, az app **hibásnak mondta volna a saját, helyesen tanított
+`waltz-time` leckéjét**: a 3/4 waltz basszust le az EGYEN, akkordokat FEL a
+kettőn-hármon játszik („oom-pah-pah", „down-up-up"), és ez dokumentáltan így
+tanított. Átvizsgáltam mind a 18 szállított minta-ritmust: ez az egyetlen
+kivétel, és jogos. Ezért két konstruktor van (`pendulum` / `authored`) és egy
+`followsPendulum` jelzés — a kezdő fokok megkövetelhetik a származtatottat a
+többi zene betiltása nélkül. A reggae és a funk ellenpélda-jelöltként ellenőrizve
+**nem** kivétel: ők az ütéseket ghostolják, nem megfordítják.
+
+### A pontozás három döntése, mindegyik egy tisztességi elágazás
+
+1. **A párosítás csak IDŐT használ, soha nem irányt.** Ha a párosító
+   előnyben részesíthetné az irányban egyező párokat, a fel-le sorrendben
+   eljátszott le-fel minta két helyes ütéssé címkéződne át. Az hízelgés, nem
+   tanítás. (Ugyanaz a sorrend, mint a motor saját mért `directionF1`-jében.)
+2. **A megerősített bizonyíték párosul ELŐBB.** §2 1–2. szabály: a nem
+   megerősített észlelés semmit nem érdemel és semmilyen negatív állítást nem
+   támaszt alá, tehát nem szoríthat ki egy megerősítettet — egy fizikai ütés
+   mindkettőként felszínre kerülhet, és a puszta „legközelebbi" elvetné a
+   kiérdemelt elismerést.
+3. **A kihagyott slot nem von le semmit — de egy kísérlet nem nézhet ki
+   hibátlannak.** A §3 nyitott kérdése lezárva, és a lezárás felszínre hozott egy
+   rést az eredeti szövegben: ha a kihagyás nem érinti az arányt, akkor 16-ból 2
+   tiszta ütés **hibátlannak olvas**. Ezért két szám van — `directionAccuracy`
+   („amit HALLOTTAM, abból mennyi volt jó", nulla bizonyítéknál `null`, nem
+   `0.0`) és `coverage` („mennyit hallottam egyáltalán"). A `coverage` alatt a
+   kísérlet **semmit nem állít**: ez nem bukás (§2 6. szabály), hanem az app nem
+   ítél túl kevés bizonyítékon, és ezt a szintmérő jelzi, nem felirat (§2 4.).
+
+**Kimondva, mi mért és mi nem:** az 50 ms-os onset-ablak a **MÉRT**
+(`onsetTolerance50Ms` a release-kapuban, `toleranceUs: 50000` a valós-audio
+hámban) — azért ez, hogy az appnak EGY „időben van" fogalma legyen. A
+`minimumRhythmCoverage = 0.5` ezzel szemben **policy**, a többségi szabály, és a
+doc-komment ezt ki is mondja, pont azért, mert a mellette álló konstans nem az.
+
+### L269: nem negyedik másolat, hanem a közös otthon
+
+A ritmus-pontozáshoz időablakos one-to-one párosítás kell. `docs/LESSONS.md`
+**L269** mérte, hogy a mohó „legközelebbi szabad pár" ALULSZÁMOLJA a találatokat,
+és szó szerint azt írja elő, hogy „minden ilyen metric UGYANAZT a
+maximum-cardinality segédet használja — a közös matcher a szerződés része".
+Ez elcsúszott: **három másolat** él a fában. Itt a tét nem metrikai finomság:
+az alulszámolás azt mondaná a tanulónak, hogy kihagyott egy ütést, amit
+eljátszott. Ezért a segéd a `core/music/onset_matching.dart`-ba került (keretrendszer-
+független), és a legjobban tesztelt használó átállt rá — a viselkedés-azonosságot
+nem én állítom: a `recognition_metrics_test.dart` 37 cellája (köztük L269 saját
+ellenpéldája és 36 kézzel ellenőrzött literál metrika) végig zöld.
+
+**NYITOTT, kimondva:** a másik két másolat
+(`audio_analysis/.../evaluation_runner.dart`, `recognition_annotation.dart`)
+bent maradt. Mindkettő mért értékelési úton van; a behúzásuk önálló,
+átnézhető szelet, nem egy tananyag-kör mellékhatása.
+
+**Mércék:** `tools/round-gate.sh` zöld minden szeletre (format, analyze,
+`test/core/music`, `test/features/curriculum` 107, `test/features/live/evaluation`,
+architecture, secrets, l10n).
+
+**Szándékosan elhalasztva:** UI, l10n és route-ok. Együtt nyílnak, hogy a
+képernyő- és a `check_l10n_parity` kapu egyszerre, készen érjen.
+
+## 🟢 E18-R07 — A REFERENCIA-MOTOR PONTOS BEÁLLÍTÁSAI: mélység-súlyozott basszus-króma (ADR 0541) + a piros kapu javítva — branch `claude/e18-r06-verify-followup` (2026-09-11)
+
+**User-kérés:** „nézz utána a gitár motor pontos beállításának, javítsd a piros
+kaput".
+
+**Kutatási jegyzet (a kért deliverable):**
+[`docs/research/chordino-reference-parameters-2026-09.md`](docs/research/chordino-reference-parameters-2026-09.md)
+— a `c4dm/nnls-chroma` TÉNYLEGES forráskódja a miénkkel szembeállítva, nem a
+cikk-leírás alapján.
+
+### A két fő lelet
+
+**1. A whitening ablakszélessége — a referencia igazolja a tegnapi javítást.**
+
+```c
+// NNLSBase.cpp:368  — "make hamming window of length 1/2 octave"
+int hamwinlength = nBPS * 6 + 1;   // 19 bin = 6 félhang TELJES, azaz ±3
+```
+
+A mi konstansunk `whiteningHalfWindow = 18 // ±half octave at 3 bins/semitone`
+volt — **18 bin mint FÉL-ablak**. A referencia „fél oktáv"-ja a *teljes* ablak;
+fél-ablakként olvasni és megduplázni volt a hiba. Az ADR 0540 méréssel,
+függetlenül jutott ±3-ra: **ugyanaz a szám két irányból**.
+
+**2. A regiszter-szétválasztás — a referencia NEM vág, hanem SÚLYOZ.**
+
+A félhang-spektrumot sima emelt-koszinusz ablakokkal szorozza a 12 binre hajtás
+előtt. Guitár-hangokra a `basswindow`: **E2 0.995, B2 0.625, C3 0.542,
+D3 0.375, E3 0.222, G3 0.056** — vagyis **E2 ~4.5×-ét számít E3-nak**. A miénk
+`midi <= bassMaxMidi` kemény vágással mindet egyenlően súlyozta, tehát a
+basszus-króma azt soha nem tudta kimondani, hogy „a C mélyebben van, mint az E".
+
+| mérés | kemény vágás | mélység-súlyozás |
+|---|---|---|
+| hét valós felvétel (offline) | 7/7, latch 6/7 | **7/7, latch 7/7** |
+| ugyanaz a teljes `LivePipeline`-on | 7/7 | **7/7** |
+| `Caug` zárt fekvés C3-E3-G#3 | `Eaug` (bass C 0.68 / E 0.73) | **`Caug`** (bass **C 0.87 / E 0.47**) |
+| mély dom7 E2–B2, whitening **±2** | **6/8** (`A#→Ddim`, `B→D#dim`) | **8/8** |
+| ugyanaz ±1.5-nél | 8/8 | 8/8 |
+
+Ez **az ADR 0540 két nyitott follow-upját zárja le**: a bővített hármas gyöke
+most geometriából jön (nem 0.05-ös különbségből), és a whitening alsó korlátja
+megszűnt. A szélesség ennek ellenére **marad ±3** (ADR 0541 D4) — az a
+referencia saját értéke, ennél szűkebbre menni e kör adatain túlillesztés lenne.
+
+**⚠ LICENC-HATÁR.** A referencia **GPL-2+**, a StrumSight privát app. A kódját
+és betáblázott konstansait **nem másoltam és nem is szabad**: a publikált
+módszert implementáltam, a táblához csak *ellenőrzésként* hasonlítottam (Hann:
+`treblewindow` 5e-07-ig, `basswindow` 2e-02-ig). Ld. a jegyzet bevezetőjét.
+
+### A piros kapu javítva
+
+`test/features/audio_analysis/engine/capability_resolver_test.dart` — a
+`Directory.listSync` a GAZDAGÉP szeparátorával fűz, a fölötte lévő könyvtár
+`/`-jelekkel van írva, így Windowson **vegyes** útvonal jött vissza
+(`…/confidence\capability_resolver.dart`) és a cella a szeparátoron bukott el,
+miközben az állítása igaz volt. Normalizálás `Platform.pathSeparator`-ral (ez a
+`legacy_identifier_guard_test.dart` bevett mintája); POSIX-on no-op, tehát a
+CI-viselkedés változatlan. Igazoltam, hogy a tegnapi változás **kistash-olva is
+ugyanúgy bukott** — F12-osztály, nem regresszió. `test/features/audio_analysis`
+683/683.
+
+**Kapu:** MINDEN ZÖLD (format, analyze, 12 teszt-útvonal, architecture,
+secrets, l10n) — ez az első kör, ahol ezen a gazdagépen egy piros cella sem
+maradt a kijelölt körben. `dsp_property_test.dart` zöld 42/7/123/2026/31337
+seeden.
+
+### Amit a jegyzet azonosított, de NEM szállítottam
+
+- **A whitening aritmetikája** (a legígéretesebb következő lépés): a referencia
+  **kivonja a futó átlagot és félhullámban egyenirányít**
+  (`(x − mean) > 0 ? (x − mean)/std^w : 0`), mi átlag-kivonás nélkül RMS-sel
+  osztunk. Ez lokális kontraszt-operátorrá teszi a whiteninget, és épp a
+  fantom-energiát célozza (az E felvétel F#4-je B2 3. harmonikusa, saját
+  alaphang nélkül). Ez a whitening átírása, nem konstans-hangolás.
+- Hamming- helyett lapos kernel; a treble-ablak csúcsosítása D4 körül; a
+  referencia tágabb sávja (A0–G#7 vs a mi E2–E6-unk); `m_whitening` 1.0 vs 0.7
+  újramérése az átlag-kivonás UTÁN.
+
+### Nyitott, változatlanul
+
+- **A 82 felvételes / 11 767 eseményes korpusz nincs megmérve** — a
+  `ml/data/klangio` a repón kívül él; a `baseline_manifest.json` 0.6707-e
+  MINDKÉT mai változásra igazolatlan. Release-állítás előtt
+  `tool/benchmarks/real_audio_dsp_baseline.dart` újrafuttatás kell.
+- **Moll akkord valós audión nincs mérve** (mind a hét felvétel dúr); az ADR
+  0540-ben rögzített szintetikus Am-veszteséget (0.12–0.16 sáv → `Esus4`) a
+  mélység-súlyozás nem célozta és utána nem mértem újra.
+- **Valódi gitáros A/B** (ADR 0539 D4 / E18-R05) továbbra is nyitott.
+
+## 🟢 E18-R06 — F9 FELISMERÉS MEGJAVÍTVA A GYÖKÉRNÉL: a whitening-szomszédság ±6 → ±3 félhang (ADR 0540) — branch `claude/e18-r06-verify-followup` (2026-09-11)
+
+**User-kérés:** „az eredmények alapján végezz kutatásokat és javítsd a
+problémákat" → „folytasd a fejlesztéseket, cél pontos jó felismerés".
+
+**A lelet:** E18-R01 **F9** („találati arány 2/5; G, D és E egyáltalán nem
+ismerte fel"). Hét címkézett valós gitárfelvételen, a teljes `LivePipeline`-on:
+kiindulás **4/7 helyes**, a D helyesen dekódolt de **soha nem konfirmált**
+(56 keret `lowConfidence`), a G `Bm`/`Dsus4`, az E `Bsus4`.
+
+**A gyökér — egy konstans, mérve:** a spektrális whitening minden bint a
+±szomszédsága RMS-ével oszt, tehát a **szélesség** dönti el, mihez képest
+hangos valami. Fél oktávnyi ablaknál egy halk hang halk marad a hangos
+szomszédai mellett. Gitárnál ez dönti el az akkordot: **a kvint két-három húron
+duplázódik, a terc pontosan egyszer van lefogva** — a kvalitást meghatározó
+hang rendszeresen a jel leghalkabb eleme (mérve: az open E terce G#3=0.12 a
+kvint B2=0.97 mellett). A `Bsus4`/`Dsus4` ezért nem véletlen: profil a valódi
+akkord hangos gyökére + kvintjére, a saját terc láthatatlan — ugyanaz a
+hibaosztály, amiért a 26. kör kihagyta a power-5-öt a szótárból.
+
+| | ±6 (r70 óta) | **±3 (most)** |
+|---|---|---|
+| valós 7 felvétel: helyes | 4/7 | **7/7** |
+| ugyanott: `confirmed` | 4/7 | **7/7** |
+
+**A szélesség KÉT oldalról kötött** — ugyanaz a mechanizmus két regiszterben:
+túl széles, és a halk terc nem lesz bizonyíték; túl szűk, és a csúcs-kiegyenlítés
+**a gyök szint-dominanciáját** is erodálja, amin a basszus-chroma a gyököt
+megnevezi. 7 binnél (±2.4 és alatta) a `dsp_property_test.dart` mély
+dominánsszeptimjei a saját tercükre épülő szűkített hármasra esnek
+(`B7` → `D#dim`) 5 seedből 4-en. ±3.0 = 9 bin: két binnel a szakadék fölött,
+a valós-audió platón belül.
+
+**Két saját tévedés korrigálva a körben:** (1) a `binsPerSemitone: 5` javításnak
+látszott (5/7 → 7/7), de a kontroll (bins 5, szélesség ±6-on TARTVA) **5/7** — a
+felbontás semmit nem ad; a látszat abból jött, hogy a konstans **bin-számban**
+volt tárolva (18 bin öt bin/félhangnál már ±3.6 félhang), ezért most félhangban
+tárolódik. (2) A ±2.0-t előbb optimumnak mértem, de a több seedes property
+kizárja.
+
+**Mércék:** `tools/round-gate.sh` zöld (format, analyze, `test/features/live`
+473, `test/property`, analyze/audio_analysis/practice/learn/songs/accessibility/
+bootstrap/ai_tutor-data). `dsp_property_test.dart` zöld 42/7/123/2026/31337
+seeden. A valós szonda: `test/tooling/live_chord_wav_probe_test.dart`
+(`LIVE_WAV_DIR` nélkül kihagyja magát, CI-t nem érint).
+
+**Amit NEM bizonyít — nyitott:**
+- **A 82 felvételes / 11 767 eseményes korpusz nincs megmérve.** Az
+  `evaluation/recognition/baseline_manifest.json` 0.6707-es akkord-pontossága a
+  repón KÍVÜL élő `ml/data/klangio`-n készült — ezen a boxon nem futtatható, így
+  az új szélességre **IGAZOLATLAN**. Release-állítás előtt újra kell futtatni a
+  `tool/benchmarks/real_audio_dsp_baseline.dart`-ot.
+- **Moll akkord valós audión nincs mérve** (mind a hét felvétel dúr), és a
+  szintetikus open Am-nél van egy **mért romlás**: a 0.12–0.16 sáv `Esus4`-re
+  esik. Open Em és Dm mindkét ablaknál, minden szinten helyes, tehát nem
+  rendszerszintű — de nyitott hiány. Részletek: ADR 0540 „A változás MÉRT
+  költsége".
+- **Valódi gitáros A/B továbbra is nyitott** (ADR 0539 D4 / E18-R05). Ez a kör
+  felvételeket mért, nem a felhasználó hangszerét.
+
+**Follow-up, mérve de NEM leszállítva:** mélység-súlyozott basszus-chroma. A
+basszus-chroma a `bassMaxMidi` alatti mindent súlyozás nélkül hajt össze, tehát
+azt soha nem mondja, hogy „a C mélyebben van, mint az E" — ezért (a) a bővített
+hármas gyöke mérési véletlenen áll (a régi `Caug` fixture-t **C 0.72 vs E 0.69**
+döntötte el; a fixture most mindhárom elfordítást a gyökével egyedül a basszusban
+ellenőrzi, ±1…±6 sávon), (b) ez a ±3 alsó korlátjának valódi oka, (c) ez adná a
+fordítások / slash-akkordok (`G/B`) elvi útját. Fordítás-tudatos basszust
+offline megmértem (G: `Bm` 0.7921 → `G` 0.8291, a többi hat győztese
+változatlan), de a szélesség-javítás után nem szükséges, ezért nem került be.
+
+**Korábban, ugyanezen az ágon:** `tool/build_tutor_knowledge_manifest.dart`
+Windows-útvonal hibája javítva (a manifest önmagát dolgozta fel tartalmi
+dokumentumként) — `test/features/ai_tutor/data` 119/119, volt `+116 -3`.
+
+## 🟢 E18-R01 EMULÁTOR-LELETEK JAVÍTVA, CI-ZÖLD, MERGE-RE VÁR — F1–F8, F10, F11 + felismerés-stabilitás (ADR 0539) — branch `claude/optimistic-bohr-vpaxh4` @ `3521c210` (2026-09-10)
+
+**User-kérés:** „itt vannak a hibák" (F1–F13, az emulátor-jelentés végén) +
+„ne ugráljon egy leütött akkordnál más hangokra… mindegyik akkordnál; kutass,
+hogy kell jól megcsinálni, nézz utána jobb motoroknak".
+
+**Végrehajtási jelentés (tétel-tábla, mércék, nem-futtatott ellenőrzések):**
+[`docs/reviews/e18-r01-emulator-fixes.md`](docs/reviews/e18-r01-emulator-fixes.md).
+Kutatás: [`docs/research/chord-recognition-stability-and-engines-2026-09.md`](docs/research/chord-recognition-stability-and-engines-2026-09.md).
+ADR: [0539](docs/adr/0539-live-recognition-stability-stabilized-hero-and-onset-guard.md).
+
+| Lelet | Állapot |
+|---|---|
+| F1 tutor-asset nem kerül be · F2/F3 beragadt kártya · F4 back kilép · F5 Library nem tölt · F6 cél-chipek · F7 néma mikrofon-hiba · F8 V2 szerkesztő belépő · F10 szintmérő · F11 előnézet pop után | **javítva**, mind gépi cellával (17 teszt-fájl új/bővített) |
+| F9 találati arány 2/5 | nem hangolva — a jelentés saját szabálya: valós gitárral ÚJRA kell mérni előbb (protokoll a kutatási jegyzet §4) |
+| F12 Windows-suite | dokumentálva (setup-jegyzet), platform-érzékenyítés külön kör |
+| F13 bannerek | termékdöntés, nem változott; az F2 részben orvosolja |
+| Felismerés „elugrál" | stabilizált hős + 0.2 s onset-őr + kártya-lejárat (ADR 0539 D1–D3); a dekóder attack-ablak eltolása (D4) → **E18-R05** valós gitáros A/B-vel |
+
+**CI-körök (3 + szelet-diagnózis):** a log-tail mögé rejtett 3 piros cellát
+eldobható szelet-ágak tették láthatóvá — részletek a jelentés „CI-kör"
+szakaszában. Két további `lib/**` javítás lett belőle: a Live üres-prompt 2,5 px-es
+túlcsordulása a hős-helyen, és az E12-R20 óta nyilvántartott
+`setup-scoring-profile-overflow` (43 px @2.0) **végleges javítása** (a registry
+zsugorodott; az azonosító a sor 60 %-ára korlátozva tördelődik, a goldenek
+változatlanok). **Ellenőrző prompt a laptopos AI-sessionnek (emulátor):**
+[`docs/reviews/e18-r01-emulator-verify-prompt.md`](docs/reviews/e18-r01-emulator-verify-prompt.md)
+— a jelentés kötelező szerkezetével (`docs/reviews/e18-r01-emulator-verify-report.md`).
+
+**Teendő a user boxáról:** (1) a négy eldobható szelet-ág törlése:
+`git push origin --delete claude/e18-fixes-diag claude/e18-diag-a claude/e18-diag-b claude/e18-diag-c`;
+(2) a HORIZON git-note felvitele — a remote konténerből a `refs/notes/*` push-t a
+proxy elutasítja („the remote end hung up unexpectedly", 4× visszalépéses
+újrapróbával is), a branch-push megy:
+`git notes add -m "round=E18-R01-fixes verdict=pass tests=10317 lesson=ci-log-tail-5000-slice-branches-and-golden-pixel-identity" 22a06e25 && git push origin 'refs/notes/*'`.
+
+**Az ág az E18-R01 ágról (`bc81bc5f`) indul** — a jelentés és az F11 kódja
+csak ott él; squash-merge UTÁN az E18-R01 merge-e mellé ez külön PR.
+**Remote konténer: nincs Flutter SDK** → a gépi bizonyíték a branchre
+dispatchelt `build-apk.yml` (a `pubspec.yaml` érintett, ADR 0171).
+**Gépi bizonyíték a `3521c210` SHA-n:**
+[build-apk 34431041159](https://github.com/wolfcasaba/strumsight/actions/runs/34431041159)
+— ZÖLD: format + analyze + **10317 teszt zöld, 0 piros, 21 skip** + property-kapu
+randomizált seeddel (123 zöld) + architektúra/asset/l10n/secret kapuk + a
+Coverage job + `strumsight-1.0.0-1-3521c21-development.apk` (73,8 MB, artefakt
+10134964374); [full-gate 34431039782](https://github.com/wolfcasaba/strumsight/actions/runs/34431039782)
+— a `full-gate` job ZÖLD (ugyanez a suite), a párhuzamos Coverage jobja
+1 rejtett (a log-tail mögötti), a másik három futásban NEM reprodukálódó
+piros cellával zárt → az egyszeri újrafuttatás (attempt 2, 03:46Z) **ZÖLD**,
+a teljes workflow zöld; a cella nemdeterminisztikus `--coverage`-futású volt. Goldenek: szándékosan egyik sem mozdul (a hub 5
+chipje megmaradt — az `e13_r17` golden csak a boxon regenerálható).
+
+**Következő lépés (a user boxán):** valós gitáros mérés a Live-on (elugrálás
+megszűnt-e; F9 újramérés WAV-loopbackkel) — ez az **E18-R05** `hold`-jának
+feloldó feltétele. A brief ELŐRE MEGÍRVA, lint + gateguard zöld:
+[`docs/rounds/e18-r05-decoder-attack-window-real-guitar-ab.md`](docs/rounds/e18-r05-decoder-attack-window-real-guitar-ab.md)
+(a dekóder onset-boost ablakának eltolása az attack-ról a sustain-re, fixture +
+property + valós gitáros A/B, ADR 0540 előzetes). A `LiveCrnnClassifier.calibrate`
+0.87-es plafonjának újrakalibrálása valós adaton KÜLÖN kör (a brief §3 kizárja).
+
+## 🟢 E18-R01 CI-ZÖLD, MERGE-RE VÁR — a dalszerkesztő akkord-MEGHALLGATÁSA és menet-ELŐNÉZET (komponálás füllel) + a Chapter 18 terve (akkordok hangból, YouTube-határ) — branch `claude/song-editor-chord-audio-tbkokz` (2026-09-09)
+
+**User-kérés (2026-09-09):** „a hangok lenyomásakor az az akkord hang hallható,
+amit benyomott a felhasználó… lehet komponálni is így, mielőtt gitárral játszaná"
++ „lehessen internetről is dalokat behívni, mondjuk YouTube-ról, és ott beolvassa
+az akkordokat… Yousician is így működik, nézz utána".
+
+**Kivétel a szereposztás alól:** a user explicit utasítására („tervezd meg és
+fejlesszük át") a tervező REMOTE session maga implementálta az E18-R01-et; a
+tesztírás Sonnet-, a review Opus-ágensé (user-döntés: token-takarékosság, minőség
+nehézség szerint). A merge-kapu VÁLTOZATLAN (ADR 0052): CI zöld + review.
+
+### Mi készült (E18-R01, ADR [0535](docs/adr/0535-song-editor-chord-audition-and-progression-preview.md))
+
+| Réteg | Fájl | Mit ad |
+|---|---|---|
+| core (tiszta Dart) | `lib/core/audio/synth/plucked_string_synth.dart`, `lib/core/music/chord_voicing.dart` | Karplus–Strong pengetett húr (fix-seedes LCG, bájt-determinisztikus), húronkénti 18 ms-os lepengetés (**↓ mély→magas, ↑ magas→mély**), fogás → MIDI/Hz (nyitott húr + bund, néma kimarad) |
+| learn | `audio/chord_audition.dart`, `providers/chord_audition_provider.dart`, `public.dart`; `chord_audio.dart` (+`hasKnownQuality`) | `ChordAudition` kontraktus; `resolve()`: FOGÁS → akkordhangok (csak ismert utótag) → csend (`Cdim`/`C5` NEM szól dúrként); LRU 24 (`debugCacheKeys`); route-hoz kötött autodispose provider, a `build`-ből **watch**-olva |
+| songs | `application/song_preview_player.dart`, `screens/song_builder_screen.dart` | `previewSchedule` (tiszta nyolcad-rács) + `SongPreviewController` (Timer-lánc, `currentBar`); chip-tap = hallás, add-chip = hozzáad+hall, ▶/■ ikon-gomb a menet fejlécsorában, szóló ütem chipje kiemelve, minden szerkezeti edit stop |
+| song_trainer (V2) | `screens/song_editor_screen.dart` | `onAddChord` → hallás. A külön „hallgasd meg újra" gomb ELHALASZTVA: az `e13_r24_song_editor_*` pixel-goldent mozdítaná, amit csak a user boxa tud regenerálni (brief §0.0.1 R2) → E18-R02 |
+| l10n | `lib/l10n/base/app_{en,hu}.arb` + generált aggregátum | `songChordHear`, `songPreviewPlay`, `songPreviewStop` |
+| tesztek (6 fájl) | `test/core/audio/plucked_string_synth_test.dart`, `test/core/music/chord_voicing_test.dart`, `test/features/learn/chord_audition_test.dart`, `test/features/songs/song_preview_player_test.dart`, `test/features/songs/song_builder_audition_test.dart`, `test/features/song_trainer/presentation/song_editor_audition_test.dart` | A1–A9 cellák (brief §6) |
+
+**Review:** [`docs/reviews/e18-r01-review.md`](docs/reviews/e18-r01-review.md)
+(Opus-ágens, READ-ONLY): 1 BLOCKER (F1 — a nullátmenet-alapú pitch-becslés
+MÉRTEN 1158 Hz-et adott 220 helyett; a szintézis jó, a MÉRŐ volt rossz →
+autokorrelációs periódus-keresés), 2 MAJOR (F2 függő Timer, F3 scope), 6 MINOR
+— F1/F2/F6/F7/F8/F9 javítva ugyanabban a sessionben, F3 brief-revízióval
+(§0.0.1 R1), F4 (randomizált property-cella az új szintézisre) → E18-R02
+follow-up. A javítások FÜGGETLEN újra-ellenőrzése még hátravan.
+
+**CI (a remote konténerben nincs Flutter SDK, a CI az egyetlen gépi bizonyíték):**
+`full-gate.yml` [34386737962](https://github.com/wolfcasaba/strumsight/actions/runs/34386737962)
+a `476b01d` HEAD-en — **`success`: format · analyze · architecture · secret ·
+l10n · asset · teljes `flutter test` (10 272 teszt, 0 piros) · randomizált
+property gate · song schema + fixture provenance.** A `main` (`1ae9e55`)
+ugyanekkor újramérve: [34373102220](https://github.com/wolfcasaba/strumsight/actions/runs/34373102220)
+`success` (10 220 teszt) — a különbség pontosan a kör 52 új tesztje.
+
+**Az odáig vezető út (mért, ADR 0112-szerű önjavítás, 10 CI-futás):** a
+CI-log csak az utolsó 5000 sort adja vissza az MCP-n, a log-zip a proxyn
+blokkolt, a híd-session a user gépén lejárt bejelentkezés miatt elhalt
+(`OAuth session expired`), a `.github/workflows/*` írása gateguard-védett —
+ezért a maradék 2 pirosat **bisect-tel** lokalizáltam 9 eldobható
+`claude/e18-diag-*` / `claude/e18-r01-diag` ágon (párhuzamos dispatch-ek,
+darabszám-jel). Eredmény: (1) **valódi termékhiba** — a preview a menet végét
+kétszer várta ki (A7 fogta meg); (2) a queue új `E18` előtagjához hiányzott a
+sor a `docs/sdd/program-completion-report.md` §3 mátrixában
+(`program_completion_test`). Mellékleletek közben: `dart format` (3 fájl),
+`unnecessary_import`/`prefer_initializing_formals`, a nullátmenet-alapú
+pitch-mérő (1158 Hz!) → autokorreláció, a V2 pixel-golden miatt elhalasztott
+„hallgasd meg újra" gomb, a `song_flow`/`song_editor_screen` tesztek
+audition-fake injektálása, hu ARB-metaadat-paritás. **A 9 eldobható ág
+törlése a proxyn át nem ment (`remote end hung up`) — a user boxáról
+törlendők: `git push origin --delete claude/e18-r01-diag claude/e18-diag-{a1,a2,a3,b1,b2,b3,c1,d1}`;
+tartalmuk SOHA nem merge-elendő.** A HORIZON git-note (`round=E18-R01 verdict=pass tests=10272 …`) LOKÁLISAN a `d0d0684`-en áll; a `refs/notes/*` push a proxyn szintén blokkolt — a user boxáról: `git fetch origin && git push origin 'refs/notes/*'` (vagy a note újra-felvétele a squash-SHA-ra).
+Router CI a push-okon zöld; `tools/tests` lokálisan 968 passed (+1 deselect: a
+dokumentált környezeti cella, `remote-container-environment.md` §5).
+
+### A Chapter 18 terve — akkordok HANGBÓL, a YouTube-határral (Opus tervező-ágens)
+
+**Kutatás (mért, forrásokkal az ADR-ben):** a Yousician NEM YouTube-ból olvas
+akkordot — kiadói licenc + kész kották (support.yousician.com); a Chordify
+szerveroldalon, a Chord ai ESZKÖZÖN futó ML-lel ismer fel akkordot, és a Chord
+ai „listen"-módja a telefon mikrofonjával hallgatja a bárhonnan (YouTube, rádió)
+szóló zenét. A YouTube ToS TILTJA a hang letöltését harmadik féllel; az SDD Ch3
+§4.2 is kizárja. **Ezért a StrumSight útja:** (a) hallgatás-mód mikrofonnal, 100 %
+eszközön, a MEGLÉVŐ analyze-csővezetékkel; (b) a user SAJÁT helyi hangfájlja;
+(c) YouTube-link csak METAADAT. → [ADR 0536](docs/adr/0536-chords-from-audio-source-boundary.md)
+(javasolt), [fejezet-terv](docs/plans/chapter-18-composer-and-chords-from-audio.md),
+briefek: [E18-R02](docs/rounds/e18-r02-recording-to-song-draft.md) (felvételből
+dal-vázlat, ADR 0537), [E18-R03](docs/rounds/e18-r03-listen-mode-external-source.md)
+(hallgatás-mód külső forrásból), [E18-R04](docs/rounds/e18-r04-local-audio-file-decoding.md)
+(MP3/M4A dekódolás — kutató kör, ADR 0538). Queue: mind `hold` (E18-R01 is —
+a pipeline nem dispatch-eli).
+
+**Következő lépés (a user boxán):** `tools/round-gate.sh` a brief §7 útvonalain
+→ a review javításainak független újra-ellenőrzése → squash-merge → queue
+`done` → E18-R02 indítása (ott: V2 „hallgasd meg újra" gomb + golden-frissítés,
+property-cella a szintézisre).
 
 ## ✅ E17-R01 KÉSZ — az onboarding First-Win állomása a szállított kompozícióban, VALÓS konfidencia-forrással — PR [#600](https://github.com/wolfcasaba/strumsight/pull/600), squash `c455e8ae` (2026-09-05)
 
@@ -13580,6 +15120,1002 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   (non-prod ON) → részletes attempt-adat.
 
 ## 3. Known blockers / risks
+- **A pengetés-IRÁNY a Ch14 §7.2 Alpha kapu alatt van (macro-F1 0,80) — a
+  diagnózis ÁTHELYEZVE, és egy korábban rögzített blokkoló VISSZAVONVA
+  (E18-R27, mérve, ADR 0550).** A szállított út irány-macro-F1-je **0,4313**,
+  fel-F1 **0,1905** független valódi pengetésen (GuitarSet Rock/Funk comping,
+  tartalék játékosok). ~~„Iránycímkés tanítóadat kell, és az a blokkoló"~~ —
+  **TÉVES, visszavonva:** a szállított modell a **Klangio GST-MM-2025**
+  készleten tanult (`ml/klangio.py`, `ml/honest_eval.py:34`), ami az
+  [arXiv 2508.07973](https://arxiv.org/html/2508.07973) saját **publikus**
+  (Apache-2.0) adatkészlete — 82 felvétel, **11767 címkézett ütés**, 38%
+  felütés, **telefon-mikrofonos** felvétel. A valódi ok **átvitel**: egy sima
+  logisztikus regresszió a modell saját bemenetéből macro **0,5885**-ot ér el
+  játékos- ÉS darab-diszjunkt GuitarSet-osztáson
+  (`ml/probe_direction_budget.py`), a betanított CRNN pedig **0,5017**-et — a rés
+  tehát **0,087**, nem a korábban közölt 0,39. *(Az E18-R27 `0,7723`-as száma
+  **ablak-igazítási hibából** jött: a próba ablakai 64 ms-mal korábban
+  kezdődtek és nem volt 70 ms-os levágás, így a tiltott onset-előtti
+  váltakozás-tippel is pontozott — **javítva, ADR 0551 D1**.)* **A kötő korlát
+  mérve a 70 ms-os élő határidő:** 70 ms-on a padló 0,6137, levágás nélkül
+  (238 ms) **0,7326**, és a fel-F1 0,3457 → **0,5466** — az irány a
+  **lecsengésben** van, nem az attackban (ADR 0551 D3). A javítás alakja ezért
+  **kétszintű döntés**: ideiglenes válasz 70 ms-nál a nyílhoz, letisztult
+  ~250 ms-nál a pontozáshoz, aminek nincs latencia-igénye (ADR 0551 D4). A
+  korpusz-deficit nevesítve:
+  `guitarist_of(rid) = str(rid)[0]`, a blokkok `1xxx/2xxx/4xxx` → **három
+  gitáros**, egy teremben, egy gitáron, egy mikrofonnal; a
+  leave-one-guitarist-out szám ezt nem tudja megmutatni. **Előfeltétel a
+  javításhoz:** tanítás a Klangio + GuitarSet korpuszon EGYÜTT, és a becsületes
+  szám a **korpuszközi** kiértékelés (egyiken tanulva a másikon mérni).
+  **Megmérve (E18-R28, `ml/experiment_cross_corpus.py`):** a GuitarSet
+  hozzáadása **mindkét** korpuszon javít — GuitarSet macro 0,3552 → **0,5017**,
+  és az *eredeti* Klangio-doménben 0,4080 → **0,5979**. A „csak GuitarSet"
+  kontroll-kar viszont összeomlott a „mindig lefelé" válaszra (a Klangión
+  **0,00**-t mond felütésnek), és a macro-ja mégis megverte a győztest —
+  **macro-F1 egyedül a rosszabb modellt hozta volna ki**, ezért minden
+  irány-eredmény mellé ki kell írni a jósolt osztály-arányt a valódi mellé
+  (ADR 0551 D2). A kapacitás-csökkentés és az ablakonkénti normalizálás mérve
+  **nem** emelő (ADR 0551 D5). **A MÉRCE, ami eddig hiányzott (E18-R29, ADR
+  0552):** a többségi alapvonal („mindig lefelé") a GuitarSet teszten macro
+  **0,4468**, a Klangión **0,3836** — a szállított irány-kimenet (0,3876) tehát
+  **a GuitarSet alapvonala ALATT van**, és ez négy mérési körön át nem derült ki,
+  mert az alapvonal nem volt leírva. Továbbá **az AUC ezen a korpuszon
+  olvashatatlan**: egy orákulum, ami csak a felvételt azonosítja és annak
+  osztály-arányát mondja, **AUC 0,7386**-ot ér el nulla ütés-információval, tehát
+  0,74 alatti AUC semmit nem bizonyít — **macro-F1-et kell olvasni**. Ugyanez
+  buktatta meg az onset előtti jel „váltakozás" magyarázatát: az egymást követő
+  ütések 61,4%-ban EGYIRÁNYÚAK, a mechanizmus felvétel-felismerés (a D3 döntése
+  áll, az érve javítva). **A kétszintű döntés megérte, mérve:** a B kar
+  (Klangio+GuitarSet) 70 → 238 ms-on GuitarSet **0,5017 → 0,6446** és Klangio
+  0,5979 → **0,6321**, nulla architektúra-költséggel (a szállított 15 frame már
+  238 ms-ot elér, a tensor-alak `(15,128)` marad). A két emelő **nem helyettesíti
+  egymást**: plusz hang egyedül a saját doménben +0,2133, idegen felvételen
+  **nulla**. Az Alpha kapu (0,80) **továbbra sem teljesül**. Bekötő kör kell
+  (AGENTS.md §9, a 3 osztályos asset újratanításával) — ADR 0552.
+  **A MARADÉK RÉS SZÉTSZEDVE (E18-R30, ADR 0553): ADAT, nem modell és nem
+  jellemző.** (a) A CRNN **0,0155**-tel van a *saját bemenetének* lineáris
+  plafonja alatt (0,6446 vs 0,6601, 95% CI [0,6088, 0,7108]) — a modell-oldal
+  **lezárva**, kapacitás/regularizáció javaslatot csak bizonyítékkal. (b) A
+  „szélesebb frekvenciasáv jobb" megállapítás **NEM replikált**: egy osztáson
+  monoton (128→8 sáv: 0,6601→0,7160), 14 foldon nem is rendezett (128: 0,6715,
+  32: 0,7090, 16: 0,6731, 8: 0,6931, mind egymás szórásán belül) — emiatt a
+  szállított `ml/features.py`-hoz és a Dart-párjához (`crnn_frontend.dart`)
+  **NEM nyúlunk**. (c) A reprezentáció **plafon, nem padló**: gradient boosting
+  minden reprezentáción *rosszabb* a logisztikusnál (0,6822 vs 0,7270 a
+  geometriai sávokon). (d) A geometriai reprezentáció párosított +0,0636-a
+  **nem bizonyított**: a normális CI nullát kizár, de az előjel-teszt p=0,2668,
+  4/13 fold negatív, és egy fold +0,3096 visz. **Az öt szám, amit együtt kell
+  idézni:** többségi alapvonal 0,4468 · szállított ma 0,3876 · betanított
+  0,6446 · a reprezentáció plafonja ~0,73 · Alpha kapu 0,80. Következő
+  **mérési** lépés gyűjtés (user saját telefonos felvétele — egyszerre lezárja
+  az L660-at; további iránycímkés/hexafonikus korpuszok; a GuitarSet 1471
+  keresztezett söprése tanításra használható, ha a teszt-fold mindkét tengelyen
+  diszjunkt), nem modellezés. Ma **kilenc gitáros** van összesen.
+  Tanulság: `docs/LESSONS.md` **L668**.
+  **AZ ARCHITEKTÚRA ELDÖNTVE (E18-R31, ADR 0554): EGY asset szolgálja mindkét
+  szintet.** A `STD_SEEDS = [42, 1, 2]` magokkal mérve a „mindkét levágáson
+  tanítva" fej **nyeri** a 70 ms-os szintet a saját specialistáját is megverve
+  (GuitarSet 0,5934 ±0,0127 vs 0,4690 ±0,0603; Klangio 0,5828 vs 0,4879), és
+  **döntetlen** a 238 ms-oson (0,6659 vs 0,6954 a ±0,036 szóráson belül) — tehát
+  egy `.bin`, egy paritás-fixtúra, egy `tryLoad`, és a két szint két **hívási
+  idő**. **A két szint NEM lehet „a mai modell kétszer hívva":** a 238 ms-os fej
+  70 ms-on a Klangión 0,08-at mond felütésnek a valódi 0,38 mellett (a **nyíl**
+  helye), a mai fej pedig 238 ms-on 0,4269 **±0,0063** — a többségi alapvonal
+  alatt, parányi szórással. **Ezért ASSET ELŐBB, SÍN UTÁNA** (a mai assettel a
+  sín a ritmus-pontozást rontaná). **Az ADR 0552 „+0,1429"-e két változást
+  kevert** (szint ÉS tanítás); ugyanazon a súlykészleten a szint-nyereség
+  **+0,0725 / +0,0847**, és az egy-magos számai **mindkét irányban** tévedtek
+  (A@70 0,5017→0,4690; B@238 0,6446→0,6954). Tanulság: **L669**.
+  **Következő kör:** a C konfigurációval 3 osztályos tanítás — GuitarSet
+  negatívok bányászása az új geometrián, a no-strum kapu újrakalibrálása (ADR
+  0549 receptje), `.bin` export, paritás-fixtúra (AGENTS.md §9). A
+  `crnn_frontend` **nem változik** (1 s-os gyűrű, a `windowAt` magától nulláz).
+  **MEGÉPÜLT (E18-R32): a kétszintű 3 osztályos asset + két döntés.** Az új súlyok
+  `assets/ml/strum_crnn_live_3c_settled.bin`-ben, a fixtúra
+  `test/fixtures/crnn_live_3c_settled_parity.json`-ban; a **szállított
+  `strum_crnn_live_3c.bin` ÉRINTETLEN**, és az új bináris **szándékosan NEM szerepel**
+  a `pubspec.yaml`-ben és a `model_manifest.json`-ban — tehát a repóban van, az
+  APK-ban nincs (a bekötés külön kör, §9).
+  **(a) ADR 0555 — a kapu osztály-feltételes:** az ADR 0549 osztály-vak szabálya a
+  felütéseket **1,3–2,8-szor** gyakrabban nyomta el (P(no-strum) mediánjuk **5×**),
+  az osztályonkénti küszöb **7×** eltér (le 0,0412 / fel 0,2929); a szállított küszöb
+  a maximum (0,2929), ami mind a négy tartalék cellában jobb 1,4 pont hamis-onset
+  elutasításért, és a felütés-elnyomást 0,225→0,127 (@70) illetve 0,098→0,078 (@238)
+  csökkenti. **Ez nevezett előzmény:** Chow (1970) szimmetrikus költségei,
+  Mondrian/címke-feltételes konformális predikció (Vovk 2003; Barber 2021 a véges
+  partícióra), és Fumera–Roli–Giacinto (2000) Pareto-dominancia-tétele. Az irodalom
+  előírta ellenőrzés (Jones 2020, Cresswell 2025) **elvégezve**: a megtartott
+  felütés-pontosság mozdulatlan (−0,005…+0,003), a recall +0,020…+0,063 — nincs
+  visszaütés. **NYITVA (ADR 0555 D4):** a megtartási kvantilis rossz keret, ha a
+  hamis csend és a hamis pozitív költsége különbözik → **költség-arányból** vezetett
+  küszöb kell (külön kör).
+  **(b) ADR 0556 — a nyíl soha nem fordul át:** a gyors hívás irányt **csak elég
+  margónál** mond, egyébként **irány-semleges ütés-jel**; a letisztult hívás adja az
+  irányt a **pontozáshoz**. Indok: az élő feliratozás mért javítás-költsége (Du, CHI
+  2023) + cry-wolf (Hoff & Bashir 2015); a naiv alternatíva pedig olyan ellen mérné a
+  tanulót, amit nem látott. **Őszinte státusz:** a guidance-hipotézis irodalma
+  másodperces skálán mért, tehát **nem dönti el** — saját tanulókon, **megtartásra**
+  kell megmérni.
+  **(c) A no-strum képesség mért ára** 0,03–0,07 macro (a valódi ütések 7,8–13,7%-a
+  elnyomva, hibának számolva).
+  **(d) Az őszinte szám:** a megtartott felütés-pontosság a GuitarSeten **0,40**, a
+  recall **0,31** (a lefelé ütés 0,857 / 0,865).
+  **KÖVETKEZŐ ADAT-LÉPÉS: Guitar-TECHS** (Zenodo 14963133, arXiv 2501.03720,
+  **CC-BY-4.0**, 5h12m, **három új profi gitáros**, explicit alternáló
+  akkord-pengetés, húronkénti MIDI Fishman Triple Play pickupból → az irány ugyanúgy
+  levezethető, mint a GuitarSetnél; **9 → 12 játékos**). Kizárva: `KLANGIO-GST-MM-T`
+  (ugyanazok a játékosok), IDMT-SMT-Guitar (**CC BY-NC-ND**), EGDB / EG-IPT (egy-egy
+  játékos), GAPS (licenc-ellentmondás), GIHME (üres repó), Zenodo 6470236 (36 játékos,
+  de a **pengetés nem megerősített**). Tanulság: **L670**.
+  **E18-R33 — A METRIKUS CSATORNA (ADR 0557, `ml/probe_direction_metric.py`).** Négy kör
+  mérte az irány-jelet a HANGBAN és falba ért; egyik sem kérdezte meg, van-e **másik
+  csatorna**. Van: az ütemen belüli **hely**. Annotáció-olvasás, **nincs audio, nincs
+  modell**, a jellemzőnek **nincs illesztett paramétere**
+  (`-|távolság a legközelebbi tizenhatod-offbeattől|`):
+  **metrikus AUC 0,9797** vs **akusztikus 0,7484** (70 ms), játékos- ÉS dal-diszjunkt
+  felosztáson. Kontrollok: címke-szivárgás kizárva (seprés-szórás 21,8/23,5 ms, különbség
+  1,7 ms, a tizenhatod 134 ms); fázis-keverés felvételen belül 0,98 → **0,56**; nem
+  sáv-műtermék (a paraméter nélküli folytonos jellemző megismétli); játékosonként
+  0,90 / 1,00 / 0,99. **Időzítési szórás:** ±30 ms → 0,96, ±50 ms → **0,84**, ±80 ms → 0,63
+  — vagyis egy pontatlan tanulón is jobb, mint az akusztikus egy profin.
+  **Az ADR 0551 kötő korlátja megszűnik:** a fázis az onset pillanatában kész, nem 70/238 ms
+  múlva. **A sín már megvan a produkcióban:** `TempoTracker.bpm` + `_placeInBar` ma
+  kiszámolja a fázist és eldobja.
+  **A KÖTŐ SZABÁLY (D4):** a metrikus csatorna **egyedül soha** nem dönti el, mit mondunk a
+  tanulóra — mert az előírt mintából a legerősebb, tehát a **saját megoldókulcs ellen**
+  mérne (a megtiltott hamis tanítás, magabiztosan). Ezért: **nyíl = fúzió**, **pontozás =
+  csak akusztikus + tartózkodás**, a metrikus a tartózkodás lécét mozdíthatja, a hívást
+  **soha nem fordítja át**, és a két csatorna **egyet nem értése** maga a pedagógiai kimenet
+  (ütem UTÁN, ADR 0556 D4).
+  **A kellemetlen fele (D5):** az ütések **96%-a engedelmeskedik az ingának**; a tanító
+  felosztásban **41 sértés 1037-ből (3,95%), ebből 39 rácson kívüli felütés**. Vagyis a
+  korpusz alig tartalmazza azt a hibaosztályt, amiért az app létezik, és **a Guitar-TECHS
+  (9 → 12 játékos) ezt NEM javítja meg** — profik nem követik el. A szükséges adat
+  **tanulók inga-sértő ütése** → a **címkézett felvétel** ezzel „jó lenne"-ből **az egyetlen
+  ismert forrása a döntő tanító adatnak** lett (különösen a `D DU UDU` és a lefojtott take).
+  **NEM állítjuk:** a **fúzió nyereségét nem mértük** (két AUC nem ad összevont számot) →
+  külön kör, a cache újraépítésével onset-idővel. A 0,9797 **profikra** szól, kezdőkön
+  nincs mérés. Tanulság: **L671** (a keretet négy körön át nem teszteltem; egy „kontrollom"
+  affin transzformáció volt, tehát vakon ment át).
+  **A BEKÖTŐ KÖR TERVE EZÉRT MEGVÁLTOZOTT:** az ADR 0556 margó-küszöbe helyett a **fúziós
+  döntési szabályt** kell megmérni — különben olyan kaput betonoznánk be, amit a metrikus
+  csatorna feleslegessé tesz.
+  **E18-R34 — A FÚZIÓS SZABÁLY MEGMÉRVE (ADR 0558, `ml/probe_direction_fusion.py`).**
+  Tartalék GuitarSet (ismeretlen játékos ÉS dal): 530 sor, a metrikus csatorna **99,2%-on
+  elérhető**, inga-követő 519, **inga-sértő 11**. Az illeszkedés **bizonyítva**: az
+  onset-időket annotációból visszajátszom, és a próba **leáll**, ha a sor-szám vagy a teljes
+  `(játékos, dal)` sorozat nem egyezik a cache-sel.
+  | tier | szabály | macro | pont. követő | **SÉRTŐ** |
+  |---|---|---|---|---|
+  | 70 ms | csak akusztikus | 0,5262 | 0,6435 | **0,3636** |
+  | 70 ms | teljes fúzió `lam=0,99` | **0,9168** | 0,9152 | **0,1818** |
+  | 238 ms | csak akusztikus | 0,6061 | 0,7649 | **0,4545** |
+  | 238 ms | teljes fúzió `lam=0,99` | **0,9226** | 0,9538 | **0,1818** |
+  | 238 ms | **csak döntetlen `m<0,30`** | 0,6784 | 0,8092 | **0,4545** |
+  **A fejléc fel van fújva, és a korpusz teszi:** a tartalék ütések **98%-a engedelmeskedik
+  az ingának**, tehát a rácsra bízó szabály nagyrészt a rácsot jósolja a rácsból. A valódi
+  becslés a **megtérülési pont** (`pont(c) = c·követő + (1−c)·sértő`):
+  **70 ms teljes fúzió `c* = 0,401`** · 70 ms döntetlen-törő 0,481 · 238 ms teljes fúzió
+  0,591 · **238 ms döntetlen-törő `c* = 0,000`**.
+  **EZ VÁLASZTJA KI A SZABÁLYT — és tierenként MÁS.** **(D1) Pontozás (238 ms): a
+  döntetlen-törő szabály, `c* = 0,000` — semmilyen engedelmességi szinten nem veszít,
+  +0,0723 macro. Pareto, SZÁLLÍTHATÓ MOST**, és egybeesik az ADR 0557 D4 etikai korlátjával
+  — **de ez egybeesés, nem levezetés**: a D4 mérés előtt született és eltérés esetén is
+  kötne. **(D2) Nyíl (70 ms): a teljes fúzió 0,6377 → 0,9000 pontosság, megtérülés 0,401**
+  (egy küszködő kezdő is meghaladja) — **de 11 ütésen áll, ezért FUNKCIÓ-KAPU mögé kerül.**
+  **(D3) És a „konzervatívnak" tervezett szabályom a gyors tieren ROSSZABB volt** (0,481 vs
+  0,401): ha az akusztikus hívás magabiztos ÉS téved — 70 ms-on gyakran az —, akkor épp a
+  „ne írd felül a magabiztosat" védelem **tartja meg a hibát**. A margó 70 ms-on nem mér
+  megbízhatóságot.
+  **NEM állítjuk:** a 0,9168 / 0,9226 **nem** generalizációs becslés tanulóra; a megtérülési
+  görbe az, és **11 ütésen** áll (minden „sértő" pontosság 1/11 többszöröse, a mért romlás
+  **két ütés**) → **korlátok, nem munkapontok**. A lineáris modell feltételezi, hogy a tanuló
+  sértései olyanok, mint a GuitarSet sértései — egy kezdőé valószínűleg **másfajta**.
+  Tanulság: **L672**.
+  **E18-R35 — A SZÁLLÍTOTT SZABÁLY + A DART-EGYSÉG (ADR 0558 korrekció,
+  `lib/features/live/engine/dsp/strum_metric_channel.dart`).** Az ADR 0557/0558 számai a
+  **mérési** szabállyal készültek (offbeat-távolság ≤ 0,09375); a **szállított** szabály a
+  lecke mintájának **legközelebbi rése** — mert az offbeat-szabály **egy korpusz** mintáját
+  kódolja. A szabályok a tartalék soroknak **0,95%-án** térnek el, a szállított **jobb**
+  (0,9848 vs 0,9791) — **és ezért a sértő részhalmaz 11 → 8**, vagyis a kockázat-becslés
+  **vékonyabb** lett (minden „sértő" pontosság 1/8 többszöröse, a mért romlás **két ütés**).
+  Újramérve: **a D1 VÁLTOZATLAN** (238 ms döntetlen-törő, `c* = 0,000`, +0,0723 macro) → a
+  szállítható szabály túlélte; **a D2 ROMLOTT** (nyíl teljes fúzió `c*` 0,401 → 0,475), ami
+  **erősíti** a funkció-kaput; a D3 áll (0,557 vs 0,475).
+  **Az egység:** paraméter nélküli, Flutter-független, a mintát **kívülről** kapja. Három
+  **elkülönített** állapot: `available == false` = **nincs rács** (metronóm nélküli szabad
+  játék, normál mód) · `available && direction == null` = **a rácson van, de szünet van
+  előírva** → nincs véleménye (a szünetre leütött ütés maga is minta-sértés, ütem utáni
+  lelet) · `hasOpinion` = az előírt irány. A doksija **kimondja, mire nem használható**: az
+  irány a **megoldókulcs**, tanulói ütésként jelenteni vagy magabiztos akusztikus hívást vele
+  átfordítani = hamis tanítás (ADR 0557 D4).
+  **§9 tételesen:** fixtúra `test/fixtures/strum_metric_channel_parity.json` (**180 eset**:
+  120 valós tartalék onset-fázis + szintetikus élek: rés-határ, 1,0 körbefordulás,
+  **negatív** fázis, szünet-rés, 3/4) · **paritás**: a fixtúrát **ugyanaz az aritmetika**
+  generálja, amivel a próba mér (`ml/make_metric_channel_fixture.py` ↔ `slot_call`), tehát
+  nem tud szétcsúszni · **property**: rés-középpont, `offsetSlots ∈ [−0,5; 0,5]`,
+  ütem-invariancia, egy-rés eltolás **átfordítja a nyilat**, **fél résnél kisebb elcsúszás
+  megtartja a rést** (120 bpm-en ±62,5 ms — a mért könyök ±50/±80 ms-on pont ide esik) ·
+  **valós-audio**: `probe_direction_metric.py` 4b (72 felvétel, 0,9848) +
+  `probe_direction_fusion.py` (a tanított modell a valós audión). **12/12 zöld.**
+  **SZÁLLÍTOTT VISELKEDÉS NEM VÁLTOZOTT — az egység NINCS BEKÖTVE** (a `LivePipeline` nem
+  hívja). Tanulság: **L673** (egy szabállyal mértem, másikat készültem szállítani; a
+  produkciós kód megírása fogta el, nem a mérés).
+  **E18-R36 — A LETISZTULT TIER MEGÉPÜLT, ÉS SÖTÉT (ADR 0559).** A `StrumAnalyzer` kapott
+  egy második, késleltetett osztályozást. A pillanat **DERIVÁLT**:
+  `LiveCrnnFrontend.framesUntilComplete` a modell geometriájából **41 frame = 238 ms** —
+  ugyanaz a 238 ms, amin a tier mérve van; a `+1` a középpont-kerekítés tartaléka, mert
+  **korán** érkezni épp a nullázást hozná vissza. **Bizonyítva, nem feltéve:** a letisztult
+  pillanatban a streamelt ablak **azonos** a teljes jelből számolt referenciával (1e-9), a
+  gyors pillanatban az utolsó sor **a csend log-mele** (egy konstans mind a 128 melen).
+  **`StrumRevision` IRÁNYT revideál, létezést soha**, és az identitása **egész frame-index**,
+  nem időbélyeg (200 bpm tizenhatodon ~13 frame a rés, 41 a letisztulás → **három ütés
+  levegőben**; egy elég bő epszilon **átérne a szomszédra**).
+  **A három csapda mérve:** a revízió nem kreál ütést (1 onset → pontosan 1 esemény + 1
+  revízió; a heurisztikus út **nulla** revízió) · nem ír át **újabb** ütést (3+ levegőben,
+  minden revízió a **saját** `onsetFrame`-jét nevezi, szigorúan növő) · elnyomott onset nem
+  éled újra (nincs esemény, nincs revízió, a sín egyszer hívva). **Plusz a fordított eset:**
+  egy **letisztult elnyomás nem vonja vissza** a már bejelentett ütést — az minden
+  fogyasztóhoz megérkezett, törlése egy **látott** ütést tüntetne el (ADR 0556 D1).
+  **A várólista-sorrend tesztelve, nem remélve:** a **letisztultat** kell előbb leszívni, mert
+  a gyors ág visszatér; az ütközéshez **29** frame-es rés kell (nem 41: a gyors 12-kor, a
+  letisztult 41-kor jár), és a teszt **söpri** a 28/29/30-at és **megköveteli** az ütközést.
+  **A TIER SÖTÉT: `settledTier = false` a default** — az élő CRNN-nel ütésenként egy **második
+  modell-forward**, és a `settledRevision`-t **ma senki nem olvassa**. Ezen a **JIT-es
+  teszt-harnesszen** egy forward **~29 ms**; **ez NEM on-device szám** és nem átvihető (a
+  release AOT lényegesen gyorsabb), ezért on-device értéket **nem állítok**. Amit állítok: a
+  duplázás **nem ingyenes**, a mértéke **ismeretlen**, 200 bpm-en ~13 ütés/s. A flag **nem
+  felhasználói kapcsoló**, hanem a sín, ami egy fogyasztó nélküli számítást távol tart; azt a
+  kör kapcsolja fel, amelyik (a) **fogyasztja** (ADR 0558 D1) és (b) **profile-buildben
+  megméri**. Teszt őrzi: opt-in nélkül a második forward **ki sem megy**.
+  **Nyolc teszt-dublőr** kimondja, hogy nincs letisztult tierje (a `settleAfterFrames`
+  kötelező sín-tag, default nélkül — egy default **csendben** beválasztana). Kettőnél ez
+  **valódi hiba** lett volna: a két tooling-rekorder a **valódi** osztályozóhoz delegál és
+  minden hívást a `calls`-ba fűz → delegálás esetén a mért futás ütésenként **egy extra
+  verdiktet** kapott volna, **más levágáson**. A `StrumEvent` kapott egy additív `onsetFrame`
+  mezőt (egyetlen építési helye az analyzer; a `features/audio_analysis` azonos nevű
+  domain-eseménye **más osztály**). **10/10 zöld, kapu zöld, szállított viselkedés
+  változatlan.** Tanulság: **L674** (a zöld teszt azt bizonyítja, hogy MŰKÖDIK, nem azt, hogy
+  FUTNIA kell).
+  **E18-R37 — A RÁCS MEGÁLLÍTOTTA A BEKÖTÉST (ADR 0560,
+  `ml/probe_metric_grid_sensitivity.py`).** A kimondott következő lépés („`TempoTracker` rács
+  + bar-horgony átadása") **hibás volt, és TÖRÖLVE**. Az ADR 0557 minden száma a GuitarSet
+  **annotált** rácsán áll (helyes tempó **és** fázis-origó); az app ezt szabad játékban nem
+  tudja: a `TempoTracker` **oktávot hajtogat** és fázist nem ad, a `_barStartSec` pedig egy
+  **önkényes ütés** saját idejéhez horgonyoz. A csatorna állítása az, hogy **a pozíció dönt**,
+  tehát egy fél réssel hibás origó nem elmossa, hanem **megfordítja** a választ.
+  Tartalék (526 ütés, 12 felvétel, felütés-arány 0,1920 → **„mindig lefelé" = 0,8080**, L667):
+  annotált **0,9848** · önhorgonyzott helyes tempóval seedenként **0,7300 / 0,9430 / 0,8555 /
+  0,7833 / 0,9468** (⇒ **3/5 ROSSZABB a konstansnál**) · ütemenként újrahorgonyozva
+  (`_placeInBar`) **0,8612** (csak +0,053) · tempó ×2 **0,6597** · ÷2 **0,7985** ·
+  mindkettő téves **0,6179 / 0,7662** — **minden rossz-oktáv sor rosszabb a konstansnál**.
+  **Az átlag elrejti a szerkezetet:** a horgony-ütés **81,2% lefelé / 18,8% felfelé**, és egy
+  **felfelé** horgony egy réssel csúsztat ⇒ szigorú alternáción **minden hívás átfordul**. A
+  0,73–0,95 szórás tehát **majdnem tökéletes és majdnem invertált felvételek keveréke** — nem
+  „kicsit pontatlanabb mindenkinek", hanem **„helyes az egyik tanulónak, fordított a
+  másiknak"**.
+  **EZ DÖNT:** a csatorna **csak olyan rácson** admisszibilis, amit **az app birtokol** — a
+  metronóm/lecke saját időrácsa, aminek a fázisa **definíció szerint ismert**. Az a
+  `features/curriculum` / `features/learn` rétegben él és **ma nem jut el a DSP-ig**, tehát a
+  bekötés **réteg-átívelő**. **Szabad játékban a csatorna NEM ELÉRHETŐ**, és ez már így van
+  megépítve (`MetricCall.unavailable` `bpm <= 0`-ra) — tiszta képesség-határ.
+  **ÚJ KOCKÁZAT:** a repó már megmérte, hogy **16 metronóm-klikkből 15 jelentett ütés** lesz
+  (`metronome_click_pollution_test.dart`, 0,1 erősítésig). A klikk **pontosan az ütemre** esik
+  ⇒ a metrikus csatorna **magabiztos lefelé ütésként** bélyegezné, és a fúzió a fantomot **még
+  magabiztosabbá** tenné. A pontozás alatti **haptikus** pulzus (`CurriculumPulse.haptic`)
+  innentől **a csatorna ELŐFELTÉTELE**, nem kényelem.
+  **NEM állítjuk:** nem azt mértük, hogy **egy** beat-tracker nem tudna elég jó rácsot adni —
+  azt, hogy **a jelenlegi** nem. Ismert fázisú, oktávot eldöntő beat-tracker külön mérés.
+  Tanulság: **L675** (a bemenetet, amin egy mért jellemző áll, külön kell megmérni).
+  **E18-R38 — A RÁCS FORRÁSA A `RhythmGrid`, ÉS AZ ELOLVASÁSA KÉT HIBÁT TALÁLT (ADR 0561).**
+  A keresett app-birtokolt rács a `lib/features/curriculum/domain/rhythm_grid.dart`, ami
+  **már tartalmazta az egészet, jobban**: `pendulumDirection` (ugyanazokra a pedagógiai
+  forrásokra hivatkozva, mint az ADR 0557), `beatsPerBar`/`subdivision`, `RhythmGrid.authored`
+  + `followsPendulum` (a tanított 3/4 oom-pah mint **dokumentált ellenpélda**),
+  `StrokeSound.ghost`, `handCrossings`, és **`onsetUs({bar, slotIndex, bpm})` — ismert fázisú
+  absztrakt időrács a gyakorlat kezdetétől**, pontosan amit az ADR 0560 megkíván.
+  **A `RhythmGrid` az inga EGYETLEN hatósága:** a `StrumMetricChannel` készen kapott irányú
+  `MetricSlot`-okat vesz át, tehát nincs második implementáció, ami elsodródhat. A DSP réteg
+  **nem importálja** a curriculumot; a leképezés a `StrumMetricChannel.crossings` gyár.
+  **HIBA 1 — egy ghost-kereszteződés HORDOZ irányt.** Az első verzió a `null` rést „nincs
+  véleménye"-ként kezelte; ez **pedagógiailag téves**, és a repó saját doksija mondja ki: a
+  kéz **inga és nem áll meg**, tehát a csendben hagyott kereszteződésen **valódi kéz-utazás**
+  van, valódi iránnyal. Ezért a `MetricSlot` **kettőt** hordoz: `direction` (mindig ismert) +
+  `expected`; a `expectedHere == false` nem kétely, hanem **minta-sértés** (ütem utáni lelet).
+  **HIBA 2 — egy NEGYED rácsot KERESZTEZŐDÉS-felbontáson kell olvasni, különben minden
+  off-beat ütés ÁTFORDUL.** A negyed rács négy lefelé ütést jelöl, de a kéz **felfelé** jön
+  vissza (`handCrossings`, és a doksi kimondja: „amit KÉRNEK" vs „amit a kéz TESZ"). Rés-
+  felbontáson egy ütemek közti ütés a legközelebbi negyedre esik és **„lefelé"** lesz,
+  miközben a kéz felfelé tart — **magabiztos inverzió** pont azokon az off-beat ütéseken,
+  amiket a tanuló akkor ad hozzá, amikor kezdi kitölteni a mintát. A `crossings` gyár a negyed
+  rácsot **nyolc kereszteződésre** tágítja; teszt pinneli a `handCrossings`-egyezést **és**
+  azt, hogy a **nem tágított** olvasat ugyanazon az ütésen „lefelé"-t ad.
+  **Az AUTHORED rács iránya érvényben marad** (`followsPendulum == false` az oom-pah-nál, a
+  csatorna nem javítja ki) — különben hamisat tanítanánk egy mintáról, amit valódi tanárok
+  tanítanak. Teszt pinneli.
+  **A MÉRÉS NEM VÁLTOZIK:** a GuitarSet implikált mintája szigorú tizenhatod-alternáció
+  **ghost nélkül**, tehát a `slot_call` válasza sosem függött a ghost-szemantikától → a 0,9797
+  és a fúziós táblák állnak. A **paritás-fixtúra újragenerálva** (180 eset): `expectedHere`,
+  a kitágított negyed rács és a 3/4 authored oom-pah is benne. **16/16 zöld, szállított
+  viselkedés változatlan, a csatorna továbbra sincs bekötve.**
+  Tanulság: **L676** — és ez a **harmadik** eset ugyanebből a családból ([[L669]] `STD_SEEDS`,
+  [[L671]] `beat_position`), tehát **mintázat**: a keresésem a **technikai** szomszédságra megy
+  (ugyanaz a réteg/könyvtár), nem a **fogalmira**. Szabály: egy domain-fogalom kódolása előtt a
+  **fogalom nevére** keresni `lib/` egészében + `docs/research/` + `docs/superpowers/specs/`.
+  **Előfeltétel (ADR 0560 D4):** pontozás alatt a pulzus **haptikus**, mert a klikk pontosan
+  az ütemre esik és a csatorna magabiztos lefelé ütésként bélyegezné.
+  **E18-R39 — A FÚZIÓ A PONTOZÓ ÚTON MEGENGEDHETETLEN (ADR 0562, FELÜLÍRJA az ADR 0558
+  D1-et ÉS D2-t).** A bekötési helyet keresve a `gradeRhythm`-ot találtam meg
+  (`lib/features/curriculum/domain/rhythm_grading.dart`), ami **már a fogyasztó** és **már
+  tartalmazza a teljes kontraktust**: `DetectedStroke {atUs, direction, isConfirmed}` ·
+  `startUs` + `grid.onsetUs(...)` = **ismert fázisú rács** · `RhythmSlotOutcome.unclear` =
+  tartózkodás · `extraConfirmedStrokes` = ghost-résre ütött ütés · és a fájl fejében **1.
+  szabály: „a párosítás IDŐT használ, SOHA nem irányt"** — ugyanaz a megoldókulcs-védelem,
+  amit az ADR 0557 D4-ben magam vezettem le.
+  **A DÖNTŐ MEGFIGYELÉS:** a `gradeRhythm` a felismert irányt a **rács** `expected`
+  irányához hasonlítja, ebből lesz a `wrongDirection` — amiről a kód azt írja: **„this is the
+  thing only this app can tell a learner"**. Ha a metrikus előírást beolvasztom a
+  `DetectedStroke.direction`-be, a grader **a rácsot a ráccsal** hasonlítja: a
+  `wrongDirection` **nullára megy**, és az app **minden tanulónak azt mondja, hogy a pengető
+  keze hibátlan**. És ez **már megmért szám**: az inga-sértő ütéseken a fúzió **0,5000 →
+  0,2500** (letisztult tier) — azok a sértő ütések **pontosan a `wrongDirection` esetek**,
+  tehát a fúzió **felére csökkenti** a ritmus-pillér egyetlen differenciátorának észlelését.
+  A táblámban ott volt, „a sértő részhalmazon jelentkező kár"-ként — és nem kötöttem össze a
+  termék kimenetével.
+  **ÖNELLENTMONDÁS, amit ki kell írni:** az ADR 0557 D4 azt mondta, a metrikus csatorna „a
+  hívást **soha nem fordítja át**"; az ADR 0558 D1 döntetlen-törő szabálya `t` alatt **a
+  metrikus hívást** hagyja dönteni, vagyis **átfordít** — és az ADR 0558 D1 szövegébe azt
+  írtam, hogy **„egybeesik"** a D4-gyel. **Nem esik egybe: megsérti.** A `c* = 0,000` mérés
+  valódi, de **irány-macro-F1-en** készült, ami **nem tudja megkérdezni**, hogy a grader képes-e
+  még észlelni egy minta-sértést.
+  **A NYÍL FÚZIÓJA IS ELESIK (ADR 0558 D2 felülírva):** fúziós nyíl + csak-akusztikus grader
+  **szerkezetileg ellentmond egymásnak pontosan a sértő ütéseken** (a tanuló a minta kért
+  nyilát látja, majd az ütem után azt olvassa, hogy a másik irányba ütött) — az ADR 0556 D2
+  tilalma visszafelé.
+  **AMI MEGMARAD a `StrumMetricChannel`-nek (ADR 0562 D5), őszintén nem tanulónak szóló:**
+  (a) **mérőeszköz** — a Python próba Dart-párja, paritás-fixtúrával, és magyarázat arra, hogy
+  a korpusz-alapú irány-számok miért optimisták (a pozíció 0,98-cal jelzi az irányt, innen a
+  take-ID orákulum is); (b) **adat-kiválasztás** — azok a menetek, ahol a két csatorna sokat
+  nem egyezik, épp a hiányzó inga-sértő ütések jelöltjei. **A repóban marad, bekötés nélkül**,
+  a tilalom a class-doksijában.
+  **KÖVETKEZMÉNY: nincs mit bekötni**, tehát a `settledTier` **SÖTÉT marad** — az egyetlen
+  indoka a D1 fúzió volt. Az ADR 0558 **D3** (a „konzervatív" szabályom rosszabb volt a gyors
+  tieren) és **D4** (a 11→8 ütéses korlát) **mérésként érvényben**.
+  **NEM állítjuk:** a `settledTier` **fúzió nélkül**, önmagában még javíthatja a pontozást (a
+  letisztult akusztikus verdikt 0,6061 vs a gyors 0,5262, **rács nélkül**) — ez **független** a
+  fúziótól, lehet külön kör, de a költsége (ütésenként egy második forward) akkor is
+  **profile-build mérést** kíván.
+  Tanulság: **L677** — „egybeesik" a legdrágább szó, amit mérés mellé írhatok; és egy
+  termék-metrikának **meg kell tudnia kérdezni, amiért a termék létezik**. Plusz: ez a
+  **negyedik** eset, hogy a repó már tartalmazta a kontraktust ([[L676]] mintázata) — az új
+  szabály, hogy a megtalált fájl **fej-kommentárját végig kell olvasni**, mert a döntései ott
+  vannak kimondva.
+  **E18-R40 — A LETISZTULT TIER CSAK A RÖVID MARGÓJÚ ÜTÉSEKEN ÉRI MEG (ADR 0563,
+  `ml/probe_settled_tier_value.py`).** A fúzió halálát a **kétszintű döntés** érintetlenül
+  átélte, mert **tisztán akusztikus** (nincs rács, nincs megoldókulcs). Tartalék GuitarSet,
+  530 ütés: **csak gyors 0,5262** (ma szállít) · **csak letisztult 0,5917** (nem szállítható:
+  minden nyíl 238 ms-ot várna) · **ADR 0556 D3 hibrid**: `t=0,10` 0,5389 / 6,4% ·
+  **`t=0,30` 0,5813 / 19,8% -> +0,0551 (VÁLASZTVA)** · `t=0,50` 0,5811 / 32,5% · `t=0,70`
+  0,6044 / 49,1% · `t=1,01` 0,5917 / 100%. A `t=0` a csak-gyors, a `t>1` a csak-letisztult:
+  **az alapvonal és a plafon ugyanazon görbe pontjai**. A 0,30 a nyereség **84%-át** adja a
+  költség **ötödéért**; feljebb a görbe ezen a mintán pár ütésen belül van önmagától (a
+  `t=0,70` még a csak-letisztultat is meghaladja, amit 530 ütés fel-F1-je nem támaszt alá).
+  **A nyereség helye:** `t=0,30`-nál a rövid margójú ütések (n=105) **0,3619 -> 0,6762**, az
+  elég margójúak (n=425) 0,7059 -> 0,7459; `t=0,90`-nél az elég margójú részhalmaz **+0,0000**.
+  **És a margó TÉNYLEG mér megbízhatóságot** (ez legitimálja a rá való útválasztást): gyors
+  pontosság **0,4000** a 0,0-0,2 sávban, **0,8500** a 0,8-1,0-ban.
+  **EZ MEGVÁLTOZTATJA AZ ADR 0559 KÖLTSÉG-KALKULUSÁT: nem duplázás, hanem +20%.** Az analyzer
+  mostantól **csak akkor** állít sorba, ha a gyors margó `< 0,30`, **vagy** ha a gyors hívás
+  **nem nevezett irányt** (akkor nincs nyíl-állítás, amit megcáfolhatnánk, és a pontozónak
+  különben semmije nem lenne). Három teszt pinneli: magabiztos gyors verdikt -> a második
+  forward **ki sem megy**; null irányú -> mindig settle-el; valószínűség nélküli osztályozó ->
+  soha. **13/13 zöld.**
+  **ÉS KORRIGÁLJA AZ L672 §2-t:** azt állítottam, hogy „a margó 70 ms-on nem mér
+  megbízhatóságot". **Téves** — monoton 0,40 -> 0,85. A valódi ok, amiért a teljes fúzió akkor
+  megverte a döntetlen-törőt: `lam=0,99`-nél **a rácsra cserélte az akusztikus hívást
+  mindenhol**, és egy **96%-ban inga-követő** korpusz ezt jutalmazza; a döntetlen-törő csak a
+  rövid margón támaszkodott rá, tehát kevesebbet nyert belőle. Az összehasonlítás a margóról
+  **semmit nem mondott**. Ez **erősíti az ADR 0562-t**: a „jobb" sor azért volt jobb, mert
+  **többet csalt**. Tanulság: **L679** — egy **mechanizmus-állítás önálló állítás**: vagy
+  mérem, vagy **sejtésnek jelölöm**; egy szám mellé írt hihető ok úgy olvasódik, mint eredmény,
+  és úgy viselkedik, mint találgatás. (Ugyanaz a szokás, mint az L677 „egybeesik"-je — kétszer
+  két körön belül.)
+  **A TIER MARAD SÖTÉT:** a `settledTier = false` nem változik, a felkapcsolás továbbra is
+  **profile-build költségszámot** kíván (a ~29 ms JIT-forward nem on-device szám). Ami
+  változott: az ár mérve **+20%** a korábbi +100% helyett, a haszon mérve **+0,0551 macro**.
+  **E18-R41 — AZ IRÁNY-MODELL 45×-ÉT KÖLTI ANNAK, AMIT A FEJLÉCE ÁLLÍTOTT (ADR 0564,
+  `tool/benchmarks/strum_direction_forward_benchmark.dart`).** Az ADR 0563 az absztrakt
+  költséget prózában hagyta („~29 ms JIT, nem on-device") — felső korlát adatpontnak
+  maszkírozva, pont amit az ADR 0474 négy `kind`-ja megakadályozni hivatott. Megmérve, a repó
+  saját benchmark-sémájában: **JIT median 25,8 ms · AOT median 27–29 ms (p95 33 ms)** —
+  vagyis **az AOT NEM gyorsabb**, a JIT-szám sosem volt pesszimista korlát.
+  És feloldva egy ellentmondás: a `crnn_strum_net.dart` fejléce **„~350k params / ~1 ms per
+  window"**-t állított. A paraméter-szám helyes (363 891), a latencia **45×-esen téves**, mert
+  **paraméterből** becsülték, nem munkából: `conv1 0,28 M + conv2 4,42 M + conv3 6,64 M +
+  GRU 15 lépés 5,16 M = **16,5 M MAC**`. Egy konv-kernel **minden pozíción**, a GRU mátrixai
+  **mind a 15 időlépésen** — a paraméter és a munka nem ugyanaz a szám. 16,5 M MAC / 28 ms ≈
+  **0,6 GMAC/s**, ami **szokásos** skalár Dart, tehát **nem a kód lassú**.
+  **A terhelés lineáris az ütés-sűrűségben:** 200 bpm tizenhatod (13,3 ütés/s) → gyors tier
+  **376 ms/s = 37,6% egy magból**, letisztult **74 ms/s = 7,4%**; 80 bpm nyolcad (2,7 ütés/s) →
+  **75 ms/s = 7,5%**, illetve **15 ms/s = 1,5%**.
+  **EZÉRT A LETISZTULT TIER NEM A SZŰK KERESZTMETSZET, HANEM A MÁR SZÁLLÍTÓ GYORS TIER.** A
+  kör kérdése („megengedhetjük-e a második forwardot") **a rossz kérdés volt**: az inkrementum
+  kicsi, az alap nagy — és az alap száma csak azért került elő, mert egy inkrementum mérése
+  rákényszerített az alap mérésére ugyanazzal a műszerrel.
+  Négy `measured` rekord `ci_host`-on; **egyik sem állít telefon-`deviceId`-t** (az ADR 0474 D2
+  zárt eszköz-szótára szerint egy kitalált eszköz **parse-hiba**). Az on-device szám **nincs
+  megmérve**, és ezért **nincs rekordja** — a séma értéket kíván, tehát egy „PENDING cél"
+  dokumentum-sor, nem rekord. A `crnn_strum_net.dart` fejléce mostantól a mért számot, a
+  MAC-táblát **és azt is** hordozza, hogy a korábbi állítás 45×-esen téves volt és miért.
+  **NEM állítjuk:** hogy a szállított gyors út elfér-e a telefon élő büdzséjében. A 37,6%
+  **x86 asztali** szám. Ha szorít, a nyereség a **trunkban** van: a 16,5 M MAC-ból **11,3 M a
+  három konvolúció** — külön kör.
+  Tanulság: **L680** — latenciát **soha ne becsülj paraméter-számból** (a munka az
+  újrahasználati faktorral szorozva: konv-pozíciók, időlépések); egy **inkrementum** mérésekor
+  ugyanazzal a műszerrel **az alapot is** meg kell mérni; és az AOT-feltevésem is mérés nélküli
+  mechanizmus-állítás volt ([[L679]] mintája egy körrel a rögzítése után).
+  **E18-R42 — A CONV TRUNK KIHAGYJA A NULLA BEMENETEKET: a forward FELE idő alatt fut,
+  bit-azonos kimenettel (ADR 0565).** A conv2/conv3 **post-ReLU** aktivációkat olvas; 200 VALÓS
+  GuitarSet-ablakon a bemenetük **46,1%** és **71,5%** nulla = a trunk 11,34 M MAC-jából
+  **6,78 M (59,8%)** kihagyható. **A kihagyás a kimeneti ciklusokon KÍVÜL kell:** a naiv
+  legbelső `if (v == 0) continue` egy tesztet egy multiply-addra költ, de a csomagolt kernel
+  `[tap][o][c]`, tehát **egy bemeneti pozíció csatorna-vektorát minden kimeneti csatorna
+  újraolvassa** — a bemenetet **egyszer**, CSR-szerűen ritkásítva `inC` teszt/pozíció árán
+  `outC` multiply-add spórolódik nullánként (conv3-nál **egy teszt 48 műveletre**).
+  **Egzakt, nem közelítés:** a kihagyott tagok `0.0 × véges`, a megmaradók eredeti sorrendjükben
+  — **mind az öt paritás-fixtúra zöld** (crnn_strum_net, crnn_live_parity, crnn_live_3c_parity,
+  chord_crnn_parity, live_crnn_3class).
+  **Mért nyereség, interleaved A/B ugyanazon a valódi ablakon:** dense **32 250–33 030 us** →
+  sparse **15 575–16 768 us** → **2,00× (1,93–2,04, n=5)**. Terhelés (valódi ablak, host AOT):
+  200 bpm tizenhatod gyors tier **42,7% → 22,2%** egy magból, letisztult tier **8,5% → 4,4%**;
+  80 bpm nyolcad gyors tier **8,5% → 4,4%**.
+  **MÉRT MÓDSZERTANI KORLÁT: ezen a hoston az AOT kód-elhelyezés önmagában ~20%-ot mozdít.**
+  Két bináris **azonos conv-kóddal**, csak a timed loopon **kívüli** print-ekben különbözve,
+  interleaved: **13 036–13 580 us vs 15 575–16 033 us**, reprodukálhatóan. Tehát (a) abszolút
+  latencia nem idézhető 20%-nál pontosabban; (b) egy A/B csak **interleaved** binárisokkal
+  érvényes; (c) ha két sorozat eltér (itt 2,43× és 2,00×), a **konzervatív** vég a szállítható
+  állítás — egy szállítási döntés nem épülhet a legszerencsésebb binárisra.
+  **EZ KORRIGÁLJA AZ ADR 0564 SZÁMAIT**, mert az **szintetikus** ablakon mért, a trunk költsége
+  viszont **adat-függő**: dense forward **~28 ms szintetikuson vs ~32,5 ms valódin**, gyors tier
+  **37,6% vs 42,7%**. A benchmark mostantól a **paritás-fixtúra valódi, normalizált ablakát**
+  olvassa, és hiányzó fixtúránál **hangosan** jelzi a szintetikus visszaesést. Ami az ADR
+  0564-ből **áll**: a „~1 ms per window" állítás téves volt, paraméter-számból latenciát becsülni
+  tilos, és a letisztult tier nem a szűk keresztmetszet.
+  A benchmark „16,5 M MAC"-ja mostantól **DENSE-EKVIVALENS**, kiírt figyelmeztetéssel, hogy
+  **nem szabad** a latenciával elosztva átbocsátóképességnek hívni (a végrehajtott ~6,2 M ezen
+  az ablakon).
+  **NEM állítjuk:** semmilyen on-device számot (a 2,00× x86 host AOT; a telefon cache-e és
+  branch-prediktora más, és a CSR-gather nem-folytonos kernel-olvasása ott máshogy viselkedhet).
+  A ritkaság **ezen a korpuszon és modellen** mért. És a dense szintetikus↔valódi különbséget a
+  MAC-számok **NEM magyarázzák** — megmérve a szintetikus ablak a GRU-ban **többet** dolgozik
+  (1,90 M vs 1,15 M), tehát a dense-nek ott lassabbnak kellene lennie: ez **kimondottan
+  megmagyarázatlan**.
+  Tanulság: **L681** — (a) ha egy mért költség a **bemenet statisztikájától** függ, a benchmark
+  bemenete **valódi adat**, különben egy **másik kísérletet** futtatok; (b) ebben a körben
+  **kétszer** adtam mechanizmust, amit a saját számaim cáfoltak (a GRU-munka iránya, és a
+  „gépterhelés" a kód-elhelyezés helyett) — a magyarázatot **a szám kiolvasása után** kell
+  megírni, és ha nem támasztja alá, akkor **„ezt nem tudom megmagyarázni"** kerül a dokumentumba.
+  **E18-R43 — A KAPU KÖLTSÉG-KERETE KORLÁTOS OPTIMALIZÁLÁS, NEM ARÁNY (ADR 0566); ÉS A
+  BEKÖTETLEN ASSET A SZÁLLÍTÓ ÚTON +0,186 IRÁNY-MACRO-F1 (ADR 0567).**
+  Az ADR 0555 D4-et a **feltett formájában lezárva**: a javasolt `C_FS/C_FP` arány **egyik
+  költséget sem tudja kifejezni**. (a) **Az elnyomott ütés nem levonás, hanem SZAKADÉK** — a
+  `rhythm_grading.dart` 3. döntése szerint „egy kihagyott slot nem von le semmit", de a
+  `minimumRhythmCoverage` (0,5) alatt a `rhythmAttemptEvidence` **nulla bizonyítékot** ad,
+  tehát **nincs haladás**. Egzakt binomiálissal a mért megtartásból: a **hibátlanul
+  eljátszott** 8-slotos kísérletek **2,4–10,7%-a** (korpusz-függő, mindkét vég **alsó
+  korlát**, mert az elnyomás sorozatos). Nincs második kapu: a `rhythm_practice_screen.dart`
+  minden ütést `isConfirmed: true`-val épít, tehát a `coverage` **pontosan** a megtartás — és
+  a `RhythmSlotOutcome.unclear` a produkcióban **elérhetetlen**. (b) **A fantom nem feltétel
+  nélkül kreditál**: a `gradeRhythm` **maximum-kardinalitással** illeszt, tehát a kár
+  **nyitott slotot** kíván (mérve **4,7%** 8 slotnál 80 bpm-en), különben
+  `extraConfirmedStrokes`, amit **egyetlen widget sem jelenít meg**. A **kiszorítás** (fantom
+  elveszi a slotot egy valódi ütéstől) mérve **1,1–1,5%** — amit a bányászott negatívok
+  **soha** nem mondhattak volna meg, mert a `ml/negatives.py` 120 ms-on belül mindent kizár.
+  **Ezért a keret Neyman–Pearson** (Tong, Feng & Zhao 2016): *minimalizáld a hamis
+  állításokat úgy, hogy P(nincs bizonyíték) ≤ δ*. **Nem a kalibráció** zárja ki az inverziót
+  (ECE **0,0249**), hanem a **lépcső** és a **feltételesség**.
+  **A D4 által kért reject curve-ök** (held-out, kevert folyam): kapu nélkül a **FEL
+  precizitás 0,206 → 0,043** omlik, mert a beengedett fantomok **93,8%-át** hívja a modell
+  „fel"-nek. Ez **korrigálja** a saját költség-modellemet: az csak a **slot-verdiktet**
+  számolja (ott a matcher védi), a precizitás **mindent** — két fogyasztó, két célfüggvény.
+  **ÉS A FOGYASZTÓKAT A KÓDBÓL OLVASTAM KI, AMI FORDÍT.** A szállított 0,85 indoklása két
+  hazugságra épült, és mindkettő ellenőrizhető volt: a „levonás" **nem létezik** (a);
+  a „fantom kreditál" **feltételes** (b); és a **nyíl**, ami a fantomot megmutatná,
+  **nincs**: a `RhythmLane` a **notált** rácsot rajzolja és észlelt ütést nem is kap, a
+  `practice_highway`/`practice_feedback` szintén a **várt** irányt
+  (`CompiledTargetEvent`, `expectedDirection`); az egyetlen **észlelt** irányt mutató felület
+  a **megosztó kártya**, az ADR 0556 élő nyila pedig **sötét**. Vagyis a kapu *de facto*
+  **aggregált precizitás-küszöb**, nem slot-verdikt-küszöb.
+  **AZ ADR 0567 MÉRÉSE** (`STRUM_SPLIT=heldout`, players 03–05 × 4 nem tanított dallam,
+  1772 onset, a szállított 0,850-es kapu, `margin on`): a `strum_crnn_live_3c_settled.bin`
+  **onsetP 0,908 → 0,836 (−0,072)**, de **onsetF1 0,6518 → 0,7810**, **pengetés-recall
+  0,758 → 0,919**, **le-F1 0,5736 → 0,7978**, **fel-F1 0,2007 → 0,3478**, **macro
+  0,3872 → 0,5728 (+0,186)**. A **precizitás az EGYETLEN** romló oszlop, és a szakadék
+  **0,0238 → 0,0002**-re esik. **A szállítható javaslat a csere ÉS a kapu visszaállítása az
+  illesztett 0,439-re**: precizitás −0,044 (nem −0,072), recall +0,117, macro **+0,190** —
+  a szigorítás itt **nem** kerül irányba, a legjobb macro épp ott van.
+  **KÉT PROVENANCIA-CSAPDA, MINDKETTŐ EBBEN A KÖRBEN (L682 §1).** (1) Elosztottam a
+  Python-megtartást (0,944) a söprés megtartásával (0,633), „30 pontos résnek" neveztem, és
+  **órákig a mechanizmusát kerestem** — miközben minden `ml/probe_*.py` a
+  `weights_live_3c_settled.npz`-t tölti, a söprés pedig a **szállított** assetet futtatja:
+  **két modell, a hányados semmiről**. Apples-to-apples: a Python orákulum-megtartás
+  0,944/0,963/0,976 vs a produkciós **0,941/0,954/0,971** ugyanazokon a söpréseken — az
+  `audio → ablak` lánc **rendben van**. (2) Aztán mind a **72** fájlon mértem, miközben a
+  settled modell **GuitarSeten tanult** (ADR 0554) — a kontaminált tábla **+0,284**-et
+  mutatott a held-out **+0,186** helyett, **felével** felnagyítva. A söprés mostantól kiírja
+  az **assetet** (`STRUM_3C_ASSET`) **és a szeletet** (`STRUM_SPLIT`).
+  **KÉT MECHANIZMUS, AMIT A SAJÁT MÉRÉSEM CÁFOLT** (harmadik kör egymás után): (1) az
+  ablak-központozás — megírtam a `probe_gate_window_jitter.py`-t, ami szándékosan tol
+  (−15 ms: 0,936 · 0 ms: 0,938 · +15 ms: 0,802 · +30 ms: 0,454), aztán megmértem a detektor
+  **előjeles késését**: **p50 = −8,3 ms (korán!)**, p90 = +1,5 ms, csak **1,4%** +30 ms-on
+  túl, és a `windowAt` ugyanazt a +2,5 hop korrekciót alkalmazza — **kizárva**; (2) a
+  tompított/perkusszív ütések (a `ml/negatives.py` docstringjéből) — **részben**: a
+  legcsendesebb hangosság-decilis elnyomása **0,147**, a leghangosabbé **0,020** (**7×**,
+  önmagában terméki lelet: *a kezdő csendesen játszik*), de az össz-elnyomás ott 5,6%.
+  **ESZKÖZ-HIBA JAVÍTVA (ADR 0566 D6):** a söprés kapu-listájában az ADR 0549 óta **kétszer**
+  szerepelt a 0,85 (egyszer literálként, egyszer `noStrumThreshold`-ként), a Dart rekordok
+  **érték-egyenlők**, tehát a tálkák map-je **egy** tálkára ejtette a kettőt: a szállított sor
+  `kept`-je **8558**-at írt 4279 helyett. **És semmi nem látszott hibásnak**, mert minden
+  *arány* olyan osztás, amiben a kettes kiesik. Őr bekerült (különböző kulcsok), és a tábla
+  most **pontosan** reprodukálja a független alapvonalat (3789/4015/4279/10106).
+  **NEM mozdult szállított konstans**, és az asset **nincs bekötve** (AGENTS.md §9 négyet kér,
+  ez a kör a **valódi-audió** lábat adja; az asset nincs a `pubspec.yaml`-ban, tehát nem is
+  kerül az APK-ba).
+  Tanulság: **L682** — (1) két mérés összevetése előtt nevezd meg **mindkettő
+  artefaktumát** (súlyok, ablak-építő, **szelet**, revízió); (2) egy különbség magyarázatának
+  **első** lépése **provenancia**, nem mechanizmus; (3) egy konfigurációkat felsoroló eszköz
+  **állítsa**, hogy a konfigurációi különbözőek; (4) mielőtt A hibát B-vel váltod, **grepeld
+  meg a widgetet**, ami megjeleníti — *egy költség, aminek nincs fogyasztója, nem költség.*
+  **E18-R43b — A PARITÁS-ARANYAT SENKI NEM OLVASTA, ROSSZ TÉRBEN VOLT, ÉS AZ ŐR WINDOWSON
+  NEM TUDOTT BUKNI (ADR 0568).** Az ADR 0555 D3 úgy hivatkozik a settled paritás-fixtúrára,
+  mintha fedés lenne. Megvan — 1,26 MB, commitolva, és **semmi nem olvasta**. Három hiba,
+  mindegyik a másik kettő miatt láthatatlan: (1) **nincs fogyasztó** tizenegy körön át;
+  (2) **nincs a manifesztben** — a fán 54 adatfájl, nyilvántartva 52 (a másik hiányzó a
+  `strum_metric_channel_parity.json`, amit **én** hagytam ott az R35-ben); (3) **rossz
+  tér** — a `CrnnStrumNet.forward` **maga standardizál**, tehát nyers log-melt vár, a
+  fixtúra viszont **normalizált** sorokat tárolt (mért tér: szállított arany mean −4,906 /
+  std 6,884 = nyers; settled +0,126 / 0,960 = normalizált). A
+  `train_live_3c_settled.py` `Xn[i]`-t írt `X[i]` helyett. A fixtúra **önmagában
+  konzisztens** volt (Keras a normalizált sorokra max|Δ| = **0,000000**) — csak a Dart
+  belépési pontjával nem: *egy belsőleg hibátlan fixtúra is lehet fogyaszthatatlan, és ezt
+  csak a fogyasztó mutatja meg.*
+  Javítva: a sorok **helyben visszaskálázva** nyers térbe az asset saját mean/std-jével, az
+  `expected` változatlanul — a kör hibája mérve **2,4e-07** az ablakon, **1,8e-07** a
+  softmaxon (a `std` 5,01–7,56, nincs felerősítés), és **teljes float32** pontossággal,
+  nem 5 tizedesre kerekítve, ami az r143 szabályát **szigorúbban** teljesíti. A
+  **generátor is javítva**.
+  **AZ ŐR NEM TUDOTT BUKNI:** a `tool/check_fixture_manifest.dart` a forward-slashra
+  normalizált absolute path-ot **nem normalizált** prefixhez hasonlította, tehát Windowson
+  a `startsWith` **soha** nem egyezett, a bejárás **semmit** nem adott vissza, és a
+  „lemezen van, manifesztben nincs" irány nem tudott jelezni — a „valódi manifeszt tiszta"
+  állítás itt **üres** volt (Linuxon/CI-n valódi). **Nem kódolvasás hozta elő, hanem a repó
+  ÖNTESZTJE**, az az eset, ami azt állítja, hogy *az őr tud bukni* — az [[L671]]
+  kifizetődése. Javítás után **mindkét irány ellenőrizve** (bedobott fájl → jelez; tiszta
+  fa → `OK (54 fixture(s))`).
+  **CI-KÖVETKEZMÉNY (következtetés, nem mérés):** a CI `flutter test --coverage`-t hív
+  **útvonal nélkül**, tehát a `fixture_manifest_test.dart` is fut, és Linuxon a valódi fa
+  esete a két nem regisztrált aranyra **elbukik** → a teljes kapu ezen a teszten
+  **az E18-R32 óta piros**. Ezt az orchestrátornak érdemes visszaigazolnia (gh-t nem hívok).
+  A kör-kapu azért nem fogta, mert a `round-gate.sh` **megnevezett** utakat futtat, és
+  tizenegy kör egyike sem nevezte meg ezt.
+  **ÉS EZ UTÓLAG HITELESÍTI AZ ADR 0567-et:** a +0,186 csak akkor a tanított modellről szól,
+  ha a Dart port reprodukálja — a most megírt paritás-teszt legnagyobb eltérése 32 esetre
+  **1,78e-07**, tehát **áll**. A **sorrend** viszont fordítva helyes: a paritás a műszer
+  **kalibrációja**, a +0,186 a **leolvasás**, és a leolvasás ment ki előbb (L683 §4).
+  **Az új `crnn_live_3c_settled_parity_test.dart` öt esete** zárja a §9 paritás- és
+  property-lábát: séma-őr (egy átnevezett `cases` kulcs különben **nulla** soron futtatna
+  mindent), paritás ≤1e-3 a legrosszabb eltérés **kiírásával**, a no-strum esetek az
+  elutasító osztályra (≥0,6), **property** (40 magolt véletlen ablakon a softmax eloszlás:
+  véges, [0,1], összeg 1e-9-en belül), és **„mért, de nincs bekötve" őr**, ami a 0,85-ös
+  `noStrumThreshold`-ot **és** a két asset bájt-különbségét is pineli — a második nélkül a
+  teszt akkor is átmenne, ha valaki a settled súlyokat a szállított útra másolja.
+  Tanulság: **L683** — (1) egy fixtúra és az **első olvasója** ugyanabban a körben szállít,
+  különben nem teszt, hanem fájl, és egy ADR-sor, ami fájlra mutat, **nem fedés**;
+  (2) ha egy kör bármit letesz a `test/fixtures/` alá, **nevezze meg** a kapuban a
+  `fixture_manifest_test.dart`-ot; (3) egy új assetet előbb a **portja paritásán** kell
+  átvinni, és csak utána mérni vele.
+  **E18-R43c — A SETTLED ASSET A TELEPÍTÉSI KORPUSZON VISSZAESIK; AZ ADR 0567 D3 CSERE-
+  JAVASLATA VISSZAVONVA (ADR 0569).** Az ADR 0567 D4 nyitva hagyta a Klangio-oldalt, kimondott
+  okkal: a szállított asset Klangion **egyedül** tanult, a settled Klangio **+ GuitarSeten**,
+  tehát a +0,186 lehet **csere**. ~~A korpusz nincs a gépen (in situ nem mérhető)~~ —
+  **HAMIS, ADR 0576: a korpusz a gépen VOLT, 9,5 órával korábban, és a mérésben használt
+  gyorsítótár éppen annak beolvasásából épült** —, de a kérdés
+  igen: az új **`ml/read_ssml.py`** mindkét `.bin`-t **egy** Keras-gráfba tölti — egy műszer,
+  két asset, ugyanazok az ablakok (az L682 §1 szabálya).
+  **Minden Klangio-fold torzít, és a torzítás IRÁNYA a műszer.** A szállított a **felvételek**
+  random 20%-át tartotta ki (`split_by_recording`, seed 42), a settled a **4-es gitárost**
+  teljesen:
+  fold **A** gitáros 4 (n=3721): **0,9490 → 0,5072 (−0,4418)**, torzít a szállított felé;
+  fold **B** a szállított eval-foldja (n=2013): **0,7950 → 0,7428 (−0,0521)**, torzít a
+  **settled** felé; fold **C** egyik sem látta (n=824): **0,8013 → 0,5359 (−0,2653)**.
+  **A B-t fordítva kell olvasni:** ott a **settled** az előnyben lévő (ott tanult), és
+  **mégis veszít** — ehhez nem kell torzításmentes sejt, csak a torzítás ismert iránya. A
+  valódi rés tehát **legalább 0,052**, és a kitettség elvételével **nő**. A C-n a settled
+  **mindkét** osztályon rosszabb (le 0,497 vs 0,810, fel 0,575 vs 0,792) **és** kevesebb
+  valódi pengetést tart meg (0,824 vs 0,964); hamis onseteken közel egyenlők.
+  **A C NEM torzításmentes sejt, és ennek elnevezése a kör saját csapdája volt:** egyik modell
+  sem memorizálta azokat az ablakokat, de a két split **fajtájában** más — a szállított látta
+  a 4-es gitáros **többi** felvételét, a settled egyet sem. *„Egyik sem tanult ezeken az
+  ablakokon" nem azonos azzal, hogy „egyformán ismeretlen".*
+  **A DÖNTÉST A KORPUSZOK HOZTÁK, NEM A DELTÁK.** A Klangio `recording_*_phone.wav` — a
+  `ml/klangio.py` saját szavaival **„our deployment condition"** —, a GuitarSet mikrofon-tömb
+  stúdióban, és az app **a telefon mikrofonját** hallja. A nyereség tehát azon a korpuszon
+  van, ami **nem** a telepítés, a veszteség azon, ami **igen**: **az assetet nem cseréljük**,
+  az ADR 0567 D3 **visszavonva** (a mérés alatta áll, a következtetés dőlt meg).
+  **A SZERKEZETI HIÁNYOSSÁG ÉS AZ ÚJ ELFOGADÁSI KRITÉRIUM:** az ADR 0554 helyesen mutatta,
+  hogy a GuitarSet hozzáadása mindkét korpuszt emelte — a **saját belső** alapvonalához
+  (GuitarSet 0,4468, Klangio 0,3836, ugyanaz a szerelvény). Ez **abláció**. Jelölt assetet a
+  **szállítotthoz** egy műszerrel, minden korpuszon **soha** nem mértünk — és ez nem
+  *kimaradt*, hanem **lehetetlen** volt: a szállított súlyok csak `.bin`-ként léteznek, és
+  nem volt olvasó. Ez a rosszabb eset, mert egy lehetetlen mérés **nem kerül fel** a listára.
+  Innentől: **egy jelölt asset akkor szállítható, ha a szállítottat MINDEN korpuszon legyőzi
+  vagy hozza, egy műszerrel mérve**, soronként kiírt torzítás-iránnyal.
+  **AMIT EZ AZ ARC TÖBBI MÉRÉSÉRŐL MOND:** a `weights_live_3c_settled.npz`-t tölti be a
+  `probe_direction_fusion`, `probe_settled_tier_value`, `probe_gate_window_jitter` és
+  `probe_gate_cost_frame` — tehát az **ADR 0563** (+0,0551 macro margó 0,30 felett), az
+  **ADR 0566 D2** reject curve-jei és az **ADR 0557–0562** akusztikus AUC-jai a **settled**
+  modellt jellemzik, nem a szállítottat. Egyik sem érvénytelen — mindegyik igaz a maga
+  modelljéről —, de a szállított útra vonatkozó előrejelzésük **nem igazolt**, és az ADR 0563
+  mérését a két-tier bekötése előtt a **szállított** assetn meg kell ismételni. A metrikus
+  csatorna 0,9797-e modell-független (ütem-fázis), azt nem érinti.
+  Tanulság: **L684** — (1) ablációs alapvonalhoz mért javulás **nem** elfogadási kritérium,
+  és ha egy összevetés **lehetetlen**, az eszköz-hiányosság, nem ok másra; (2) ha két modell
+  splitje **fajtájában** más, nincs közös tiszta halmaz — építs olyan foldot, ami a cáfolni
+  kívánt állítás **felé** torzít; (3) egy kereszt-korpusz delta mellé ki kell írni, **melyik
+  korpusz a telepítési feltétel**.
+  **E18-R43d — A KÉT-TIER ROUTING JELE ASSET-SPECIFIKUS (ADR 0570).** Az ADR 0569 által
+  megnevezett következő lépés elvégezve: a `probe_settled_tier_value.py` mostantól
+  `--asset=PATH [--gate=X]`-szel bármely SSML blobot mér (a `read_ssml.py`-on keresztül) és
+  **kiírja, melyiket** — argumentum nélkül **egzaktan** reprodukálja az ADR 0563-at (fast
+  0,5262, hibrid@0,30 0,5813, +0,0551), ami a paraméterezés regressziós ellenőrzése.
+  **A szállított assetn a margó NEM jelez** (ugyanaz a szelet, ugyanaz az 530 ütés, 0,85-es
+  kapu): margó-sávonként **0,2188 / 0,4545 / 0,2286 / 0,3000 / 0,3202** — **lapos és nem
+  monoton**, szemben a settled asset monoton **0,4000 → 0,8500**-ával. Az L672 §2 kritériuma
+  tehát az egyik assetn teljesül, a másikon nem: *a routing-jel érvényessége a MODELL
+  tulajdonsága, nem az ötleté.*
+  **A letisztult tier a szállított assetn IS sokat ér, csak máshol:** csak gyors **0,3340**,
+  csak letisztult **0,5259** (**+0,1919**) — de a nyereség a **megfelelő** margójú ütéseken
+  van (+0,3230, n=486), nem a rövideken (+0,0909, n=44), ezért a `_settleBelowMargin = 0.30`
+  ebből **+0,0044**-et fog. A szállított assethez tartozó szabály tehát **„MINDEN ütést
+  letisztítani"**, nem „a rövid margójúakat".
+  **ÉS AZ UX-ELLENVETÉS MA NEM KÖTELEZ:** az ADR 0556 D1 a revízió-költségre, a D3 az
+  irány-semleges nyilak árára hivatkozva vetette el a „mindent letisztítani" utat — de az
+  ADR 0566 D3 szerint **egyetlen szállított felület sem rajzol ÉSZLELT irányt**, tehát a
+  100% semleges nyíl ára **nulla**, mert nincs nyíl. A pontozó a kísérlet **végén** értékel,
+  ahol a 238 ms irreleváns. **Egy él-eset kimondva:** a kísérlet **utolsó** ütése — a
+  lezárást a bekötő körnek az utolsó onset + 238 ms-ig ki kell várnia, különben az az ütés
+  bizonyíték nélkül marad. A **költség** levezetett (ADR 0565), nem újonnan mért: minden
+  ütésre egy második forward = a gyors tier **kétszerese**, ~44% egy magból 200 bpm
+  tizenhatodon, ~8,8% 80 bpm nyolcadon.
+  **NEM kapcsoltunk fel semmit:** hiányzik az **in-situ** letisztult szám (a söprés egy
+  onsetre **egy** osztályozást rögzít, a 70 ms-osat — a letisztult pillanathoz egy második,
+  csonkítatlan ablakos hívás rögzítése kell), és a pontozó irány-forrásának változtatása a
+  §9 négy lábát kívánja. Amit a kör **ad**: a `_settleBelowMargin` doc-kommentje mostantól
+  **megnevezi az assetet**, amin a tábla készült, és hordozza a szállított asset
+  ellen-tábláját is.
+  Tanulság: **L685** — (1) egy routing-jel **nem öröklődik** modellcserén át, a „jelez-e?"
+  kritériumot assetenként kell kimérni; (2) ha egy komment **mért táblát** hordoz, nevezze
+  meg a tábla **artefaktumát** is (a split és az n a *mérésről* szól, az asset arról, hogy
+  **miről**); (3) egy **sötét** konstans nem mis-shippel, de az **indoklását** a következő
+  kör örökli — *a sötétség a viselkedést védi, nem a gondolatmenetet.*
+  **E18-R43e — A LETISZTULT TIER IN SITU +0,168 MACRO, ÉS A NYERESÉG TELJES EGÉSZE A LEFELÉ
+  ÜTÉS (ADR 0571).** Az ADR 0570 orákulum-ablakon +0,1919-et jelzett, és kimondta, hogy **nem**
+  in-situ szám. Most az is megvan: a söprés recordere rögzíti az **onset-frame**et, és a pass
+  után minden megtartott onsetre megépül a **csonkítatlan** ablak a
+  `LiveCrnnFrontend.referenceWindow`-val — a repó **saját**, a streamelt `windowAt`-hoz már
+  pinelt referenciájával. Két részlet teszi helyessé: (1) **szelet, nem a felvétel** (a ring
+  **egy másodperc**, tehát egy 30 s-os take-ből csak az utolsó másodperc címezhető — a szelet
+  az onset előtt 0,1 s, utána 0,6 s); (2) a `referenceWindow` **maga** adja az r144
+  attack-offsetet, tehát az onset **FRAME** kezdete kell neki — a közzétett időből
+  visszaszámolva **kétszer** alkalmazódna. A létezést továbbra is a **gyors** hívás dönti
+  (ADR 0559 D2), tehát a mérés azt izolálja, amit a **második forward** vásárol.
+  **Mérve (12 held-out fájl, 1772 onset, szállított asset, 0,850-es kapu, margin on):**
+  irány-macro **0,3872 → 0,5551 (+0,1679)**, **LE 0,5736 → 0,9032 (+0,3296)**, **FEL 0,2007 →
+  0,2069 (+0,0062)**. Kapu szerint: 0,439 **+0,1917**, 0,650 +0,1788, 0,850 +0,1679, nincs
+  +0,1168. Az 1772-ből **1** onsetnek nem volt megépíthető a letisztult ablaka (take vége) —
+  kizárva és **kiírva**.
+  **A NYERESÉG TELJES EGÉSZE A LEFELÉ ÜTÉS.** A második forward a lefelé ütést ezen a
+  korpuszon gyakorlatilag megoldja, a felütéshez **semmit** nem ad — ami az **ADR 0553**
+  adat-diagnózisát **megerősíti**, nem váltja: aminek több hang kellett, az a lefelé ütés
+  volt; a felütéshez **adat** kell. Terméki következmény: egy `reggae-skank`-szerű,
+  felütés-domináns lecke ebből **semmit** nem kap.
+  **A KÉT MŰSZER A DELTÁN EGYEZIK, A SZINTEN NEM:** orákulum 0,3340/0,5259 (+0,1919), in situ
+  0,3872/0,5551 (+0,1679) — a szintek ~0,05-tel eltérnek (más ablak-építő, más onset-időpontok,
+  más kapu-alkalmazás), a delta **0,024-en belül** egyezik. Ez az arc **első** olyan esete,
+  ahol egy orákulum-szám in-situ ellenőrzést kapott, és használható korlátot ad: az
+  orákulum-műszer **delta-kérdésekre** korroborált, **szint-kérdésekre** nem — szűrni
+  orákulumon szabad (gyors, nem kell korpusz-audió), szállítási állítás **szintjét** in situ
+  kell mérni.
+  **NEM kapcsoltunk fel semmit:** a pontozó irány-forrásának változtatása szállított
+  viselkedés, tehát a §9 négy lábát kívánja; ez a kör a **valódi-audió** lábat adja. Hátravan:
+  **fixtúra + property** a „letisztult irány minden ütésre" útra; az **él-eset** (a kísérlet
+  **utolsó** ütése — a lezárást az utolsó onset + 238 ms-ig ki kell várni; a mérésben ez a
+  „missing 1" a take végén); és a **CPU** (ADR 0565-ből levezetve: minden ütésre egy második
+  forward = a gyors tier **kétszerese**, ~44% egy magból 200 bpm tizenhatodon, ~8,8% 80 bpm
+  nyolcadon). Az irány-macro 0,5551 továbbra is a Chapter 14 §7.2 Alpha kapu (**0,80**)
+  **alatt**, és a rés most már majdnem teljesen a **felütés**.
+  **E18-R43f — A LETISZTULT TIER MINDKÉT LEVÁGÁSON TANÍTOTT ASSETET KÍVÁN; A SZÁLLÍTOTTON
+  KLANGION −0,2455 (ADR 0572).** Az ADR 0571 GuitarSeten in situ **+0,1679**-et mért a
+  „minden ütést letisztítani" szabályra. De az ADR 0569 már megmutatta, hogy a két korpusz
+  **előjelben** is eltérhet, és hogy a **Klangio** a telepítési feltétel — tehát az L684 §3
+  saját szabályom a **saját** eredményemre is áll. ~~A Klangio-audió nincs a gépen~~ (**ADR
+  0576: a gépen volt**), de a két
+  levágás gyorsítótára igen (`klangio_live70.npz` / `klangio_live_full.npz`, **sor-azonosak
+  és ellenőrizve**), és az ADR 0571 D4 épp erre a **delta**-kérdésre korroborálta az
+  orákulum-műszert.
+  **Mérve:** szállított asset (csak `live70`-en tanult), csak gyors → csak letisztult:
+  GuitarSet in situ **+0,1679**, **Klangio −0,2455** (0,7950 → 0,5495), a **felütés
+  0,7579 → 0,3118**-ra omlik. **Ellentétes előjel.**
+  **A KONTROLL, AMI ELDÖNTI, MIT JELENT:** ugyanaz a mérés azon az assetn, ami **mindkét**
+  levágáson tanult (ADR 0554), mindkettő a **saját tiszta** foldján: GuitarSet
+  0,5262 → 0,5917 (**+0,0655**), Klangio 0,5055 → 0,6354 (**+0,1299**) — **mindkettő
+  pozitív**. (Műszer-ellenőrzés: ez a két Klangio-szám az ADR 0555 saját tábláján 0,5055 és
+  0,6363, az utóbbi 0,001-en belül.)
+  Tehát **az ötlet jó, a BEMENET volt eloszláson kívül.** Egy eloszláson kívüli bemenet nem
+  „rosszabb", hanem **kiszámíthatatlan** — és a kiszámíthatatlanság pont így néz ki: két
+  korpusz, két előjel, és amelyiken először mérek, azt hiszem el. Ez a bizonyíték
+  általánosítása, **nem mechanizmus**: hogy a telefon-mikrofon későbbi hangja miért fordítja
+  meg az előjelet, **nem tudjuk**.
+  **EZ AZ EGÉSZ ARCOT EGY HIÁNYZÓ ARTEFAKTUMRA FŰZI:** az ADR 0563 margó-routingja a settled
+  assetn érvényes, a szállítotton nem (ott a margó **lapos**, ADR 0570); a „mindent
+  letisztítani" a settled assetn **mindkét** korpuszon érvényes, a szállítotton a telepítésin
+  **−0,2455**; és a settled asset maga nem szállítható, mert a Klangion összességében
+  visszaesik (ADR 0569). Mindhárom **ugyanarra** vár: **egy asset, ami (a) mindkét levágáson
+  tanul, (b) a szállítottat a Klangion is legyőzi vagy hozza, (c) és amin a margó jelez.**
+  Egy tanító kör **három** ADR-t nyit fel — ez specifikáció, nem kívánságlista.
+  **ÉS JAVÍT EGY EGY KÖRREL KORÁBBI ÁLLÍTÁST:** az ADR 0571 D3 azt írta, hogy „a felütéshez
+  **adat** kell". GuitarSet-alapú volt és általánosként **téves**: ugyanez a szállított asset
+  a **Klangion** a felütést **0,7579**-cel hozza (vs 0,2007 GuitarSeten). A modell **tud**
+  felütést a saját korpuszán; amit nem tud, az **átvinni** — az **ADR 0550** diagnózisa, nem
+  az ADR 0553-é.
+  Tanulság: **L686** — (1) ha egy döntés a modellt olyan bemeneten használja, amin **nem
+  tanult**, egy korpusz **nem elég**, mert az **előjel** sem garantált; a kontroll egy olyan
+  modell, ami **azon a bemeneten** tanult; (2) egy osztály gyengesége akkor **az osztályé**,
+  ha **két** korpuszon megvan — egyébként alapértelmezésben **transzfer**, és a „hiányzik az
+  adat" a legdrágább diagnózis, amit egyetlen korpuszból fel lehet írni; (3) a szabályok
+  akkor érnek valamit, ha a következő kör a **saját** munkájára alkalmazza őket.
+  **E18-R44 — A SZÁLLÍTOTT ASSETNEK NINCS ÚJ-JÁTÉKOS KLANGIO SZÁMA; A RECEPT HAT DOLOGBAN
+  TÉR EL; ÉS ILLESZTETT SPLITTEN A SETTLED RECEPT MINDKÉT KORPUSZON GYŐZ (ADR 0573, 0574,
+  0575).** Ez a kör az **előző kettő következtetését fordítja meg**, és a saját lokalizációs
+  hipotézisemet is megdönti.
+  **(1) A SPLIT, MEGSZÁMOLVA (ADR 0573).** A `klangio.split_by_recording` a **felvételek**
+  20%-át tartja ki: gitáros 1 → 21 TRAIN / 6 EVAL felvétel, gitáros 2 → 23/5, gitáros 4 →
+  **22/5**. **Mind a három gitáros MINDKÉT oldalon van.** Tehát a szállított asset „tiszta
+  held-out eval foldja" **felvétel**-diszjunkt, **nem játékos**-diszjunkt — a **0,7950**
+  same-player szám —, a fold A 3721 pengetésének pedig **78%-a literálisan a tanítókészletében**
+  van, ezért áll ott 0,9490-en. **A szállított assetnek egyetlen új-játékos Klangio száma sincs,
+  és a splitje nem is tud ilyet előállítani.**
+  **(2) ÉS A NAGYSÁGOT A REPÓ MÁR MEGMÉRTE.** `ml/model_card.json`, r172, leave-one-guitarist-out,
+  **live-70 ms**, a 4-es fold `n_test`=**3721** — bitre a fold A: `test_acc` **0,5289**, míg a
+  gitáros 1 → 0,6508 és a gitáros 2 → 0,6387. **A 4-es a három közül a LEGROSSZABB**, és a
+  settled split pont őt tartja ki. A chunk saját szavaival: *„a legrosszabb ismeretlen gitáros
+  közel pénzfeldobás"*. **Tizenegy kör óta a model cardban állt, és nem néztem meg.**
+  **Mérve (ADR 0573 D3):** a szállított **RECEPT** a 4-es gitáros nélkül, ugyanazon a 3721
+  pengetésen, közös kapukon **0,4039 / 0,4132 / 0,4220** a szállított **ASSET** 0,9481 / 0,9484 /
+  **0,9490**-je ellen — kapu-illesztve **0,527** a rés. **DE felső korlát, és ezt a saját
+  kontrollom mondja:** a Klangiónak **három** gitárosa van, egyet kihagyni a játékos-diverzitás
+  harmadát veszi el, és a **GuitarSet-sejten — az egyetlenen, ami mindkettőnek egyformán
+  ismeretlen** — az R0 is gyengébb (0,1386 vs 0,3340). A szintet az r172 LOGO foldja pineli,
+  nem az R0.
+  **(3) AZ ELFOGADÁSI KRITÉRIUM SZERKEZETILEG TELJESÍTHETETLEN VOLT (ADR 0573 D6, L688).**
+  Minden Klangio-sejt a szállítottnak kedvez (mert a splitje nem ad új-játékos számot), minden
+  GuitarSet-sejt a jelöltnek (mert ott tanult) — **nincs dönthető sejt**, tehát a „legyőzni a
+  szállítottat minden korpuszon" **minden** jelöltet örökre blokkol, érdemtől függetlenül. Az
+  ADR 0569 D2 **korlátja** („legalább 0,052") és D4 **kritériuma** **visszavonva**, helyben
+  annotálva; a D4 második mondata (*ablációs alapvonal nem kritérium*) **áll**.
+  **(4) A RECEPT HAT DOLOGBAN TÉR EL, NEM KETTŐBEN (ADR 0575).** korpusz / levágás /
+  **regularizáció** (nincs vs dropout .25+rec .15+l2 1e-4) / **fit-menetrend** (val_accuracy 40
+  bs32 vs val_loss 60 bs64) / **split** / **val-protokoll** (a szállítottnál az eval fold
+  EGYBEN a korai-leállás ÉS a kapu-kalibrálás foldja). Az arc mindig csak az első kettőt nevezte
+  meg.
+  **A LÉTRA (`ml/experiment_recipe_ladder.py`), öt kar, egy faktor/lépés, EGY splitten:**
+  Klangio@70 **R0 0,4354 → R1 0,4808 (+0,0454, menetrend) → R2 0,4591 (−0,0217, regularizáció)
+  → R3 0,5401 (+0,0810, GuitarSet) → R4 0,5405 (+0,0004, 2. levágás)**; GuitarSet@70
+  **0,1623 → 0,1506 → 0,2504 → 0,5596 → 0,5071**. Nettó **+0,1051** / **+0,3448**. És a
+  csonkítatlan tier, amit csak az R4 szolgálhat: Klangio@full **0,4231 [kereszt-tier] → 0,6112**.
+  **Tehát illesztett splitten a settled recept MINDKÉT korpuszon győz, és a második levágás a
+  70 ms-os tieren nem kerül semmibe, miközben a 238 ms-osat megvásárolja.** Ez az ADR 0569
+  következtetését **megfordítja**, és a mechanizmus-listájából a *„GuitarSet-dominancia"*-t
+  **kizárja** (a GuitarSet a Klangiót is emeli).
+  **(5) A ZAJPADLÓ, MÉRVE (ADR 0575 D5).** Az R4 ugyanaz a recept/split/seed, mint a settled
+  **asset**, mégis 0,5405 vs 0,4923. Végigmértem, hogy a kapu magyarázza-e: **nem** — a settled
+  asseten 0,1245-ről a **kapu nélküliig** is csak +0,030 (0,4923 → 0,5219). Tehát ~0,048
+  **futás-közi szórás két script között egy seeden**. Ezért: **megbízható** a GuitarSet-lépés
+  (+0,0810), a nettó (+0,1051/+0,3448) és a full tier megvásárlása; **egy seeden NEM feloldható**
+  a menetrend (+0,0454), a regularizáció (−0,0217) és a 2. levágás 70 ms-os hatása (+0,0004).
+  **(6) AZ ADR 0554-GYEL NINCS ELLENTMONDÁS**, mert az `experiment_deadline_augmentation.py`
+  **`n_classes=2`** — nincs reject fej, **nincs kapu**, sima `argmax`, és a „0,59/0,19" oszlopa
+  `called_up`/`truth_up`, nem elnyomás. Más mennyiség; összevetni őket pont az **L682**-hiba
+  lenne. Amit a kör hozzáad: az ADR 0554 központi döntését most a **szállító** modell-családon
+  (3 osztály, kapu) is megmértük, és ott a 70 ms-os tier **döntetlen**, nem győzelem — a döntés
+  áll, az érv gyengébb.
+  **(7) AZ OOD-LÁBNYOM A RAMPA, NEM A NÉGY HALOTT FRAME (ADR 0574) — a saját hipotézisem
+  megdöntve.** A `live70`-ben a 15 frame-ből az utolsó **4 halott konstans** (sor-szórás
+  **0,0015**, átlag −13,81, mind a 11767 ablakon). Kézenfekvő volt, hogy ott a kár. **Nem ott
+  van:** a `RESTORE f11..14` a kárnak csak **40–56%**-át javítja, a `RESTORE f7..14` viszont
+  **95–96%**-át — mert az 1024 mintás analízis-ablak **átlóg** a vágáson, és a különbség-profil
+  **rampa** (|Δ| f7 2,62 / f8 4,20 / f9 7,38 / f10 14,04). **8 frame a 15-ből, nem 4.** És a
+  settled asset **ugyanazokban** a frame-ekben a tükörképe (0,5055 → 0,6363, a f7..14 visszatétele
+  0,6399-re hozza vissza): ugyanaz a bemeneti régió hordozza a veszteséget az egy levágáson
+  tanult assetnek és a nyereséget a kettőn tanultnak. A próba **k=0 kontrollja** mind a négy
+  blokkban pontosan egyezik; a **felbontás-korlátja** kimondva (a settled asseten csak a f14
+  visszatétele katasztrofális — 0,3325 / le-F1 0,1368 —, ez műtermék, nem értelmezzük).
+  **(8) EGY KÓDLELET:** a `train_live_3c_settled.py` felépíti a `pool_tier` tömböt, **odaírja az
+  indoklást** (*„a kapu tierenként ingyen kalibrálható … egy asset nem jelent egy küszöböt"*),
+  a 157. sorban átveszi, és **soha nem hivatkozik rá** — a `class_blind` kapu a két levágás val
+  sorain **összevontan** számolódik. Az ADR 0568 „fixtúra, amit senki nem olvas" családja.
+  Költsége a söprés szerint **korlátos** (≤0,03), tehát **helyességi** javítás, nem kar.
+  **Új guard:** `ml/test_pipeline.py::test_split_by_recording_is_NOT_player_disjoint` — pineli a
+  diszjunktság **mértékegységét**, és **mindkét irányban ellenőrizve** (a játékos-diszjunkt
+  splitterre elsül). **Gate:** zöld. **Semmi nem kerül felkapcsolásra**, a `settledTier` marad
+  **false**, asset nem cserélve, szállított konstans nem mozdítva.
+  **E18-R45 — A KLANGIO KORPUSZ A GÉPEN VOLT, AMIKOR HÁROM ADR AZT ÍRTA, HOGY NINCS; A
+  TELEPÍTÉSI KORPUSZ ELŐSZÖR IN SITU; ÉS HÁROM SEED VISSZAVONJA AZ ELŐZŐ KÖR FŐÁLLÍTÁSÁNAK
+  FELÉT (ADR 0576, 0577, 0578).**
+  **(1) A KORPUSZ A GÉPEN VOLT (ADR 0576).** `ml/data/klangio/` — **82** telefon-wav
+  (44,1 kHz mono, ~60 s) + **82** `.strums`, gitignore-olva (`git ls-files | grep -c '\.wav$'`
+  → **0**, a harmadik-fél audió szabály sértetlen). Ez a **telepítési feltétel**. Az időrend:
+  **12:38–12:42** a korpusz a gépre kerül → **12:53** a `klangio_live70.npz` **ebből épül** →
+  **22:12** az ADR 0569 commit: *„a Klangio korpusz NINCS A GÉPEN"* → **22:44** az ADR 0572
+  ugyanezt megismétli. **Kilenc és fél óra.** És nem következtetés: az 1001-es felvétel ablakai
+  a helyi audióból újraépítve **bitre** egyeznek a gyorsítótárral (**49/49 sor, max |Δ| = 0**).
+  Három ADR azon a derivátumon mért, amiről azt írta, hogy a forrása nem elérhető. **Harmadik
+  cáfolat r164 óta a repóban:** a `test/tools/klangio_real_ab_test.dart`-ban
+  `const dataDir = 'ml/data/klangio'`, és „auto-skips when ml/data/klangio is absent" — a repó
+  **kész elérhetőség-próbát** tartalmazott. Javítva **10 helyen, 5 fájlban**; a számok állnak
+  (orákulum-ablakosak voltak és annak is nevezték magukat), az **elnapolás** dőlt meg.
+  **Tanulság L690:** *egy hamis szám messzebb nem jut, mert a következő kör újramérné; egy
+  hamis „ezt nem tudjuk megmérni" viszont **kifogásként** viselkedik, tehát a következő kör nem
+  ellenőrzi, hanem **örökli** — és épít rá korlátot meg elnapolási tételt, amitől minden körrel
+  drágább kimondani, hogy az alapja egy `ls` volt.*
+  **(2) EGY MŰSZER, KÉT KORPUSZ (ADR 0577).** Kiszerveztem a söprés gépezetét a
+  `test/support/live_sweep_harness.dart`-ba (streamelt pass, letisztult ablak, margó-kapu,
+  onset-egyeztető, kapu-ladder, F1-konvenció), és **ellenőriztem, hogy nem mozdult szám**: a
+  GuitarSet-söprés az ADR 0571 D2 táblájának **minden jegyét** reprodukálja (0,3872 → 0,5551,
+  +0,1679, le 0,9032, fel 0,2069, missing 1). Másolni helyette azt jelentette volna, hogy két
+  korpusz csendben két műszert mér (L269, L682).
+  **(3) A TELEPÍTÉSI KORPUSZ IN SITU, ELŐSZÖR.** 82 felvétel, **11767** annotált pengetés,
+  13142 SuperFlux onset, 18 egybeolvadás miatt kizárva. Szállított asset, 0,850-es kapu,
+  margin on: onset **P 0,7264 / R 0,7021 / F1 0,7141**, **irány-macro 0,9166** (le 0,9398, fel
+  0,8934). **NEM generalizációs állítás:** `split: all`, és a szállított asset ezek ~80%-án
+  tanult (ADR 0573 D1) — **same-player** szám. **A letisztult tier itt −0,3355** (0,9166 →
+  0,5811; fel 0,8934 → **0,3429**; `settledMissing` = 0). Az ADR 0572 D1 orákulumon −0,2455-öt
+  mért: **ugyanaz az előjel, nagyobb magnitúdó** — tehát az **ADR 0571 D4 korlátja igazolva**
+  (az orákulum a delta ELŐJELÉRE korroborált, a SZINTJÉRE nem: itt 0,09-cel tévedett, helyes
+  irányban), és a „ne kapcsold fel a szállított assettel" mostantól **in-situ, telepítési
+  korpuszú** számon áll. **Az onsetR 0,70 nem regresszió:** a 89,6% a **nyers detektor** ±0,12 s
+  ablakkal, ez a **teljes pipeline** ±50 ms-mal (2,4× szigorúbb, későbbi fázis), és az
+  `onset_recall_probe_test.dart` első sora r164 óta pont a **73%**-ot kérdezi. A kapu **nincs
+  benne**: teljes felengedése 0,7021 → 0,7078 (**+0,006**). **A kapu viszont megkeresi az árát**,
+  végponttól végpontig először: **+0,0884 precizitás −0,0057 megtartásért.**
+  **(4) HÁROM SEED, ÉS VISSZAVONJA AZ ELŐZŐ KÖRT (ADR 0578).** Az ADR 0575 D5 **saját**
+  előírása szerint (`STD_SEEDS = [42, 1, 2]`). **Nettó R0 → R4, Klangio: +0,1051 / +0,0923 /
+  −0,0403** — átlag +0,0524 ± **0,0805**, **előjelet vált**. Tehát a telepítési korpuszon **nem
+  megállapított**, melyik recept jobb: se nem „nyer", se nem „visszaesik". **Áll:** a GuitarSet
+  nettó **+0,3765 ± 0,0713** (mindhárom pozitív), a GuitarSet-adat lépése GuitarSeten
+  **+0,2823 ± 0,0264**, a regularizáció Klangión **következetes költség** (−0,0592 ± 0,0348,
+  mindhárom negatív), és a 2. levágás Klangión mindhárom seeden pozitív (+0,0467 ± 0,0508).
+  **Visszavonva:** a D2 Klangio-fele, a D3 Klangio-lépése („a GuitarSet a Klangiót is emeli" —
+  s2-n **−0,0413**), és a D4 Pareto-csere (a regularizáció GuitarSeten **előjelet vált**:
+  +0,0997 / −0,0485 / +0,0458 — tehát zaj, nem nyereség). **Ami viszont REPLIKÁL: az ADR 0554 D1
+  szórás-érve** — a mindkét levágáson tanított kar **mindkét korpuszon a legkisebb
+  seed-szórású** (Klangio sd **0,0153** az R0 0,0757-e ellen; GuitarSet 0,0308 a 0,0705 ellen).
+  Ez az ADR 0554 érvének az a fele, ami a szállító (3-osztályú, kapuzott) családra **átvisz**.
+  **A módszertani hiba kimondva:** az ADR 0575 D5 a +0,1051-es nettót azért tette a
+  „megbízható" oldalra, mert nagyobb volt a 0,048-as padlónál. *Rossz teszt: egy egy-seedes
+  zajpadló a LÉPÉSEKRE ad korlátot, nem a NETTÓRA — a nettó négy lépés összege, és ha a lépések
+  külön-külön seed-érzékenyek, az összegük szórása nagyobb lehet, nem kisebb.*
+  **(5) ELFOGYASZTVA a `pool_tier` (ADR 0575 D7 folytatása).** A
+  `train_live_3c_settled.py` mostantól **tierenkénti** `class_blind` kaput is kiszámol és
+  rögzít (`per_tier_class_blind`). A szállított választás **nem** változik: a headroom ≤0,03, és
+  a söprés optimuma a kapu nélküli eset, ami az ADR 0549 fantom-cseréjét nyitja újra. Az irány
+  viszont **ismert**: az R4 tierenkénti kapui **közrefogják** a poolozottat (0,1962 @70 /
+  0,0462 @full vs pooled 0,1245), tehát a poolozott kapu a **70 ms-os** tieren
+  **alul-megtart** — ott, ahol a nyíl él.
+  **(6) DART DOC-JAVÍTÁSOK.** A `strum_analyzer.dart` két helyen az ADR 0569 visszaesés-olvasatát
+  hordozta; javítva (az utasítás — *ne kapcsold fel a szállított assettel* — **áll**, de az oka
+  megváltozott: soron belüli OOD, nem egy asset-rangsor). A `live_crnn_classifier.dart` gate-doc
+  mostantól kiírja, hogy a „HELD-OUT eval fold" **felvétel**-diszjunkt és **nem**
+  játékos-diszjunkt, tehát a 0,807-es iránypontosság **same-player** szám, és az új-játékos szám
+  az r172 LOGO (0,6061 ± 0,0548, legrosszabb fold 0,5289).
+  **Gate:** zöld. **Semmi nem kerül felkapcsolásra**, `settledTier` **false**, asset nem
+  cserélve, szállított konstans nem mozdítva.
+  **E18-R46 — A LETISZTULT TIER IN SITU A TELEPÍTÉSI KORPUSZON +0,1236-OT ÉR, HA AZ ASSET
+  MINDKÉT LEVÁGÁSON TANULT (ADR 0579).** Ez a két-tier ügy **hiányzó valódi-audió lába** a
+  telepítési korpuszon. Mindkét asset ugyanazon a foldon (4-es gitáros, 27 felvétel, **3721**
+  annotált pengetés, 4430 onset, 9 egybeolvadás kizárva), ugyanazzal a műszerrel, ugyanazokon a
+  kapukon — a söprés mostantól `KLANGIO_EXTRA_GATES`-szel a jelölt **saját** kapuját is felveszi,
+  a kanonikus sorok megtartásával.
+  **Belső ellenőrzés, ami a többit olvashatóvá teszi:** a `nincs kapu / margin off` sor **bitre
+  ugyanaz** a két assetre (onsetP **0,6582**, onsetR **0,7837**, 4430 megtartva) — az onset-út
+  tehát **asset-független**, és minden különbség utána keletkezik.
+  **A HIÁNYZÓ LÁB (settled asset, saját 0,2929-es kapu, saját tiszta foldja):** gyors **0,5389**
+  → letisztult **0,6625**, **+0,1236** — és **mindkét irány javul** (le 0,4873 → 0,6847, fel
+  0,5905 → 0,6402), `settledMissing` = **0**.
+  **Ugyanaz a fold, ugyanaz a műszer, a SZÁLLÍTOTT asseten: −0,3628** (0,9373 → 0,5745; fel
+  0,9224 → **0,3432**). Ellentétes előjel, és a különbség az, hogy az asset tanult-e a
+  csonkítatlan ablakon — az ADR 0572 D3 állítása in situ, az ADR 0574 lokalizációjával (f7..14).
+  **AZ ORÁKULUM-MŰSZER MOST HÁROM PONTON JELLEMEZVE:** settled/Klangio (in-distribution)
+  orákulum +0,1299 vs in situ **+0,1236** (|Δ| **0,0063**); szállított/GuitarSet +0,1919 vs
+  +0,1679 (0,0240); szállított/Klangio csonkítatlan (**OOD**) −0,2455 vs −0,3355 (0,0900).
+  Tehát az ADR 0571 D4 korlátja **áll és pontosodik**: *a delta 0,006–0,024-re pontos, ha a
+  bemenet az asset számára eloszláson BELÜL van; ha kívül, csak az ELŐJEL marad.* A **szintek**
+  szisztematikusan elválnak (a settled gyors 0,5055 → in situ 0,5389; letisztult 0,6354 →
+  0,6625) — in situ **magasabb**, és az okát **nem mértük**.
+  **NEM asset-rangsor:** a szállított 0,9373 vs settled 0,5250 ezen a foldon a **szennyezett**
+  pár (a szállított 22/27-ét tanulta), és az in-situ műszer a Python orákulum 0,9490 / 0,5055-ét
+  **reprodukálja** (0,9373 / 0,5250) — ez a **műszert** hitelesíti, nem a rangsort.
+  **ÉS EGY ÁR, AMIT A CSERE FIZETNE:** a settled asset iránya **javul** a szorosabb kapun
+  (0,5250 → 0,5550 a 0,124-en), de az onset-megtartása **összeomlik** (0,7157 → **0,6095**;
+  3534 → 2737 megtartva a szállított 3950 → 3783-a ellen). Az ADR 0566 szerint egy elnyomott
+  pengetés olyan ütés, amit a pontozó **soha nem lát** — a tanuló a motor hallgatásáért kap
+  levonást. A jobb irány tehát **fedezettel van megvásárolva**, és ez in situ megerősíti az
+  ADR 0569 D2 orákulum-megfigyelését (settled 0,824 vs szállított 0,964 megtartás).
+  **Két kisebb javítás:** a létra JSON-ja mostantól **MERGE**-öl, nem klobberol (egy
+  `--arms=R5` futás korábban szétverte volna a három seed ötkaros provenance-rekordját), és a
+  `crnn_live_3c_settled_parity_test.dart` „measured, not wired" guardjának `reason`-je egy
+  **visszavont** állítást hordozott („a settled asset a fitted 0,439-et akarná" — az ADR 0567 D3
+  javaslata, amit az ADR 0569 D3 visszavont, és a 0,439 a **szállított** asset saját értéke). Most
+  kiírja, hogy a kapu **asset-specifikus**, és hogy a settled asset 0,2929-re / 0,1245-re
+  kalibrál. **Gate:** zöld. **Semmi nem kerül felkapcsolásra.**
+  **AZ R5 KAR (regularizáció elvétele) ELUTASÍTVA, ÉS KÉT EGYEZŐ SEED NEM REPLIKÁCIÓ
+  (ADR 0580, L691).** Irányított kísérlet volt, nem tapogatózás: az ADR 0578 D2 egyetlen stabil
+  negatívja az volt, hogy a regularizáció Klangión mindhárom seeden **költség**
+  (−0,0592 ± 0,0348). Elvéve, három seeden: **Klangio@70 +0,0533 / +0,0440 / −0,0244** —
+  **előjelet vált**, tehát nem megállapított. **GuitarSet@70 +0,0246 / −0,0630 / −0,0696** —
+  szintén. De a **csonkítatlan** tieren a legszorosabb delta az egész sorozatban:
+  **−0,0190 ± 0,0051** Klangión, mindhárom seeden — azaz az elvétele pont azt a tiert rombolja
+  következetesen, amit a két-tier döntés **meg akar vásárolni** (ADR 0579). **És a regularizáció
+  szűkíti a szórást:** Klangio@70 seed-sd **R4 0,0153** vs **R5 0,0509** (3,3×), tehát az R5
+  látszólag magasabb átlaga (0,5474 vs 0,5231) háromszor bizonytalanabb mérésből jön. **Az R5
+  elutasítva**, az **R4 marad a jelölt recept.** Az ADR 0578 D2 regularizáció-megállapítása
+  **hatókörben szűkítve**: a Klangio-only / 70 ms-only kontextusra áll, a mindkét levágáson
+  tanító receptre **nem vihető át** (L685 családja).
+  **A MÓDSZERTANI LELET, HÁROM ESETTEL:** `ADR 0575 nettó +0,1051/+0,0923/−0,0403`;
+  `ADR 0578 R2→R3 +0,0810/+0,0642/−0,0413`; `ADR 0580 R4→R5 +0,0533/+0,0440/−0,0244`. Háromszor
+  ugyanaz: **s42 és s1 egyetért, s2 megfordítja** — és mindháromszor a két egyező érték közel
+  volt egymáshoz, ami pont úgy néz ki, mint két korrelált zajminta, de **konzisztenciának
+  érződik**. A Klangio@70 seed-szórása az R0-n **0,0757**, nagyobb mindhárom vizsgált hatásnál.
+  **SZABÁLY innentől: ezen a létrán egyetlen recept-állítás sem megy ADR-be két seedből;
+  mindhárom `STD_SEEDS` kötelező, és ha egy delta előjele nem egyezik mind a háromon, az
+  eredmény „NEM MEGÁLLAPÍTOTT", nem „kisebb".** Előjel-egyezés és nem t-próba, mert n=3-nál a
+  szórás-becslés maga is zajos. Ez a műszert nem utasítja el: a **GuitarSet** oldalon ugyanez a
+  létra háromszor egyező, szoros deltákat ad (+0,2823 ± 0,0264 / nettó +0,3765 ± 0,0713) — a
+  szabály azt mondja meg, **mekkora hatást tud ez a műszer kimutatni** (Klangio@70-en ~0,08
+  fölött).
+  **KÖVETKEZŐ:** (1) a **matched-data létra R0 karja** három seeden (`--data=allklangio`, már
+  megírva és assertelve): minden kar CSAK Klangión tanul **mind a három** gitároson, ugyanannyi
+  adaton és ugyanolyan fajta splittel, mint a szállított asset — tehát **az EGÉSZ GuitarSet
+  (3056 pengetés) harmadik korpusz a karoknak ÉS a szállított assetnek is**, és ez az egyetlen
+  sejt, ahol a szállított **artefaktum** tisztességesen összevethető. A közvetlen kérdés: a
+  szállított asset GuitarSet-száma (**0,2997** a produkciós kapun, mérve) a **RECEPT**
+  tulajdonsága vagy egy szerencsés futás? Ez kvantifikálja az ADR 0573 D4 kimondott konfoundját; (2) a **matched-data
+  létra lefuttatása** (`--data=allklangio`, már megírva és assertelve): minden kar CSAK
+  Klangión tanul mind a három gitároson, tehát **az EGÉSZ GuitarSet (3056 pengetés) harmadik
+  korpusz a karoknak ÉS a szállított assetnek is** — ez az egyetlen sejt, ahol a szállított
+  **artefaktum** tisztességesen összevethető egy jelölttel (a bar mérve: SHIP **0,2997** a
+  produkciós kapun); (3) az **R5** kar (settled recept regularizáció **nélkül**) — az ADR 0578
+  szerint a regularizáció Klangión következetes költség, tehát ez most **mérendő**, nem
+  opcionális; (4) a **címkézett felvétel**;
+  (3) ~~ha a Klangio korpusz bekerül a gépre~~ — **a gépen van (ADR 0576)** —, a Klangio
+  **in-situ** söprés megírva: `test/tooling/klangio_threshold_sweep_test.dart`;
+  (2) **on-device mérés** (CI/profile) a **gyors**
+  tierre — a `--json` a `tool/compare_benchmarks.py`-ba illik; (3) ha kifizetődik, a
+  `settledTier` felkapcsolása az ADR 0556 D3 szabályával; (4) a **címkézett felvétel** —
+  továbbra is az egyetlen ismert forrása az inga-sértő ütéseknek, **és** az egyetlen módja a
+  7×-es hangosság-gradiens terméki súlyának megmérésére (a „damped" take pont ez).
+  **Két megkötés, amit a mérés kikényszerített:** (1) az irány-fejet
+  **szigorúan onset utáni** ablakon kell pontozni — az onset ELŐTTI hang
+  egyedül AUC **0,7128**-cal jelzi az irányt, mert a comping váltakozik, és a
+  mi mintáink **nem** (`D DU UDU`-ban két le egymás után, `reggae-skank` szinte
+  csak felütés), tehát ez a tipp nálunk hazugság lenne; (2) a bemenet
+  időfelbontásához **nem** nyúlunk — mérve, egyenlő jellemzőszámmal a nagy
+  felbontás rosszabb (0,6435 vs 0,7723). A külső korpuszok **nincsenek
+  verziókövetve** (`ml/data/` gitignorált, harmadik fél audiója soha nem kerül
+  a repóba), a mérés ezért elkötelezett riport, nem CI-kapu. Mérés:
+  [`docs/eval/guitarset-strum-baseline.md`](docs/eval/guitarset-strum-baseline.md),
+  tanulság `docs/LESSONS.md` **L665**.
 - **E06-R28 cache — 6 lezárandó előfeltétel a jövőbeli BEKÖTŐ körnek, nincs
   kijelölt kör (mérve, `docs/reviews/e06-r28-…-security.md` §6).** A cache-nek
   ma nulla production hívója van (`audioAnalysisV2Enabled` false), úgyhogy

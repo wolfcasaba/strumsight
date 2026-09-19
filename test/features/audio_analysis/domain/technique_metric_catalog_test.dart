@@ -46,33 +46,31 @@ void main() {
       }
     });
 
-    test(
-      'the new flag defaults to false in every environment (flag-guard)',
-      () {
-        for (final environment in AppEnvironment.values) {
-          final flags = FeatureFlags.forEnvironment(
-            environment,
-            accountEnabled: false,
-          );
-          expect(
-            flags.analysisTechniqueProxiesEnabled,
-            isFalse,
-            reason:
-                '$environment must not implicitly enable technique proxies.',
-          );
-          expect(
-            flags.toString(),
-            contains('analysisTechniqueProxiesEnabled: false'),
-          );
-        }
-        const defaults = FeatureFlags(
+    test('the flag is on outside production only and off in it (flag-guard, '
+        'owner decision 2026-09-15)', () {
+      for (final environment in AppEnvironment.values) {
+        final flags = FeatureFlags.forEnvironment(
+          environment,
           accountEnabled: false,
-          diagnosticsEnabled: false,
-          labModeAvailable: false,
         );
-        expect(defaults.analysisTechniqueProxiesEnabled, isFalse);
-      },
-    );
+        final expected = environment != AppEnvironment.production;
+        expect(
+          flags.analysisTechniqueProxiesEnabled,
+          expected,
+          reason: '$environment: technique proxies follow the nonProd gate.',
+        );
+        expect(
+          flags.toString(),
+          contains('analysisTechniqueProxiesEnabled: $expected'),
+        );
+      }
+      const defaults = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+      );
+      expect(defaults.analysisTechniqueProxiesEnabled, isFalse);
+    });
 
     test(
       'AnalysisDocument, its codec and the pipeline never reference the '

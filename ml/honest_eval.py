@@ -83,7 +83,12 @@ def build_live(deadline_s=LIVE_DEADLINE_S, cache="klangio_live70.npz"):
 # ---------------------------------------------------------------------------
 # r174 — no-strum reject head: hard-negative windows + 3-class measurement.
 # ---------------------------------------------------------------------------
-NEG_CACHE = {"batch": "klangio_neg_batch.npz", "live70": "klangio_neg_live70.npz"}
+NEG_CACHE = {"batch": "klangio_neg_batch.npz", "live70": "klangio_neg_live70.npz",
+             "live_full": "klangio_neg_live_full.npz"}
+# E18-R32: the truncation each config mines at. `live_full` is the SETTLED tier of
+# ADR 0552/0554 - any deadline past the window's 238 ms reach means "nothing thrown
+# away", so one extra config serves it without a second implementation to drift.
+NEG_DEADLINE = {"live70": LIVE_DEADLINE_S, "live_full": 10.0}
 REJECT_RETENTION = 0.95  # gates are calibrated to keep >=95% of TRUE strums
 
 
@@ -92,8 +97,9 @@ def build_negatives(config, seed=42):
 
     Same geometry as the positives: `batch` = full (PRE 3 / POST 12) log-mel
     window (as load_batch), `live70` = audio-truncated at onset+70 ms (as
-    build_live). Times come from negatives.negative_times (hard flux-peak false
-    onsets + easy interior gaps), NEVER within 120 ms of a labeled strum.
+    build_live), `live_full` = no truncation, the ADR 0554 settled tier. Times
+    come from negatives.negative_times (hard flux-peak false onsets + easy
+    interior gaps), NEVER within 120 ms of a labeled strum.
     Cached; returns (X, rec)."""
     import negatives as NEG
 
@@ -117,7 +123,7 @@ def build_negatives(config, seed=42):
                 xs.append(F.window_at(lm, t))
         else:
             for t in times:
-                xs.append(window_truncated(pcm, t, LIVE_DEADLINE_S))
+                xs.append(window_truncated(pcm, t, NEG_DEADLINE[config]))
         recs.extend([rid] * len(times))
     X = np.stack(xs).astype(np.float32)
     rec = np.array(recs)

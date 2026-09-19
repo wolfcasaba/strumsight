@@ -12,9 +12,12 @@ import 'live_providers.dart';
 /// Rules (in order):
 ///  1. `frame.current == null` (idle) → return the buffer unchanged.
 ///  2. Same chord as the last card (consecutive dedupe): if a strum just
-///     landed, update the last card's direction/confidence in place; otherwise
-///     leave the buffer unchanged. Never append — re-detecting the same chord
-///     must NOT spawn a new card.
+///     landed, update the last card's direction/confidence in place; if the
+///     frame carries NO strum any more (the engine expires `latestStrum` 2 s
+///     after the onset) and the card still shows one, clear it in place —
+///     a stale "↓ 87 %" is a confident claim the signal no longer backs
+///     (E18-R01 emulator F2/F3); otherwise leave the buffer unchanged. Never
+///     append — re-detecting the same chord must NOT spawn a new card.
 ///  3. Changed/new chord (A→B, or A→B→A which IS a new card) → append a fresh
 ///     [ChordEvent], then trim from the FRONT so `length ≤ cap`. Newest last.
 List<ChordEvent> reduceChordTimeline(
@@ -30,8 +33,11 @@ List<ChordEvent> reduceChordTimeline(
 
   // Rule 2 — same chord still sounding: dedupe, but reflect the latest strum.
   if (buffer.isNotEmpty && buffer.last.chord.label == current.label) {
-    if (strum == null) return buffer;
     final last = buffer.last;
+    if (strum == null) {
+      if (last.direction == null) return buffer;
+      return [...buffer.sublist(0, buffer.length - 1), last.withoutStrum()];
+    }
     // `latestStrum` is STICKY (the most recent strum, not a per-frame event),
     // so this branch runs on every frame while a chord holds. Return the SAME
     // list reference when nothing actually changed — otherwise the notifier

@@ -17,6 +17,9 @@ class _FixedInner implements StrumDirectionClassifier {
   int observed = 0;
 
   @override
+  int? get settleAfterFrames => null;
+
+  @override
   void observe(Float64List frame, StrumFrameFeatures features) => observed++;
 
   @override

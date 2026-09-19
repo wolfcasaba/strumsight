@@ -221,6 +221,49 @@ def test_legacy_two_way_split_unchanged():
     assert not _straddles(ev, _LOGO_REC)
 
 
+def test_split_by_recording_is_NOT_player_disjoint():
+    """The unit of disjointness, pinned (ADR 0573, LESSONS L687).
+
+    `split_by_recording` is RECORDING-disjoint and says so. It is NOT
+    player-disjoint: every guitarist lands on both sides, so a number measured on
+    its eval fold is a SAME-PLAYER number. The shipped 3-class asset
+    (`train_live_3c.py`) is fitted on this split, which is why it has no
+    new-player Klangio figure and cannot be given one — and why ADR 0569 read its
+    eval-fold score as an honest held-out level when it was not.
+
+    This asserts the negative deliberately. `logo_folds` is the player-disjoint
+    splitter (guarded above); if this ever goes red because `split_by_recording`
+    became player-disjoint, that is a behaviour change which invalidates every
+    figure measured on the old fold, so the ADRs naming it have to be revisited
+    rather than the assertion relaxed.
+
+    On the real corpus (82 recordings, 27/28/27 per guitarist) all three players
+    land on BOTH sides and the shipped asset trained on 22 of guitarist 4's 27
+    recordings — measured in ADR 0573 D1. This fixture is far smaller, so the
+    assertion here is the part that holds for ANY size and carries the whole
+    claim: the eval fold contains no player the train fold has not seen.
+    """
+    tr, ev = klangio.split_by_recording(_LOGO_REC, eval_frac=0.2, seed=42)
+    train_g = {klangio.guitarist_of(r)
+               for m, r in zip(tr.tolist(), _LOGO_REC.tolist()) if m}
+    eval_g = {klangio.guitarist_of(r)
+              for m, r in zip(ev.tolist(), _LOGO_REC.tolist()) if m}
+    assert len({klangio.guitarist_of(r) for r in _LOGO_REC.tolist()}) > 1, \
+        "the fixture needs >1 guitarist to say anything"
+    assert eval_g, "the eval fold is empty — the split guard above should have caught that"
+    # THE point: no guitarist is held out, so no eval row is a new-player row.
+    assert eval_g.issubset(train_g), (
+        f"eval guitarists {sorted(eval_g)} are not all in train {sorted(train_g)} — "
+        "split_by_recording has become player-disjoint; see the docstring")
+    # The contrast with the player-disjoint splitter, on the same fixture.
+    for _g, logo_tr, logo_te in klangio.logo_folds(_LOGO_REC):
+        logo_train_g = {klangio.guitarist_of(r)
+                        for m, r in zip(logo_tr.tolist(), _LOGO_REC.tolist()) if m}
+        logo_test_g = {klangio.guitarist_of(r)
+                       for m, r in zip(logo_te.tolist(), _LOGO_REC.tolist()) if m}
+        assert logo_test_g.isdisjoint(logo_train_g)
+
+
 # ---------------------------------------------------------------------------
 # r173 AUDIO AUGMENTATION transforms (pytest). PCM-domain, pure NumPy — each
 # operates on the raw signal BEFORE log-mel so the augmentation is realistic
