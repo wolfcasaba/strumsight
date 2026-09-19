@@ -1,5 +1,46 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E17-R02 KÉSZ — az Analysis V2 capture-ág GÉPI ŐRE + a „korábbi elemzés" navigációs hibája javítva — PR [#602](https://github.com/wolfcasaba/strumsight/pull/602), squash `c0e06a2e` (2026-09-19)
+
+**A kör fordulata.** A brief azt írta elő, hogy kösse be a három capture-képernyőt.
+A pre-flight újramérése (a brief-lint `S15` lelete nyomán, `main @ 4c12083c`) viszont
+azt mérte, hogy **a bekötés már a `main`-en van** — a pipeline-on kívüli `050e45028`
+(2026-09-05) committól, **brief, review, ADR és gépi őr nélkül**. A kör ezért a
+hiányzó MÉRCÉT építette meg, és javította azt, amit az őrizetlenség elrejtett.
+
+| | |
+|---|---|
+| **ADR** | [`0584`](docs/adr/0584-analysis-capture-flow-guard-and-open-contract.md) (az előre írt `0521` szám közben elkelt) |
+| **Review** | [`docs/reviews/e17-r02-review.md`](docs/reviews/e17-r02-review.md) — 1 MAJOR → javító kör → **APPROVED** |
+| **Motor** | implementer `sonnet-impl` (Claude Sonnet 5 high), orchestrátor/reviewer Claude Opus 5 |
+| **CI** | Full Gate `35408910142` + Router CI `35408908155`, mindkettő `success` a merge SHA-n (`0806f191`) |
+
+**Amit hozott:**
+
+- `test/features/audio_analysis/capture_wiring_test.dart` — 7 cella (A1–A6): a három
+  route léte és flag-kötöttsége MINDKÉT `audioAnalysisV2Enabled`-álláson, a
+  home → recording → processing átmenet a VALÓS providereken (override csak a
+  mikrofon- és repository-varraton), és a capture-widgetek injektált
+  szerződésének forrás-szintű pinnelése.
+- **Javított hiba:** a kezdőlap „korábbi elemzés megnyitása" ága `AnalysisSummary`-t
+  adott a timeline route-nak, amely `AnalysisDocument`-et kér (ADR 0241 §1) — a
+  koppintás MINDIG a fail-closed Live útra vitt. Most a kompozíció betölti a
+  dokumentumot (`_openStoredAnalysis`), hibánál marad a fail-closed ág.
+- **Három bizonyított rontás:** a route kapun kívülre kötve → A3 piros; a régi
+  `extra: summary` alak → A6 piros; `ref.watch` → `ref.read` a processing-builderben
+  → A2 piros (ez utóbbi a review saját lelete volt, l. [L657](docs/LESSONS.md#l657)).
+
+**Szándékosan NYITVA marad (a következő kör bemenete):** a capture kezdőlap
+„legutóbbi elemzések" listája a betöltési HIBÁT üres listaként mutatja
+(`app_router.dart`: `recent.value ?? const <AnalysisSummary>[]` → a képernyő a
+„még nincs elemzésed" üres-állapotot rajzolja). Ez hazug UI; az őszinte
+hibaállapot ÚJ l10n-kulcsot kíván (`lib/l10n/base/app_{en,hu}.arb` + a generált
+aggregátum), ami az E17-R02 `allowed_paths`-án kívül esett → lista-tágítás lett
+volna (H3). **Egy külön kör tárgya.**
+
+**Következő kör:** `E17-R03` — Setlist session bekötés (`docs/rounds/e17-r03-setlist-session-wiring.md`,
+a két maradék elérhetetlen song_trainer-képernyő).
+
 ## 🔀 INTEGRÁCIÓ 2026-09-18: a Song Trainer-vonal a mainbe — `integration/audio-import`
 
 A `claude/workflow-production-readiness-r1866i` (122 commit, 2026-09-17: járható

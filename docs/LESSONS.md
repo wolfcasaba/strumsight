@@ -26601,3 +26601,52 @@ walk bővítése valódi tapokkal megy, teszt-oldali híd nélkül.
 set and the documented exclusion table exactly partition the measured-reachable
 screen set` (a kör `gate_tests`-én, brief §0.0.2), falszifikálva: a
 `walked.add('FirstWinStageScreen')` kivételére MÉRTEN piros.
+
+### L656 — A pipeline-on KÍVÜL landolt bekötés őrizetlen: a kör igazi hiánya nem a kód volt, hanem a mérce (E17-R02, 2026-09-19)
+
+**Mérve.** Az E17-R02 briefje (`main @ b17e08ef`) azt írta elő, hogy kösse be a
+három capture-képernyőt. A pre-flight újramérése (`main @ 4c12083c`) viszont ezt
+találta: a bekötés MÁR a `main`-en van, a pipeline-on kívüli `050e45028`
+(2026-09-05) committól — brief, review, ADR és **gépi őr nélkül**. A leltár
+`reachable: true` + `flagGated: true`-t mért mindhárom képernyőre, miközben a
+`AppRoutes.analysisCapture|analysisRecord|analysisProcessing` hármasra a teljes
+`test/` fában **nulla** cella hivatkozott.
+
+Az őrizetlen bekötésben a pre-flight azonnal talált egy MÉRT hibát is: a
+kezdőlap `onOpenAnalysis` ága `AnalysisSummary`-t adott a timeline route-nak,
+amely `AnalysisDocument`-et kér ([ADR 0241](adr/0241-analysis-overview-presentation-boundary.md)
+§1) — a koppintás tehát MINDIG a fail-closed Live útra vitt. Egy őrcella ezt a
+landolás pillanatában elkapta volna.
+
+**A tanulság.** Ha egy brief mért alapja elmozdult, és a kör terméke időközben
+más úton landolt, a kör NEM tárgytalan: a hiányzó bizonyíték maga a munka. A
+`S15` lint-lelet feloldása ezért nem „a kör kész", hanem a §0.0 revízió, amely
+kimondja, mi maradt igaz és hol van a kör EGYETLEN döntési helye.
+
+**Őrteszt:** `test/features/audio_analysis/capture_wiring_test.dart` (A1–A6, 7 cella).
+
+### L657 — Az „átmenet végigmegy" cella zölden átengedi a `watch` → `read` regressziót: a KÉPERNYŐ TÍPUSA nem bizonyítja, hogy az állapot látszik is (E17-R02 review, 2026-09-19)
+
+**Mérve.** Az E17-R02 első implementációja után a review eldobható próbája a
+`app_router.dart` processing-route-builderében ennyit írt át:
+
+```dart
+final state = ref.watch(analysisControllerProvider);   // eredeti
+final state = ref.read(analysisControllerProvider);    // a próba
+```
+
+`read` mellett a képernyő az ELSŐ build állapotán ragad (soha nem lép
+`AnalysisAnalyzing` → `AnalysisCancelled`/`AnalysisCompleted`-re), tehát a
+felvevő-ág a feldolgozó-képernyőn zsákutcába fut. A kör kapuja mégis **mind a 7
+cellán zöld maradt**: a cella a controller állapotát a `container`-ből olvasta,
+a képernyőt pedig `find.byType`-pal kereste — és a STATEFUL widget-példány a
+regresszió alatt is a helyén marad.
+
+Ez az [L654](#l654) testvére: ott a `router.state.uri.path` volt a hamis tanú,
+itt a widget TÍPUSA. **A javítás:** az állapotváltás UTÁN a cella a törzs
+TARTALMÁT méri (`analysis-processing-cancelled-title` és
+`analysis-processing-restart` jelen, `analysis-processing-step` eltűnt) — a
+`watch` → `read` rontás így `+4 -1`-gyel pirosra vált, függetlenül
+reprodukálva az izolált review-klónban.
+
+**Őrteszt:** `test/features/audio_analysis/capture_wiring_test.dart`::`A2 — home to recording to processing, real providers`.
