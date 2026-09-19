@@ -757,6 +757,19 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: AppRoutes.songTrainerImport,
           builder: (_, _) => const SongImportScreen(),
         ),
+        // E17-R03 (ADR 0585 D1) — the ONE entry point for the shipped
+        // Setlist V2 composition. `SetlistListScreenV2` is constructor-
+        // injected, so the builder binds it to the existing providers via a
+        // `Consumer` instead of introducing a new provider bridge.
+        GoRoute(
+          path: AppRoutes.songTrainerSetlists,
+          builder: (_, _) => Consumer(
+            builder: (context, ref, _) => SetlistListScreenV2(
+              controller: ref.watch(setlistControllerProvider),
+              clock: ref.watch(songTrainerClockProvider),
+            ),
+          ),
+        ),
         GoRoute(
           path: AppRoutes.songTrainerNewEditor,
           builder: (_, _) => const SongEditorScreen.newDocument(),

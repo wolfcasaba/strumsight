@@ -41,6 +41,10 @@ abstract final class AppRoutes {
       '/practice/generator/change-review';
   static const String songTrainerLibrary = '/song-trainer';
   static const String songTrainerImport = '/song-trainer/import';
+  // Setlist V2 session wiring (E17-R03, ADR 0585 D1) — the ONE entry point
+  // for the shipped Setlist V2 composition; mode is a runtime parameter of
+  // the screen it renders, not a second route (D2).
+  static const String songTrainerSetlists = '/song-trainer/setlists';
   static const String songTrainerNewEditor = '/song-trainer/editor/new';
   static const String songTrainerEditor = '/song-trainer/editor/:songId';
   static const String songTrainerOverview = '/song-trainer/overview/:songId';

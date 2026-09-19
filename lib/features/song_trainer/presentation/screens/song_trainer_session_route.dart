@@ -21,6 +21,7 @@ import '../../application/trainer/song_trainer_controller.dart';
 import '../../application/trainer/song_trainer_result.dart';
 import '../../application/trainer/song_trainer_session_launcher.dart';
 import '../../application/trainer/song_trainer_state.dart';
+import '../../application/trainer/song_transport_state.dart';
 import 'song_trainer_screen.dart';
 
 /// `extra` payload of the result route.
@@ -39,12 +40,35 @@ final class SongTrainerResultArgs {
   final VoidCallback? onPracticeAgain;
 }
 
+/// The Stage's own measured outcome, returned to a caller that pushed
+/// [SongTrainerSessionRoute] directly and asked for one (E17-R03/D4 — the
+/// Setlist runner is the only caller today). Exactly one of the two
+/// factories applies: a scored session reports its own [SongTrainerResult];
+/// a playback-only session (no scoring, no microphone) instead reports the
+/// transport's own measured elapsed active time once its timeline actually
+/// reaches [SongTransportPhase.completed] — never a wall-clock guess.
+final class SongTrainerSessionOutcome {
+  /// A scored session's own, already-mapped result.
+  const SongTrainerSessionOutcome.scored(SongTrainerResult result)
+    : scoredResult = result,
+      playbackActiveDuration = null;
+
+  /// A playback-only session whose transport reached its measured end.
+  const SongTrainerSessionOutcome.playback(Duration activeDuration)
+    : scoredResult = null,
+      playbackActiveDuration = activeDuration;
+
+  final SongTrainerResult? scoredResult;
+  final Duration? playbackActiveDuration;
+}
+
 /// Hosts one Song Trainer session.
 final class SongTrainerSessionRoute extends ConsumerStatefulWidget {
   /// Stable constructor.
   const SongTrainerSessionRoute({
     required this.songId,
     required this.args,
+    this.returnResultToCaller = false,
     super.key,
   });
 
@@ -53,6 +77,15 @@ final class SongTrainerSessionRoute extends ConsumerStatefulWidget {
 
   /// Session data assembled by `loadSongTrainerSession`.
   final SongTrainerSessionArgs args;
+
+  /// When `true`, a naturally-reached completion pops this route back to
+  /// its caller with a [SongTrainerSessionOutcome] instead of pushing the
+  /// interactive result screen (E17-R03/D4). The registered
+  /// `songTrainerSession` `GoRoute` never sets this, so the single-song
+  /// setup→session→result path (including "practice again") stays
+  /// bit-identical; only a caller that pushes this widget directly (the
+  /// Setlist runner) opts in.
+  final bool returnResultToCaller;
 
   @override
   ConsumerState<SongTrainerSessionRoute> createState() =>
@@ -63,11 +96,14 @@ final class _SongTrainerSessionRouteState
     extends ConsumerState<SongTrainerSessionRoute> {
   SongTrainerController? _controller;
   StreamSubscription<SongTrainerEffect>? _effects;
+  StreamSubscription<SongTrainerState>? _states;
   bool _resultOpen = false;
+  bool _outcomeReturned = false;
 
   @override
   void dispose() {
     _effects?.cancel();
+    _states?.cancel();
     super.dispose();
   }
 
@@ -80,6 +116,14 @@ final class _SongTrainerSessionRouteState
       _controller = controller;
       _effects?.cancel();
       _effects = controller.effects.listen(_onEffect);
+      _states?.cancel();
+      // Only a playback-only session (no `NavigateToSongTrainerResult`
+      // effect ever fires for it — `_finishAndFinalize` requires a scored
+      // Practice session) needs this path, and only when the caller asked
+      // for a returned outcome at all.
+      _states = widget.returnResultToCaller && controller.isPlaybackOnly
+          ? controller.states.listen(_onState)
+          : null;
     }
     return SongTrainerScreen(
       songId: widget.songId,
@@ -98,9 +142,31 @@ final class _SongTrainerSessionRouteState
 
   void _onEffect(SongTrainerEffect effect) {
     if (effect is! NavigateToSongTrainerResult) return;
+    if (widget.returnResultToCaller) {
+      _returnOutcome(SongTrainerSessionOutcome.scored(effect.result));
+      return;
+    }
     if (_resultOpen || !mounted) return;
     _resultOpen = true;
     unawaited(_openResult(effect.result));
+  }
+
+  /// Playback-only completion signal (E17-R03/D4) — the transport's own
+  /// phase transition to [SongTransportPhase.completed], never a guess.
+  /// [SongTrainerController.finish] is not called automatically anywhere in
+  /// this route: the Stage always drives it, so this only fires once the
+  /// timeline genuinely finished playing.
+  void _onState(SongTrainerState state) {
+    if (state.transportState.phase != SongTransportPhase.completed) return;
+    _returnOutcome(
+      SongTrainerSessionOutcome.playback(state.transportState.activePosition),
+    );
+  }
+
+  void _returnOutcome(SongTrainerSessionOutcome outcome) {
+    if (_outcomeReturned || !mounted) return;
+    _outcomeReturned = true;
+    Navigator.of(context).pop(outcome);
   }
 
   Future<void> _openResult(SongTrainerResult result) async {

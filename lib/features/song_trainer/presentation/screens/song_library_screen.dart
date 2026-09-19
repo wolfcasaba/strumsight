@@ -156,6 +156,15 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
       appBar: AppBar(
         title: Text(l10n.songLibraryTitle),
         actions: <Widget>[
+          // E17-R03 (ADR 0585 D1) — the ONE human entry point into the
+          // shipped Setlist V2 composition; without this affordance the
+          // route is unreachable by a person even though it exists.
+          IconButton(
+            key: const Key('song-library-open-setlists'),
+            onPressed: () => context.push(AppRoutes.songTrainerSetlists),
+            icon: const Icon(Icons.queue_music_outlined),
+            tooltip: l10n.songLibraryOpenSetlists,
+          ),
           // Learner-loop round 5: the legacy "My songs" builder list stays
           // one tap away now that this library is the Songs destination.
           IconButton(
