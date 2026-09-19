@@ -299,9 +299,7 @@ def test_a3_writes_subflag_off_disables_write_routes_but_keeps_reads():
     assert "get" in paths.get("/community/notifications", {})
     assert "get" in paths.get("/community/notifications/preferences", {})
     assert "post" in paths.get("/community/notifications/{public_id}/read", {})
-    assert "post" in paths.get(
-        "/community/notifications/{public_id}/read-up-to", {}
-    )
+    assert "post" in paths.get("/community/notifications/{public_id}/read-up-to", {})
     assert "put" in paths.get("/community/notifications/preferences", {})
 
     # social_graph: follow/unfollow (POST/DELETE) are gone; the follower /
