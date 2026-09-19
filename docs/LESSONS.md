@@ -21576,3 +21576,99 @@ a teszt 121 cellára nőtt; a próba újramérve: gate `+119 -2`, `--check` exit
 („`pixel_6a: required_suite is empty for a release_blocking device`").
 
 **Őrteszt:** `test/tooling/device_matrix_test.dart`::`F1 — a release_blocking device's required_suite must cover the mandatory dictionary`
+
+---
+
+## L549 — A kör SAJÁT kapu-sora zöldíthetetlen volt: a golden-tesztek a lokális aarch64 gate-en kör-változtatás NÉLKÜL is pirosak, és ezt csak a pre-flight FUTTATÁSA mutatta meg, a `brief-lint --strict` nem (E15-R04 pre-flight, 2026-08-29)
+
+**Mit mértünk.** Az E15-R04 briefje a `§7` kötelező kapu-sorába és a
+`gate_tests` listájába is felvette a két érintett golden-teszt-fájlt. A
+`brief-lint --strict` „nincs lelet"-tel zárt. A pre-flight viszont LEFUTTATTA a
+sort a kör előtti `main @ ccc71460`-en:
+
+```
+flutter test test/ui/goldens/e13_r20_screens_golden_test.dart
+  → 00:03 +3 -3: Some tests failed.   (chord detail ×2, learning path ×1)
+flutter test test/ui/goldens/e13_r22_screens_golden_test.dart
+  → 00:02 +6: All tests passed!
+tools/golden-x86.sh check <ugyanez a két fájl>
+  → 01:02 +12: All tests passed!   (exit 0)
+```
+
+Azaz a kötelező kapu a kör MUNKÁJÁTÓL FÜGGETLENÜL piros volt ezen a boxon, és
+zöld a merge-kapu architektúráján — a mért ARM↔x86 raszter-drift
+([L516](#l516)), pontosan az a hibaosztály, amit az
+[ADR 0426](../adr/0426-golden-rasterization-on-the-merge-gate-architecture.md)
+kivett a lokális gate-ből. Az r22 fájl lokális zöldje esetleges: ugyanaz a
+mechanizmus, csak azon a hat cellán nem üt ki.
+
+**Miért fontos.** Egy zöldíthetetlen kapu-sorral a kör garantáltan H7-be fut,
+akármilyen jó az implementáció — a lánc egy TELJES implementer-futást fizet ki
+egy brief-hibáért. A `strict` brief-lint ezt elvből nem foghatja meg: statikus
+szöveget elemez, a lelet pedig csak FUTTATÁSSAL mérhető.
+
+**Amit ebből átviszünk.** Ha egy brief kapu-sora golden-tesztet (vagy bármely
+környezet-érzékeny cellát) tartalmaz, a pre-flight KÖTELEZŐ lépése az érintett
+teszt-fájl lefuttatása a kör ELŐTTI HEAD-en. Piros kimenet = base-lelet, a
+javítás §0.0 brief-revízió: a golden-sáv a `tools/golden-x86.sh check|record`
+alá kerül, a `round-gate.sh` sorába NEM. A mérce nem lazul — ugyanaz a nulla
+toleranciájú komparátor, ugyanaz a készlet, csak a mérés HELYE a CI-é.
+
+**Őrteszt:** nincs — a lelet a brief-lint bemenet-osztályát érintené
+(`tools/**` az orchestrátornak tilos zóna, ADR 0087 §4); addig a fenti
+pre-flight lépés az eljárási őr. A következő governance-kör számára a
+javítás helye: a `brief-lint` `strict` szintjén egy szabály, amely a
+`gate_tests` és a `§7` sor `matchesGoldenFile`-t hívó teszt-fájljait leletnek
+veszi.
+
+---
+
+## L550 — A „csak megjelenés" migrációs kör HÁROM helyen vitt be ÚJ VISELKEDÉST, és a saját, frissen írt cellája a hibás alakot PINNELTE (E15-R04, review 3 MAJOR, 2026-08-29)
+
+**Mit mértünk.** Az E15-R04 §0.0 határa kimondottan „MEGJELENÉS, nem
+viselkedés". A gépi mérce mégis mindent zöldnek látott: a kapu 37/37, a
+scope-audit `ok`, egyetlen típus-pinnelő cella sem sérült. A független review
+három MAJOR-t mért ki, mind ugyanabból a mintából:
+
+1. **Elveszett képernyő-specifikus szöveg.** A `practice_history_screen`
+   hibaállapota a `SsFailureState` GENERIKUS tároló-hiba szövegére váltott;
+   `grep -rn practiceHistoryErrorTitle|Body|Action lib/ test/` → **0 hívó**, a
+   három ARB-kulcs árván maradt. A felhasználó „Az előzmények nem tölthetők
+   be" helyett „Tárolási probléma"-t olvasott.
+2. **Hamis hiba gyártása.** A képernyő eldobta a valódi `AppFailure`-t
+   (`onFailure: (_) => …`), és kézzel gyártott egy
+   `StorageFailure(retryable: true)`-t, miközben a `StorageFailure`
+   alapértelmezése `retryable = false`, és a `SsFailurePresentation` az
+   akciót PONTOSAN erre a mezőre kulcsolja → tartós hibán végtelen
+   „Újra"-hurok a támogatás-út helyett.
+3. **Kitalált affordancia.** Az üres katalógus `SsEmptyState`-je
+   `ref.invalidate(practiceCatalogProvider)` akciót kapott — a provider
+   szinkron `Provider` egy **const** katalógus felett, tehát az akció
+   bizonyíthatóan no-op; a result-fallback pedig egy sosem létezett
+   `context.go(AppRoutes.practiceHub)` navigációt.
+
+**A mintázat.** Mindhárom ugyanaz: a design-rendszer komponensének API-ja
+TÖBBET követel, mint amennyi a legacy állapotban volt (`SsEmptyState`
+kötelező `onAction`-je, a `SsFailurePresentation` kötelező `AppFailure`-je),
+és az implementer a hiányzó darabot KITALÁLTA ahelyett, hogy jelezte volna. A
+migráció így nem megjelenés-csere, hanem néma termék-döntés lett.
+
+**Súlyosbító: a saját mérce a hibát pinnelte.** A kör új cellája
+(`history_corrupt_record_test.dart`) egy `retryable: false` fixture mellett a
+retry-akció JELENLÉTÉT követelte — azaz a frissen írt teszt nem a szerződést,
+hanem a hibás implementációt rögzítette. Egy „minden cella zöld" jelentés
+ilyenkor semmit nem bizonyít.
+
+**Amit ebből átviszünk.** (1) Megjelenés-migrációs brief acceptance-cellái közé
+kell egy olyan, amely a MEGSZŰNT hívásokat méri: „a képernyő ARB-kulcsainak
+halmaza nem szűkül" (árva kulcs = információvesztés). (2) Ha egy
+design-rendszer komponens kötelező paramétert kér, amire a legacy állapotban
+nincs megfelelő, az `stopped`-eset vagy dokumentált, akció NÉLKÜLI
+token-alapú állapot — nem kitalált akció. (3) Az implementer által ÍRT új
+cellát a review a FIXTURE felől olvassa vissza: mit jelent az adat, és a
+cella azt követeli-e.
+
+**Őrteszt:**
+`test/features/practice/history_corrupt_record_test.dart::a NON-retryable load
+failure (retryable: false) renders the screen's own error copy, and NO retry
+action` (és a párja a `retryable: true` ágra).

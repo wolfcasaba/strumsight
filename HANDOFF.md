@@ -1,5 +1,51 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E15-R04 KÉSZ — Practice és Learn: 8 képernyő a design-rendszeren — PR [#504](https://github.com/wolfcasaba/strumsight/pull/504), squash `66515988` (2026-08-29)
+
+A Chapter 15 negyedik köre: a **leggyakrabban látott** felület — a gyakorlás
+belépője, eredménye, előzményei, a Speed Builder és a teljes Learn-út — a
+design-rendszer komponenseire és tokenjeire került, **változatlan viselkedés**
+mellett. Migrációs mérés: **8/8 `MIGRATED`**, a `docs/ui/migration-status.md` a
+mért új arányt írja (51/96).
+
+| Képernyő | |
+|---|---|
+| `practice_hub`, `practice_result`, `practice_history`, `speed_builder` | Practice |
+| `learn`, `lesson_list`, `lesson_score_preview`, `latency_calibration` | Learn |
+
+**A pre-flight fogott egy BASE-leletet (§0.0/R3).** A brief kötelező kapu-sora
+tartalmazta a két érintett golden-teszt-fájlt — és azok ezen az aarch64 boxon a
+kör MUNKÁJÁTÓL FÜGGETLENÜL pirosak (`e13_r20_…golden_test.dart` → `+3 -3` a kör
+előtti `main`-en, L516 raszter-drift), miközben a merge-kapu x86
+architektúráján 12/12 zöldek. A sor tehát zöldíthetetlen volt: a kör
+garantáltan H7-be futott volna egy brief-hibáért. A golden-sáv a
+`tools/golden-x86.sh check|record` alá került (ADR 0426) — ugyanaz a nulla
+toleranciájú komparátor, ugyanaz a készlet, csak a mérés helye a CI-é
+([L549](docs/LESSONS.md#l549)). További pre-flight javítások: a golden PNG-k, az
+ARB-források és az A6 bizonyítéka (`hardcoded_string_guard`) hiányoztak a kör
+listájáról/kapujából (R4–R6); a brief három komponens-neve
+(`SsListTile`/`SsErrorState`/`SsMetricTile`) nem létezik a fán (R10).
+
+**A review 3 MAJOR-t mért — mind ugyanaz a mintázat.** A gépi mérce mindent
+zöldnek látott (kapu 37/37, `scope_audit=ok`, egyetlen pinnelő cella sem
+sérült), a „csak megjelenés" kör mégis három helyen vitt be ÚJ VISELKEDÉST:
+a Practice History elvesztette a saját hibaszövegét (3 árva ARB-kulcs); a
+képernyő eldobta a valódi `AppFailure`-t és egy hamis `retryable: true`-t
+gyártott (tartós hibán végtelen „Újra"-hurok a támogatás-út helyett); az üres
+katalógus egy bizonyíthatóan no-op „Újra" gombot, a result-fallback pedig egy
+sosem létezett navigációt kapott. Súlyosbító: a kör SAJÁT, frissen írt cellája
+a hibás alakot pinnelte. Mindhárom ZÁRVA a javító körben, két ÚJ őrcellával
+(nem-retryable → nincs retry; retryable → a retry tényleg újratölt)
+([L550](docs/LESSONS.md#l550)).
+
+| Bizonyíték | |
+|---|---|
+| Review | [`docs/reviews/e15-r04-review.md`](docs/reviews/e15-r04-review.md) — CHANGES REQUESTED → javító kör → **APPROVED** |
+| Full Gate | `[33236990540](https://github.com/wolfcasaba/strumsight/actions/runs/33236990540)` — `success` a `20f3ad63` merge SHA-n |
+| Router CI | `success` ugyanazon a SHA-n (a review-commit nem triggereli, kézi dispatch — [L545](docs/LESSONS.md#l545)) |
+| Golden | `tools/golden-x86.sh check` → exit 0, 12/12 cella a merge-kapu architektúráján |
+| Motor | implementer `sonnet-impl` (Sonnet 5, `--effort high`), orchestrátor/reviewer Opus 5 |
+
 ## ✅ E12-R13 KÉSZ — Device matrix és device lab nyilvántartás — PR [#503](https://github.com/wolfcasaba/strumsight/pull/503), squash `2de98844` (2026-08-29)
 
 A Ch12 **Kör 13** mércéje: a fán hat, egymástól független manuális eszköz-dokumentum
