@@ -1,13 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/setlists/setlist_controller.dart';
+import '../../application/setlists/setlist_session_providers.dart';
+import '../../application/song_trainer_providers.dart';
+import '../../application/trainer/song_trainer_session_launcher.dart';
 import '../../domain/models/song_id.dart';
 import '../../domain/models/song_setlist.dart';
 import '../widgets/setlist_item_availability_badge.dart';
+import 'setlist_session_screen.dart';
 
-final class SetlistListScreenV2 extends StatefulWidget {
+final class SetlistListScreenV2 extends ConsumerStatefulWidget {
   const SetlistListScreenV2({
     super.key,
     required this.controller,
@@ -18,10 +26,12 @@ final class SetlistListScreenV2 extends StatefulWidget {
   final DateTime Function() clock;
 
   @override
-  State<SetlistListScreenV2> createState() => _SetlistListScreenV2State();
+  ConsumerState<SetlistListScreenV2> createState() =>
+      _SetlistListScreenV2State();
 }
 
-final class _SetlistListScreenV2State extends State<SetlistListScreenV2> {
+final class _SetlistListScreenV2State
+    extends ConsumerState<SetlistListScreenV2> {
   List<SongSetlist>? _setlists;
   bool _isSaving = false;
 
@@ -72,9 +82,51 @@ final class _SetlistListScreenV2State extends State<SetlistListScreenV2> {
     }
   }
 
+  /// Starts a Setlist V2 session for [setlist] in [mode] — the ONE entry
+  /// point both the Practice and the Performance affordance call, with mode
+  /// as its parameter (ADR 0585 D2): two divergent methods here would
+  /// create two code paths onto the same `SetlistSessionController` state
+  /// machine. Availability is resolved from a fresh, one-time repository
+  /// snapshot (ADR 0585 D3) — never a constant `ready` — and the item
+  /// runners close over the shipped trainer-session launcher and route
+  /// (ADR 0585 D3/D4). Pushing via the raw [Navigator] (not `context.go`)
+  /// keeps this list on the stack underneath, so leaving the session
+  /// returns here, never to the app root (A7).
+  Future<void> _startSession(
+    SongSetlist setlist,
+    SetlistSessionMode mode,
+  ) async {
+    final repository = ref.read(songRepositoryProvider);
+    final launcher = ref.read(songTrainerSessionLauncherProvider);
+    final snapshot = await loadSetlistAvailabilitySnapshot(repository);
+    if (!mounted) return;
+    final availability = buildSetlistAvailabilityResolver(snapshot);
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (sessionContext) => SetlistSessionScreen(
+          setlist: setlist,
+          mode: mode,
+          availability: availability,
+          performanceRunner: buildSetlistPerformanceRunner(
+            context: sessionContext,
+            repository: repository,
+            launcher: launcher,
+          ),
+          createPracticeRunner: () => buildSetlistPracticeRunner(
+            context: sessionContext,
+            repository: repository,
+            launcher: launcher,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final typography = Theme.of(context).extension<SsTypography>()!;
     final setlists = _setlists;
     return Scaffold(
       appBar: AppBar(title: Text(l10n.setlistV2Title)),
@@ -87,31 +139,76 @@ final class _SetlistListScreenV2State extends State<SetlistListScreenV2> {
       body: SafeArea(
         child: switch (setlists) {
           null => const Center(child: CircularProgressIndicator()),
-          final values when values.isEmpty => Center(
-            child: Semantics(
-              liveRegion: true,
-              child: Text(l10n.setlistV2Empty),
-            ),
+          final values when values.isEmpty => SsEmptyState(
+            icon: Icons.queue_music_outlined,
+            title: l10n.setlistV2EmptyTitle,
+            message: l10n.setlistV2Empty,
+            actionLabel: l10n.setlistV2Create,
+            onAction: () => _edit(null),
           ),
           final values => ListView.builder(
             key: const Key('setlist-list-window'),
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(SsSpacing.space4),
             itemCount: values.length,
             itemBuilder: (context, index) {
               final setlist = values[index];
-              return Card(
-                child: ListTile(
-                  title: Text(setlist.name),
-                  subtitle: Column(
+              return Padding(
+                padding: const EdgeInsets.only(bottom: SsSpacing.space3),
+                child: SsCard(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      Text(l10n.setlistV2ItemCount(setlist.items.length)),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              setlist.name,
+                              style: typography.titleMedium.copyWith(
+                                color: colors.textPrimary,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            key: Key('setlist-start-practice-${setlist.id}'),
+                            tooltip: l10n.setlistSessionStartPractice,
+                            onPressed: () => unawaited(
+                              _startSession(
+                                setlist,
+                                SetlistSessionMode.practice,
+                              ),
+                            ),
+                            icon: const Icon(Icons.fitness_center),
+                          ),
+                          IconButton(
+                            key: Key('setlist-start-performance-${setlist.id}'),
+                            tooltip: l10n.setlistSessionStartPerformance,
+                            onPressed: () => unawaited(
+                              _startSession(
+                                setlist,
+                                SetlistSessionMode.performance,
+                              ),
+                            ),
+                            icon: const Icon(Icons.theater_comedy_outlined),
+                          ),
+                          IconButton(
+                            key: Key('setlist-edit-${setlist.id}'),
+                            tooltip: l10n.setlistV2Edit,
+                            onPressed: _isSaving ? null : () => _edit(setlist),
+                            icon: const Icon(Icons.edit_outlined),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        l10n.setlistV2ItemCount(setlist.items.length),
+                        style: typography.bodyMedium.copyWith(
+                          color: colors.textSecondary,
+                        ),
+                      ),
                       if (setlist.items.isNotEmpty) ...[
-                        const SizedBox(height: 4),
+                        const SizedBox(height: SsSpacing.space1),
                         Wrap(
                           key: Key('setlist-readiness-${setlist.id}'),
-                          spacing: 6,
+                          spacing: SsSpacing.space2,
                           children: <Widget>[
                             for (final item in setlist.items)
                               SetlistItemAvailabilityBadge(
@@ -131,22 +228,20 @@ final class _SetlistListScreenV2State extends State<SetlistListScreenV2> {
                         if (item.initialAvailability ==
                             SetlistItemAvailability.missingSong)
                           Padding(
-                            padding: const EdgeInsets.only(top: 2),
+                            padding: const EdgeInsets.only(
+                              top: SsSpacing.space1,
+                            ),
                             child: Text(
                               l10n.setlistV2ItemMissingSong(item.songId.value),
                               key: Key(
                                 'setlist-missing-song-${setlist.id}-${item.id}',
                               ),
-                              style: Theme.of(context).textTheme.bodySmall,
+                              style: typography.bodyMedium.copyWith(
+                                color: colors.textSecondary,
+                              ),
                             ),
                           ),
                     ],
-                  ),
-                  trailing: IconButton(
-                    key: Key('setlist-edit-${setlist.id}'),
-                    tooltip: l10n.setlistV2Edit,
-                    onPressed: _isSaving ? null : () => _edit(setlist),
-                    icon: const Icon(Icons.edit_outlined),
                   ),
                 ),
               );

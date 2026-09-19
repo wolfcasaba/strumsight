@@ -11,12 +11,12 @@ import 'package:flutter/material.dart';
 import 'package:strumsight/features/practice/public.dart'
     show PracticeFinishReason;
 
-import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/foundation/app_result.dart';
 import '../../../../core/music/tuning.dart';
 import '../../domain/models/loop_config.dart';
 import '../../domain/models/setlist_result.dart';
 import '../../domain/models/song_document.dart';
+import '../../domain/models/song_id.dart';
 import '../../domain/models/song_setlist.dart';
 import '../../domain/models/song_track.dart';
 import '../../domain/models/trainer_config.dart';
@@ -50,10 +50,18 @@ SetlistAvailabilityResolver buildSetlistAvailabilityResolver(
 
 /// Loads the ONE-TIME index snapshot [buildSetlistAvailabilityResolver]
 /// locks over. `includeTrashed` is required so a trashed song is visible
-/// (and excluded) instead of looking identical to a missing one.
+/// (and excluded) instead of looking identical to a missing one. A failed
+/// listing degrades to an empty snapshot — every item then measures
+/// `missingSong`, never a fabricated `ready`.
 Future<List<SongSummary>> loadSetlistAvailabilitySnapshot(
   SongRepository repository,
-) => repository.list(const SongQuery(includeTrashed: true));
+) async {
+  final listed = await repository.list(const SongQuery(includeTrashed: true));
+  return switch (listed) {
+    Success(:final value) => value,
+    Failure() => const <SongSummary>[],
+  };
+}
 
 /// Builds the scored Practice runner (D3 layer 2 + D4).
 ///

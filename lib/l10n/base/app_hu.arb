@@ -1181,6 +1181,7 @@
   "songImportGuitarProSteps": "1. Saját eszközödön használj offline átalakító eszközt.\n2. Ellenőrizd az átalakított fájlt, mert egyes Guitar Pro-részletek elveszhetnek.\n3. Importáld az eredményül kapott MusicXML-, MXL- vagy MIDI-fájlt.",
   "songImportGuitarProGuidanceSemantics": "Guitar Pro átalakítási útmutató. A Guitar Pro fájlokat a StrumSight nem importálja közvetlenül. A saját fájlodat a StrumSighton kívül alakítsd MusicXML, MXL vagy MIDI formátumba. Nincs feltöltés.",
   "songLibraryTitle": "Dalkönyvtár",
+  "songLibraryOpenSetlists": "Dalcsomagok",
   "songLibraryLoading": "Dalkönyvtár betöltése…",
   "songLibraryImport": "Importálás",
   "songLibraryRetry": "Próbáld újra",
@@ -1471,6 +1472,7 @@
     }
   },
   "setlistV2Title": "Dalcsomagok",
+  "setlistV2EmptyTitle": "Nincs dalcsomag",
   "setlistV2Empty": "Még nincs dalcsomag.",
   "setlistV2Create": "Dalcsomag létrehozása",
   "setlistV2Edit": "Dalcsomag szerkesztése",
