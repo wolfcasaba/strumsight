@@ -18,26 +18,49 @@ abstract interface class ClipPlayer {
 }
 
 /// The production [ClipPlayer] — one `audioplayers` player per instance.
+///
+/// The platform player is created on the FIRST [play], not in the
+/// constructor. Constructing an `AudioPlayer` opens the global audioplayers
+/// event channel immediately, so merely HOLDING a player — which is what a
+/// screen does when it watches the pad's `lastError` to decide whether to
+/// render the audio-output notice (audit H20 / L12) — raised a
+/// `MissingPluginException` wherever the channel is absent (widget tests,
+/// golden recording). Nothing that only looks at the output's health should
+/// need a platform channel; only actually playing should.
 class AudioPlayersClipPlayer implements ClipPlayer {
   /// A plain player (chord pads, reference tones).
-  AudioPlayersClipPlayer() : _player = AudioPlayer();
+  AudioPlayersClipPlayer() : _lowLatency = false;
 
   /// A player configured for the metronome click. The config calls are
   /// fire-and-forget — never await a platform round-trip here (it hangs
   /// where the channel is absent, e.g. tests).
-  AudioPlayersClipPlayer.lowLatency() : _player = AudioPlayer() {
-    _player.setReleaseMode(ReleaseMode.stop).ignore();
-    _player.setPlayerMode(PlayerMode.lowLatency).ignore();
-  }
+  AudioPlayersClipPlayer.lowLatency() : _lowLatency = true;
 
-  final AudioPlayer _player;
+  final bool _lowLatency;
+  AudioPlayer? _player;
+
+  AudioPlayer _ensurePlayer() {
+    final existing = _player;
+    if (existing != null) return existing;
+    final created = AudioPlayer();
+    if (_lowLatency) {
+      created.setReleaseMode(ReleaseMode.stop).ignore();
+      created.setPlayerMode(PlayerMode.lowLatency).ignore();
+    }
+    return _player = created;
+  }
 
   @override
   Future<void> play(Uint8List wav) {
-    _player.stop().ignore();
-    return _player.play(BytesSource(wav));
+    final player = _ensurePlayer();
+    player.stop().ignore();
+    return player.play(BytesSource(wav));
   }
 
   @override
-  Future<void> dispose() => _player.dispose();
+  Future<void> dispose() async {
+    // A player that never played was never created — nothing to release.
+    await _player?.dispose();
+    _player = null;
+  }
 }
