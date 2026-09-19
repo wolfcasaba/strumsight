@@ -158,14 +158,6 @@ round, unscheduled.
 
 - `lib/features/gamification/presentation/screens/level_detail_screen.dart`
   (`LevelDetailScreen`, legacy) — no measured reference anywhere in `lib/`.
-- `lib/features/song_trainer/presentation/screens/setlist_session_screen.dart`
-  (`SetlistSessionScreen`, legacy) — same.
-- `lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart`
-  (`SetlistListScreenV2`, legacy) — same. It was INVISIBLE to the tool until
-  2026-09-06: `tool/ui_inventory.dart`'s population filter matched only
-  `_screen.dart`, so a `_screen_v2.dart` file never entered the measurement
-  at all. Widening the filter is what made this row honest — the screen did
-  not become unreachable, it had simply never been counted.
 - `lib/features/ai_tutor/presentation/screens/practice_plan_preview_screen.dart`
   (`PracticePlanPreviewScreen`, already migrated) — same.
 - `lib/features/onboarding/screens/first_win_stage_screen.dart`
@@ -288,8 +280,8 @@ catch.
 | `lib/features/share/screens/share_preview_screen.dart` | `SharePreviewScreen` | yes | no | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
 | `lib/features/share/screens/strum_reel_screen.dart` | `StrumReelScreen` | yes | no | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
 | `lib/features/share/screens/wrapped_preview_screen.dart` | `WrappedPreviewScreen` | yes | no | keep | — | — | Already design-system migrated; reachable — no Ch15 action. |
-| `lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart` | `SetlistListScreenV2` | no | no | unreachable | — | — | Entered the measured population on 2026-09-06 when the inventory filter was widened to `_screen(_v\d+)?.dart`; legacy, with no route and no measured construction site anywhere in lib/. |
-| `lib/features/song_trainer/presentation/screens/setlist_session_screen.dart` | `SetlistSessionScreen` | no | no | unreachable | — | — | No route and no measured construction site anywhere in lib/. |
+| `lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart` | `SetlistListScreenV2` | yes | yes | keep | — | — | E17-R03 (ADR 0585 D1/D5) wired `/song-trainer/setlists` (`songTrainerEnabled`) to this screen and migrated it to `design_system` in the same round (the A3 machine constraint on any screen a round makes reachable) — no separate Ch15 action. |
+| `lib/features/song_trainer/presentation/screens/setlist_session_screen.dart` | `SetlistSessionScreen` | yes | yes | keep | — | — | E17-R03 (ADR 0585 D1) wired an imperative `Navigator.push` from `SetlistListScreenV2`; already design-system migrated — no Ch15 action. |
 | `lib/features/song_trainer/presentation/screens/song_editor_screen.dart` | `SongEditorScreen` | yes | yes | migrate | E15-R09 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/song_trainer/presentation/screens/song_import_preview_screen.dart` | `SongImportPreviewScreen` | yes | no | migrate | E15-R09 | — | Legacy, reachable — Ch15 design-system migration. |
 | `lib/features/song_trainer/presentation/screens/song_import_screen.dart` | `SongImportScreen` | yes | no | migrate | E15-R09 | — | Legacy, reachable — Ch15 design-system migration. |
